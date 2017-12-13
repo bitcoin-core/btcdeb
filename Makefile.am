@@ -43,11 +43,12 @@ libkerl_a_SOURCES = kerl/kerl.c kerl/kerl.h
 btcdeb_SOURCES = btcdeb.cpp
 btcdeb_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS) -lreadline
+btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
 	$(LIBBITCOIN) \
-	$(LIBKERL)
+	$(LIBKERL) \
+	-lreadline
 
 # btcc binary #
 btcc_SOURCES = btcc.cpp
