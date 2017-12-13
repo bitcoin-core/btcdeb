@@ -11,9 +11,11 @@ extern "C" {
 typedef std::vector<unsigned char> valtype;
 
 int fn_step(const char*);
+int fn_exec(const char*);
 int fn_stack(const char*);
 int fn_altstack(const char*);
 int fn_print(const char*);
+char* compl_exec(const char*, int);
 
 InterpreterEnv* env;
 
@@ -24,26 +26,33 @@ void print_dualstack();
 
 int main(int argc, const char** argv)
 {
-    if (argc < 2) {
-        printf("syntax: %s <script> [<stack top item> [... [<stack bottom item>]]]\n", argv[0]);
+    if (argc == 2 && !strcmp(argv[1], "-h")) {
+        printf("syntax: %s [<script> [<stack top item> [... [<stack bottom item>]]]]\n", argv[0]);
+        printf("if executed with no arguments, an empty script and empty stack is provided\n");
         return 1;
+    } else{
+        printf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
     }
-    if (strlen(argv[1]) & 1) {
-        printf("error: invalid hex string (length %zu is odd)\n", strlen(argv[1]));
-        return 1;
+    if (argc > 1) {
+        if (strlen(argv[1]) & 1) {
+            printf("error: invalid hex string (length %zu is odd)\n", strlen(argv[1]));
+            return 1;
+        }
     }
     CScript script;
-    std::vector<unsigned char> scriptData(ParseHex(argv[1]));
-    if (scriptData.size() != (strlen(argv[1]) >> 1)) {
-        printf("failed to parse hex string\n");
-        return 1;
-    }
-    script = CScript(scriptData.begin(), scriptData.end());
-    if (script.HasValidOps()) {
-        printf("valid script\n");
-    } else {
-        printf("invalid script\n");
-        return 1;
+    if (argc > 1) {
+        std::vector<unsigned char> scriptData(ParseHex(argv[1]));
+        if (scriptData.size() != (strlen(argv[1]) >> 1)) {
+            printf("failed to parse hex string\n");
+            return 1;
+        }
+        script = CScript(scriptData.begin(), scriptData.end());
+        if (script.HasValidOps()) {
+            printf("valid script\n");
+        } else {
+            printf("invalid script\n");
+            return 1;
+        }
     }
     std::vector<valtype> stack;
     BaseSignatureChecker checker;
@@ -83,6 +92,8 @@ int main(int argc, const char** argv)
     kerl_register("step", fn_step, "Execute one instruction and iterate in the script.");
     kerl_register("stack", fn_stack, "Print stack content.");
     kerl_register("altstack", fn_altstack, "Print altstack content.");
+    kerl_register("exec", fn_exec, "Execute command.");
+    kerl_set_completor("exec", compl_exec);
     kerl_register("print", fn_print, "Print script.");
     kerl_register_help("help");
     printf("%d op script loaded. type `help` for usage information\n", count);
@@ -98,7 +109,7 @@ int main(int argc, const char** argv)
 #define fail(msg...) do { fprintf(stderr, msg); return 0; } while (0)
 
 int fn_step(const char* arg) {
-    if (env->done) fail("at end of script");
+    if (env->done) fail("at end of script\n");
     if (!StepScript(*env)) fail("error: %s\n", ScriptErrorString(*env->serror));
     print_dualstack();
     if (env->curr_op_seq < count) {
@@ -187,6 +198,74 @@ int fn_altstack(const char*) {
     return print_stack(env->altstack);
 }
 
+int fn_exec(const char* arg) {
+    size_t argc;
+    char** argv;
+    if (kerl_make_argcv(arg, &argc, &argv)) {
+        printf("user abort\n");
+        return -1;
+    }
+    if (argc < 1) {
+        printf("syntax: exec <op> [<op2> [...]]\n");
+        printf("to push to stack, simply execute the numeric or hexadecimal value\n");
+        return 0;
+    }
+    CScript script;
+    for (int i = 0; i < argc; i++) {
+        const char* v = argv[i];
+        const size_t vlen = strlen(v);
+        // empty strings are ignored
+        if (!v[0]) continue;
+        // number?
+        int n = atoi(v);
+        if (n != 0) {
+            // verify
+            char buf[vlen + 1];
+            sprintf(buf, "%d", n);
+            if (!strcmp(buf, v)) {
+                // verified; can it be a hexstring too?
+                if (!(vlen & 1)) {
+                    std::vector<unsigned char> pushData(ParseHex(v));
+                    if (pushData.size() == (vlen >> 1)) {
+                        // it can; warn about using 0x for hex
+                        fprintf(stderr, "warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
+                    }
+                }
+                // can it be an opcode too?
+                if (n < 16) {
+                    fprintf(stderr, "warning: ambiguous input %s is interpreted as a numeric value (%s), not as an opcode (OP_%s). Use OP_%s to force into op code interpretation\n", v, v, v, v);
+                }
+                
+                script << (int64_t)n;
+                continue;
+            }
+        }
+        // hex string?
+        if (!(vlen & 1)) {
+            std::vector<unsigned char> pushData(ParseHex(v));
+            if (pushData.size() == (vlen >> 1)) {
+                script << pushData;
+                continue;
+            }
+        }
+        opcodetype opc = GetOpCode(v);
+        if (opc != OP_INVALIDOPCODE) {
+            script << opc;
+            continue;
+        }
+        fprintf(stderr, "error: invalid opcode %s\n", v);
+        return 0;
+    }
+    CScript::const_iterator it = script.begin();
+    while (it != script.end()) {
+        if (!ExecIterator(*env, script, it, false)) {
+            fprintf(stderr, "Error: %s\n", ScriptErrorString(*env->serror));
+        }
+    }
+    print_dualstack();
+    return 0;
+}
+
 int fn_print(const char*) {
     for (int i = 0; i < count; i++) printf("%s%s\n", i == env->curr_op_seq ? " -> " : "    ", script_lines[i]);
     // auto it = env->script.begin();
@@ -203,4 +282,171 @@ int fn_print(const char*) {
     //     }
     // }
     return 0;
+}
+
+static const char* opnames[] = {
+    // push value
+    "OP_0",
+    "OP_FALSE",
+    "OP_PUSHDATA1",
+    "OP_PUSHDATA2",
+    "OP_PUSHDATA4",
+    "OP_1NEGATE",
+    "OP_RESERVED",
+    "OP_1",
+    "OP_TRUE",
+    "OP_2",
+    "OP_3",
+    "OP_4",
+    "OP_5",
+    "OP_6",
+    "OP_7",
+    "OP_8",
+    "OP_9",
+    "OP_10",
+    "OP_11",
+    "OP_12",
+    "OP_13",
+    "OP_14",
+    "OP_15",
+    "OP_16",
+
+    // control
+    "OP_NOP",
+    "OP_VER",
+    "OP_IF",
+    "OP_NOTIF",
+    "OP_VERIF",
+    "OP_VERNOTIF",
+    "OP_ELSE",
+    "OP_ENDIF",
+    "OP_VERIFY",
+    "OP_RETURN",
+
+    // stack ops
+    "OP_TOALTSTACK",
+    "OP_FROMALTSTACK",
+    "OP_2DROP",
+    "OP_2DUP",
+    "OP_3DUP",
+    "OP_2OVER",
+    "OP_2ROT",
+    "OP_2SWAP",
+    "OP_IFDUP",
+    "OP_DEPTH",
+    "OP_DROP",
+    "OP_DUP",
+    "OP_NIP",
+    "OP_OVER",
+    "OP_PICK",
+    "OP_ROLL",
+    "OP_ROT",
+    "OP_SWAP",
+    "OP_TUCK",
+
+    // splice ops
+    "OP_CAT",
+    "OP_SUBSTR",
+    "OP_LEFT",
+    "OP_RIGHT",
+    "OP_SIZE",
+
+    // bit logic
+    "OP_INVERT",
+    "OP_AND",
+    "OP_OR",
+    "OP_XOR",
+    "OP_EQUAL",
+    "OP_EQUALVERIFY",
+    "OP_RESERVED1",
+    "OP_RESERVED2",
+
+    // numeric
+    "OP_1ADD",
+    "OP_1SUB",
+    "OP_2MUL",
+    "OP_2DIV",
+    "OP_NEGATE",
+    "OP_ABS",
+    "OP_NOT",
+    "OP_0NOTEQUAL",
+
+    "OP_ADD",
+    "OP_SUB",
+    "OP_MUL",
+    "OP_DIV",
+    "OP_MOD",
+    "OP_LSHIFT",
+    "OP_RSHIFT",
+
+    "OP_BOOLAND",
+    "OP_BOOLOR",
+    "OP_NUMEQUAL",
+    "OP_NULEQUALVERIFY",
+    "OP_NUMNOTEQUAL",
+    "OP_LESSTHAN",
+    "OP_GREATERTHAN",
+    "OP_LESSTHANOREQUAL",
+    "OP_GREATERTHANOREQUAL",
+    "OP_MIN",
+    "OP_MAX",
+
+    "OP_WITHIN",
+
+    // crypto
+    "OP_RIPEMD160",
+    "OP_SHA1",
+    "OP_SHA256",
+    "OP_HASH160",
+    "OP_HASH256",
+    "OP_CODESEPARATOR",
+    "OP_CHECKSIG",
+    "OP_CHECKSIGVERIFY",
+    "OP_CHECKMULTISIG",
+    "OP_CHECKMULTISIGVERIFY",
+
+    // expansion
+    "OP_NOP1",
+    "OP_CHECKLOCKTIMEVERIFY",
+    "OP_NOP2",
+    "OP_CHECKSEQUENCEVERIFY",
+    "OP_NOP3",
+    "OP_NOP4",
+    "OP_NOP5",
+    "OP_NOP6",
+    "OP_NOP7",
+    "OP_NOP8",
+    "OP_NOP9",
+    "OP_NOP10",
+
+    // // template matching params
+    // "OP_SMALLINTEGER",
+    // "OP_PUBKEYS",
+    // "OP_PUBKEYHASH",
+    // "OP_PUBKEY",
+    nullptr,
+};
+
+char* compl_exec(const char* text, int continued) {
+    static int list_index, len;
+	const char *name;
+
+	/* If this is a new word to complete, initialize now.  This includes
+	 saving the length of TEXT for efficiency, and initializing the index
+	 variable to 0. */
+	if (!continued) {
+		list_index = -1;
+		len = strlen(text);
+	}
+
+	/* Return the next name which partially matches from the names list. */
+	while (opnames[++list_index]) {
+		name = opnames[list_index];
+
+		if (strncasecmp(name, text, len) == 0)
+			return strdup(name);
+	}
+
+	/* If no names matched, then return NULL. */
+	return (char *)NULL;
 }

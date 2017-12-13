@@ -208,5 +208,6 @@ struct InterpreterEnv {
 
 bool StepScript(InterpreterEnv& env);
 bool ContinueScript(InterpreterEnv& env);
+bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_iterator& it, bool update_env);
 
 #endif // BITCOIN_SCRIPT_INTERPRETER_H

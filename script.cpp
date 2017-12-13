@@ -164,6 +164,7 @@ opcodetype GetOpCode(const char* name)
     c(1NEGATE);
     c(RESERVED);
     c(1);
+    c(TRUE);
     c(2);
     c(3);
     c(4);
