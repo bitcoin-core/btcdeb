@@ -208,16 +208,14 @@ void print_dualstack() {
 }
 
 int print_stack(std::vector<valtype>& stack, bool raw) {
-    if (stack.size() == 0) printf(raw ? "\n" : "- empty stack -\n");
-    int i = 0;
-    for (int j = stack.size() - 1; j >= 0; j--) {
-        auto& it = stack[j];
-    // }
-    // for (auto& it : stack) {
-        i++;
-        if (raw) {
-            printf("%s\n", HexStr(it.begin(), it.end()).c_str());
-        } else {
+    if (raw) {
+        for (auto& it : stack) printf("%s\n", HexStr(it.begin(), it.end()).c_str());
+    } else {
+        if (stack.size() == 0) printf("- empty stack -\n");
+        int i = 0;
+        for (int j = stack.size() - 1; j >= 0; j--) {
+            auto& it = stack[j];
+            i++;
             printf("<%02d>\t%s%s\n", i, HexStr(it.begin(), it.end()).c_str(), i == 1 ? "\t(top)" : "");
         }
     }
