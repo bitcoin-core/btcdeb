@@ -47,8 +47,7 @@ btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
 	$(LIBBITCOIN) \
-	$(LIBKERL) \
-	-lreadline
+	$(LIBKERL)
 
 # btcc binary #
 btcc_SOURCES = btcc.cpp

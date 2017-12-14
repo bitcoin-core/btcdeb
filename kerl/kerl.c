@@ -12,9 +12,6 @@
 #include <string.h>
 #include <assert.h>
 
-#include <readline/readline.h>
-#include <readline/history.h>
-
 #include "kerl.h"
 
 #ifndef whitespace
@@ -127,7 +124,9 @@ void kerl_run(const char *prompt)
 
 void kerl_add_history(const char *s)
 {
+#ifdef HAVE_READLINE_HISTORY
   add_history(s);
+#endif // HAVE_READLINE_HISTORY
   if (history_file) {
     FILE *fp = fopen(history_file, "a");
     fprintf(fp, "%s\n", s);
@@ -139,6 +138,7 @@ void kerl_set_history_file(const char *path)
 {
   if (history_file) free(history_file);
   history_file = strdup(path);
+#ifdef HAVE_READLINE_HISTORY
   char buf[1024];
   FILE *file = fopen(path, "r");
   if (file) {
@@ -147,6 +147,7 @@ void kerl_set_history_file(const char *path)
       add_history(buf);
     }
   }
+#endif // HAVE_READLINE_HISTORY
 }
 
 /* Execute a command line. */
@@ -296,12 +297,16 @@ int kerl_make_argcv_escape(const char *argstring, size_t *argcOut, char ***argvO
       } else bufiter();
     }
     if (line) free(line);
+#ifdef HAVE_LIBREADLINE
     if (quot || esc) {
       if (quot) buf[j++] = '\n';
       line = readline(quot == '"' ? "dquote> " : quot == '\'' ? "quote> " : "> ");
       if (!line) { printf("\n"); free(buf); *argcOut = 0; *argvOut = NULL; return -1; }
       argstring = line; // preserve whitespace as we are quoting
     } else break;
+#else
+    break;
+#endif // HAVE_LIBREADLINE
   }
 
   if (j > 0) {
@@ -340,11 +345,13 @@ char **kerl_completion ();
    if not. */
 void initialize_readline ()
 {
+#ifdef HAVE_LIBREADLINE
   /* Allow conditional parsing of the ~/.inputrc file. */
   rl_readline_name = "kerl";
 
   /* Tell the completer that we want a crack first. */
   rl_attempted_completion_function = kerl_completion;
+#endif // HAVE_LIBREADLINE
 }
 
 /* Attempt to complete on the contents of TEXT.  START and END show the
@@ -356,6 +363,7 @@ char **kerl_completion(char *text, int start, int end)
   char **matches;
 
   matches = (char **)NULL;
+#ifdef HAVE_LIBREADLINE
 
   /* If this word is at the start of the line, then it is a command
      to complete. */
@@ -376,7 +384,7 @@ char **kerl_completion(char *text, int start, int end)
       }
     }
   }
-
+#endif // HAVE_LIBREADLINE
   return matches;
 }
 
