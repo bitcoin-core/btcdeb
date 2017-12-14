@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <unistd.h>
 
 #include <script.h>
 #include <interpreter.h>
@@ -16,44 +17,64 @@ int fn_stack(const char*);
 int fn_altstack(const char*);
 int fn_print(const char*);
 char* compl_exec(const char*, int);
+int print_stack(std::vector<valtype>&, bool raw = false);
 
 InterpreterEnv* env;
 
+bool piping = false;
 int count = 0;
 char** script_lines;
 
 void print_dualstack();
 
+void btc_logf_dummy(const char* fmt...) {}
+
 int main(int argc, const char** argv)
 {
+    piping = !isatty(fileno(stdin));
+    if (piping) btc_logf = btc_logf_dummy;
+
     if (argc == 2 && !strcmp(argv[1], "-h")) {
-        printf("syntax: %s [<script> [<stack top item> [... [<stack bottom item>]]]]\n", argv[0]);
-        printf("if executed with no arguments, an empty script and empty stack is provided\n");
+        fprintf(stderr, "syntax: %s [<script> [<stack top item> [... [<stack bottom item>]]]]\n", argv[0]);
+        fprintf(stderr, "if executed with no arguments, an empty script and empty stack is provided\n");
         return 1;
     } else{
-        printf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
+        btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
     }
-    if (argc > 1) {
-        if (strlen(argv[1]) & 1) {
-            printf("error: invalid hex string (length %zu is odd)\n", strlen(argv[1]));
+    int stack_idx = 2;
+    char* script_str = NULL;
+    if (piping) {
+        stack_idx--;
+        char buf[1024];
+        fgets(buf, 1024, stdin);
+        int len = strlen(buf);
+        while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r')) buf[--len] = 0;
+        script_str = strdup(buf);
+    } else {
+        script_str = argc > 1 ? strdup(argv[1]) : NULL;
+    }
+    if (script_str) {
+        if (strlen(script_str) & 1) {
+            fprintf(stderr, "error: invalid hex string (length %zu is odd)\n", strlen(script_str));
             return 1;
         }
     }
     CScript script;
-    if (argc > 1) {
-        std::vector<unsigned char> scriptData(ParseHex(argv[1]));
-        if (scriptData.size() != (strlen(argv[1]) >> 1)) {
-            printf("failed to parse hex string\n");
+    if (script_str) {
+        std::vector<unsigned char> scriptData(ParseHex(script_str));
+        if (scriptData.size() != (strlen(script_str) >> 1)) {
+            fprintf(stderr, "failed to parse hex string\n");
             return 1;
         }
         script = CScript(scriptData.begin(), scriptData.end());
         if (script.HasValidOps()) {
-            printf("valid script\n");
+            btc_logf("valid script\n");
         } else {
-            printf("invalid script\n");
+            fprintf(stderr, "invalid script\n");
             return 1;
         }
     }
+    free(script_str);
     std::vector<valtype> stack;
     BaseSignatureChecker checker;
     ScriptError error;
@@ -87,21 +108,30 @@ int main(int argc, const char** argv)
         script_lines[i-1] = strdup(buf);
     }
 
-    kerl_set_history_file(".btcdeb_history");
-    kerl_set_repeat_on_empty(true);
-    kerl_register("step", fn_step, "Execute one instruction and iterate in the script.");
-    kerl_register("stack", fn_stack, "Print stack content.");
-    kerl_register("altstack", fn_altstack, "Print altstack content.");
-    kerl_register("exec", fn_exec, "Execute command.");
-    kerl_set_completor("exec", compl_exec);
-    kerl_register("print", fn_print, "Print script.");
-    kerl_register_help("help");
-    printf("%d op script loaded. type `help` for usage information\n", count);
-    print_dualstack();
-    if (env->curr_op_seq < count) {
-        printf("%s\n", script_lines[env->curr_op_seq]);
+    if (piping) {
+        if (!ContinueScript(*env)) {
+            fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
+            print_dualstack();
+        } else {
+            print_stack(env->stack, true);
+        }
+    } else {
+        kerl_set_history_file(".btcdeb_history");
+        kerl_set_repeat_on_empty(true);
+        kerl_register("step", fn_step, "Execute one instruction and iterate in the script.");
+        kerl_register("stack", fn_stack, "Print stack content.");
+        kerl_register("altstack", fn_altstack, "Print altstack content.");
+        kerl_register("exec", fn_exec, "Execute command.");
+        kerl_set_completor("exec", compl_exec);
+        kerl_register("print", fn_print, "Print script.");
+        kerl_register_help("help");
+        btc_logf("%d op script loaded. type `help` for usage information\n", count);
+        print_dualstack();
+        if (env->curr_op_seq < count) {
+            printf("%s\n", script_lines[env->curr_op_seq]);
+        }
+        kerl_run("btcdeb> ");
     }
-    kerl_run("btcdeb> ");
 
     delete env;
 }
@@ -177,15 +207,19 @@ void print_dualstack() {
     }
 }
 
-int print_stack(std::vector<valtype>& stack) {
-    if (stack.size() == 0) printf("- empty stack -\n");
+int print_stack(std::vector<valtype>& stack, bool raw) {
+    if (stack.size() == 0) printf(raw ? "\n" : "- empty stack -\n");
     int i = 0;
     for (int j = stack.size() - 1; j >= 0; j--) {
         auto& it = stack[j];
     // }
     // for (auto& it : stack) {
         i++;
-        printf("<%02d>\t%s%s\n", i, HexStr(it.begin(), it.end()).c_str(), i == 1 ? "\t(top)" : "");
+        if (raw) {
+            printf("%s\n", HexStr(it.begin(), it.end()).c_str());
+        } else {
+            printf("<%02d>\t%s%s\n", i, HexStr(it.begin(), it.end()).c_str(), i == 1 ? "\t(top)" : "");
+        }
     }
     return 0;
 }
@@ -228,12 +262,12 @@ int fn_exec(const char* arg) {
                     std::vector<unsigned char> pushData(ParseHex(v));
                     if (pushData.size() == (vlen >> 1)) {
                         // it can; warn about using 0x for hex
-                        fprintf(stderr, "warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
+                        btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
                     }
                 }
                 // can it be an opcode too?
                 if (n < 16) {
-                    fprintf(stderr, "warning: ambiguous input %s is interpreted as a numeric value (%s), not as an opcode (OP_%s). Use OP_%s to force into op code interpretation\n", v, v, v, v);
+                    btc_logf("warning: ambiguous input %s is interpreted as a numeric value (%s), not as an opcode (OP_%s). Use OP_%s to force into op code interpretation\n", v, v, v, v);
                 }
                 
                 script << (int64_t)n;

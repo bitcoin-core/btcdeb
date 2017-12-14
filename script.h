@@ -14,6 +14,9 @@
 #include <serialize.h>
 #include <crypto/common.h>
 
+typedef void (*btc_logf_t) (const char *fmt...);
+extern btc_logf_t btc_logf;
+
 // Maximum script length in bytes
 static const int MAX_SCRIPT_SIZE = 10000;
 

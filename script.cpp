@@ -5,6 +5,15 @@
 
 #include <script.h>
 #include <utilstrencodings.h>
+#include <cstdarg>
+
+void btc_logf_stderr(const char* fmt...) {
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+}
+btc_logf_t btc_logf = btc_logf_stderr;
 
 const char* GetOpName(opcodetype opcode)
 {

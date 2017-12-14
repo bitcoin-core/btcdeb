@@ -60,8 +60,8 @@ static inline void _popstack(std::vector<valtype>& stack)
         throw std::runtime_error("popstack(): stack empty");
     stack.pop_back();
 }
-#define popstack(stack) do { printf("\t\t<> POP  " #stack "\n"); _popstack(stack); } while (0)
-#define pushstack(stack, v) do { stack.push_back(v); printf("\t\t<> PUSH " #stack " %s\n", HexStr(stack.at(stack.size()-1)).c_str()); } while (0)
+#define popstack(stack) do { btc_logf("\t\t<> POP  " #stack "\n"); _popstack(stack); } while (0)
+#define pushstack(stack, v) do { stack.push_back(v); btc_logf("\t\t<> PUSH " #stack " %s\n", HexStr(stack.at(stack.size()-1)).c_str()); } while (0)
 
 bool static IsCompressedOrUncompressedPubKey(const valtype &vchPubKey) {
     if (vchPubKey.size() < 33) {
