@@ -156,6 +156,8 @@ void print_dualstack() {
     char buf[1024];
     opcodetype opcode;
     valtype vchPushValue;
+    static int glmax = 7;
+    static int grmax = 7;
     int lmax = 0;
     int rmax = 0;
     while (env->script.GetOp(it, opcode, vchPushValue)) {
@@ -176,7 +178,11 @@ void print_dualstack() {
         if (s.length() > rmax) rmax = s.length();
         r.push_back(s);
     }
-    int lcap = 66, rcap = 66; // lmax > 66 ? 66 : lmax, rcap = rmax > 66 ? 66 : rmax;
+    if (glmax < lmax) glmax = lmax;
+    if (grmax < rmax) grmax = rmax;
+    lmax = glmax; rmax = grmax;
+    int lcap = //66, rcap = 66; // 
+    lmax > 66 ? 66 : lmax, rcap = rmax > 66 ? 66 : rmax;
     char lfmt[10], rfmt[10];
     sprintf(lfmt, "%%-%ds", lcap + 1);
     sprintf(rfmt, "%%%ds", rcap);
