@@ -86,6 +86,18 @@ char *dupstr (char *s)
   return r;
 }
 
+#ifndef HAVE_LIBREADLINE
+char* readline(const char* prompt) {
+  static char buf[10240];
+  fputs(prompt, stdout);
+  char* pbuf = fgets(buf, 10240, stdin);
+  if (!pbuf) return NULL;
+  size_t len = strlen(buf);
+  while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r')) buf[--len] = 0;
+  return pbuf ? strdup(buf) : NULL;
+}
+#endif
+
 void kerl_run(const char *prompt)
 {
   char *line, *pline = NULL, *s, *p = NULL;

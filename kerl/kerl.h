@@ -20,6 +20,7 @@
 #ifdef NO_AUTOMAKE
 #  include <readline/readline.h>
 #  include <readline/history.h>
+#  define HAVE_LIBREADLINE
 #  define HAVE_READLINE_HISTORY
 #else
 #  ifdef HAVE_LIBREADLINE
