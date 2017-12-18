@@ -4,6 +4,10 @@
 #include <script.h>
 #include <interpreter.h>
 #include <utilstrencodings.h>
+#include <policy/policy.h>
+#include <primitives/transaction.h>
+#include <streams.h>
+#include <pubkey.h>
 
 extern "C" {
 #include <kerl/kerl.h>
@@ -31,27 +35,76 @@ void btc_logf_dummy(const char* fmt...) {}
 
 int main(int argc, const char** argv)
 {
+    ECCVerifyHandle evh;
     piping = !isatty(fileno(stdin));
     if (piping) btc_logf = btc_logf_dummy;
 
     if (argc == 2 && !strcmp(argv[1], "-h")) {
-        fprintf(stderr, "syntax: %s [<script> [<stack top item> [... [<stack bottom item>]]]]\n", argv[0]);
+        fprintf(stderr, "syntax: %s [tx=[amount1,amount2,..:]<hex> [<script> [<stack top item> [... [<stack bottom item>]]]]]\n", argv[0]);
         fprintf(stderr, "if executed with no arguments, an empty script and empty stack is provided\n");
+        fprintf(stderr, "to debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
+            "as well as (SegWit only) every amount for the inputs\n");
+        fprintf(stderr, "e.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
+        fprintf(stderr, "you do not need the amounts for non-SegWit transactions\n");
         return 1;
     } else{
         btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
     }
-    int stack_idx = 2;
+    int arg_idx = 1;
+    // crude check for tx=
+    CTransactionRef tx;
+    std::vector<CAmount> amounts;
+    if (argc > 1 && !strncmp(argv[1], "tx=", 3)) {
+        const char* txdata = &argv[1][3];
+        // parse until we run out of amounts
+        const char* p = txdata;
+        while (1) {
+            const char* c = p;
+            while (*c && *c != ',' && *c != ':') ++c;
+            if (!*c) {
+                if (amounts.size() == 0) {
+                    // no amounts provided
+                    break;
+                }
+                fprintf(stderr, "error: tx hex missing from input\n");
+                return 1;
+            }
+            char* s = strndup(p, c-p);
+            std::string ss = s;
+            free(s);
+            CAmount a;
+            if (!ParseFixedPoint(ss, 8, &a)) {
+                fprintf(stderr, "failed to parse amount: %s\n", ss.c_str());
+                return 1;
+            }
+            amounts.push_back(a);
+            p = c + 1;
+            if (*c == ':') break;
+        }
+        std::vector<unsigned char> txData = ParseHex(p);
+        if (txData.size() != (strlen(p) >> 1)) {
+            fprintf(stderr, "failed to parse tx hex string\n");
+            return 1;
+        }
+        CDataStream ss(txData, SER_DISK, 0);
+        // tx = new CTransaction();
+        CMutableTransaction mtx;
+        UnserializeTransaction(mtx, ss);
+        tx = MakeTransactionRef(CTransaction(mtx));
+        while (amounts.size() < tx->vin.size()) amounts.push_back(0);
+        arg_idx++;
+        fprintf(stderr, "got transaction:\n%s\n", tx->ToString().c_str());
+    }
     char* script_str = NULL;
     if (piping) {
-        stack_idx--;
         char buf[1024];
         fgets(buf, 1024, stdin);
         int len = strlen(buf);
         while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r')) buf[--len] = 0;
         script_str = strdup(buf);
     } else {
-        script_str = argc > 1 ? strdup(argv[1]) : NULL;
+        script_str = argc > arg_idx ? strdup(argv[arg_idx]) : NULL;
+        arg_idx++;
     }
     if (script_str) {
         if (strlen(script_str) & 1) {
@@ -76,12 +129,18 @@ int main(int argc, const char** argv)
     }
     free(script_str);
     std::vector<valtype> stack;
-    BaseSignatureChecker checker;
+    BaseSignatureChecker* checker;
+    if (tx) {
+        checker = new TransactionSignatureChecker(tx.get(), 0, amounts[0]);
+    } else {
+        checker = new BaseSignatureChecker();
+    }
+    
     ScriptError error;
-    for (int i = 2; i < argc; i++) {
+    for (int i = arg_idx; i < argc; i++) {
         stack.push_back(ParseHex(argv[i]));
     }
-    env = new InterpreterEnv(stack, script, 0, checker, SIGVERSION_WITNESS_V0, &error);
+    env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS, *checker, SIGVERSION_BASE, &error);
     if (!env->operational) {
         fprintf(stderr, "failed to initialize script environment: %s\n", ScriptErrorString(error));
         return 1;

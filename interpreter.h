@@ -7,18 +7,17 @@
 #define BITCOIN_SCRIPT_INTERPRETER_H
 
 #include <script_error.h>
-// #include <primitives/transaction.h>
-// #include <uint256.h>
+#include <primitives/transaction.h>
+#include <uint256.h>
 #include <script.h>
 
 #include <vector>
 #include <stdint.h>
 #include <string>
 
-// class CPubKey;
+class CPubKey;
 class CScript;
-// class CTransaction;
-// class uint256;
+class uint256;
 
 /** Signature hash types/flags */
 enum
@@ -112,13 +111,13 @@ enum
 
 bool CheckSignatureEncoding(const std::vector<unsigned char> &vchSig, unsigned int flags, ScriptError* serror);
 
-// struct PrecomputedTransactionData
-// {
-//     uint256 hashPrevouts, hashSequence, hashOutputs;
-//     bool ready = false;
-// 
-//     explicit PrecomputedTransactionData(const CTransaction& tx);
-// };
+struct PrecomputedTransactionData
+{
+    uint256 hashPrevouts, hashSequence, hashOutputs;
+    bool ready = false;
+
+    explicit PrecomputedTransactionData(const CTransaction& tx);
+};
 
 enum SigVersion
 {
@@ -126,7 +125,7 @@ enum SigVersion
     SIGVERSION_WITNESS_V0 = 1,
 };
 
-// uint256 SignatureHash(const CScript &scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache = nullptr);
+uint256 SignatureHash(const CScript &scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache = nullptr);
 
 class BaseSignatureChecker
 {
@@ -149,24 +148,24 @@ public:
     virtual ~BaseSignatureChecker() {}
 };
 
-// class TransactionSignatureChecker : public BaseSignatureChecker
-// {
-// private:
-//     const CTransaction* txTo;
-//     unsigned int nIn;
-//     const CAmount amount;
-//     const PrecomputedTransactionData* txdata;
-// 
-// protected:
-//     virtual bool VerifySignature(const std::vector<unsigned char>& vchSig, const CPubKey& vchPubKey, const uint256& sighash) const;
-// 
-// public:
-//     TransactionSignatureChecker(const CTransaction* txToIn, unsigned int nInIn, const CAmount& amountIn) : txTo(txToIn), nIn(nInIn), amount(amountIn), txdata(nullptr) {}
-//     TransactionSignatureChecker(const CTransaction* txToIn, unsigned int nInIn, const CAmount& amountIn, const PrecomputedTransactionData& txdataIn) : txTo(txToIn), nIn(nInIn), amount(amountIn), txdata(&txdataIn) {}
-//     bool CheckSig(const std::vector<unsigned char>& scriptSig, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const override;
-//     bool CheckLockTime(const CScriptNum& nLockTime) const override;
-//     bool CheckSequence(const CScriptNum& nSequence) const override;
-// };
+class TransactionSignatureChecker : public BaseSignatureChecker
+{
+private:
+    const CTransaction* txTo;
+    unsigned int nIn;
+    const CAmount amount;
+    const PrecomputedTransactionData* txdata;
+
+protected:
+    virtual bool VerifySignature(const std::vector<unsigned char>& vchSig, const CPubKey& vchPubKey, const uint256& sighash) const;
+
+public:
+    TransactionSignatureChecker(const CTransaction* txToIn, unsigned int nInIn, const CAmount& amountIn) : txTo(txToIn), nIn(nInIn), amount(amountIn), txdata(nullptr) {}
+    TransactionSignatureChecker(const CTransaction* txToIn, unsigned int nInIn, const CAmount& amountIn, const PrecomputedTransactionData& txdataIn) : txTo(txToIn), nIn(nInIn), amount(amountIn), txdata(&txdataIn) {}
+    bool CheckSig(const std::vector<unsigned char>& scriptSig, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const override;
+    // bool CheckLockTime(const CScriptNum& nLockTime) const override;
+    // bool CheckSequence(const CScriptNum& nSequence) const override;
+};
 
 // class MutableTransactionSignatureChecker : public TransactionSignatureChecker
 // {
