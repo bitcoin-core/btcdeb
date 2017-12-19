@@ -197,7 +197,6 @@ struct Value {
         data.clear();
         // The rest of the symbols are converted witness program bytes.
         if (ConvertBits<5, 8, false>(data, bech.second.begin() + 1, bech.second.end())) {
-            printf("got "); println();
             if (version == 0) {
                 {
                     if (data.size() == 20) {
