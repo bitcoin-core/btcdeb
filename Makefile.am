@@ -31,6 +31,8 @@ noinst_PROGRAMS =
 # bitcoin core #
 BITCOIN_CORE_H = \
 	amount.h \
+	base58.h \
+	bech32.h \
 	crypto/common.h \
 	crypto/hmac_sha512.h \
 	crypto/ripemd160.h \
@@ -60,6 +62,8 @@ libbitcoin_a_LIBADD = $(LIBSECP256K1)
 libbitcoin_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_a_CXXFLAGS = $(AM_CXXFLAGS)
 libbitcoin_a_SOURCES = \
+	base58.cpp \
+	bech32.cpp \
 	crypto/hmac_sha512.cpp \
 	crypto/ripemd160.cpp \
 	crypto/sha1.cpp \
@@ -81,7 +85,9 @@ libkerl_a_CPPFLAGS = $(AM_CPPFLAGS) -Ikerl
 libkerl_a_SOURCES = kerl/kerl.c kerl/kerl.h
 
 # btcdeb binary #
-btcdeb_SOURCES = btcdeb.cpp
+btcdeb_SOURCES = \
+	btcdeb.cpp \
+	value.h
 btcdeb_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)

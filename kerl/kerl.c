@@ -107,6 +107,7 @@ void kerl_run(const char *prompt)
   /* Loop reading and executing lines until the user quits. */
   for ( ; done == 0; ) {
     line = readline(prompt);
+    printf("> %s\n", line);
 
     if (!line) break;
 
@@ -116,21 +117,22 @@ void kerl_run(const char *prompt)
     s = stripwhite(line);
 
     if (*s) {
+      if (repeat_empty) {
+        if (pline) free(pline);
+        pline = strdup(line);
+        p = stripwhite(pline);
+      }
       kerl_add_history(s);
       execute_line(s);
     } else if (repeat_empty) {
-      if (p) execute_line(p);
-      free(line);
-      continue;
+      if (p) {
+          s = strdup(p);
+          printf("々 %s\n", s);
+          execute_line(s);
+          free(s);
+      }
     }
-
-    if (repeat_empty) {
-      if (pline) free(pline);
-      pline = line;
-      p = s;
-    } else {
-      free(line);
-    }
+    free(line);
   }
 }
 
@@ -385,15 +387,18 @@ char **kerl_completion(char *text, int start, int end)
     /* If we have a custom completor, we use that. Otherwise it is the name 
        of a file in the current directory. */
     int spaces = 0;
-    for (register int i = 0; spaces < 2 && rl_line_buffer[i]; i++) spaces += rl_line_buffer[i] == ' ';
+    for (register int i = 0; spaces < 2 && i < rl_point; i++) spaces += rl_line_buffer[i] == ' ';
+    if (spaces > 1) printf("spaces = %d in '%s', no completion for yoooou\n", spaces, rl_line_buffer);
     if (spaces < 2) {
       char *strcom = strdup_command(rl_line_buffer);
       int clen = strlen(strcom);
       COMMAND *com = find_command(strcom);
-      free(strcom);
       if (com && com->compl) {
         matches = rl_completion_matches(text, com->compl);
-      }
+        } else {
+            printf("no completion for command %s\n", strcom);
+        }
+        free(strcom);
     }
   }
 #endif // HAVE_LIBREADLINE
