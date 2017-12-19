@@ -107,7 +107,6 @@ void kerl_run(const char *prompt)
   /* Loop reading and executing lines until the user quits. */
   for ( ; done == 0; ) {
     line = readline(prompt);
-    printf("> %s\n", line);
 
     if (!line) break;
 
@@ -127,7 +126,6 @@ void kerl_run(const char *prompt)
     } else if (repeat_empty) {
       if (p) {
           s = strdup(p);
-          printf("々 %s\n", s);
           execute_line(s);
           free(s);
       }
