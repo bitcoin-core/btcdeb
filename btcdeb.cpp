@@ -18,6 +18,7 @@ extern "C" {
 typedef std::vector<unsigned char> valtype;
 
 int fn_step(const char*);
+int fn_rewind(const char*);
 int fn_exec(const char*);
 int fn_stack(const char*);
 int fn_altstack(const char*);
@@ -182,6 +183,7 @@ int main(int argc, const char** argv)
         kerl_set_history_file(".btcdeb_history");
         kerl_set_repeat_on_empty(true);
         kerl_register("step", fn_step, "Execute one instruction and iterate in the script.");
+        kerl_register("rewind", fn_rewind, "Go back in time one instruction.");
         kerl_register("stack", fn_stack, "Print stack content.");
         kerl_register("altstack", fn_altstack, "Print altstack content.");
         kerl_register("exec", fn_exec, "Execute command.");
@@ -206,6 +208,18 @@ int main(int argc, const char** argv)
 int fn_step(const char* arg) {
     if (env->done) fail("at end of script\n");
     if (!StepScript(*env)) fail("error: %s\n", ScriptErrorString(*env->serror));
+    print_dualstack();
+    if (env->curr_op_seq < count) {
+        printf("%s\n", script_lines[env->curr_op_seq]);
+    }
+    return 0;
+}
+
+int fn_rewind(const char* arg) {
+    if (env->done) {
+        env->done = false;
+    }
+    if (!RewindScript(*env)) fail("error: no history to rewind\n");
     print_dualstack();
     if (env->curr_op_seq < count) {
         printf("%s\n", script_lines[env->curr_op_seq]);

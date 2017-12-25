@@ -182,9 +182,15 @@ bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const C
 size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags);
 
 typedef std::vector<unsigned char> valtype;
+typedef std::vector<valtype> stack_type;
 
 struct InterpreterEnv {
-    std::vector<valtype>& stack;
+    std::vector<stack_type> stack_history;
+    std::vector<stack_type> altstack_history;
+    std::vector<CScript::const_iterator> pc_history;
+    std::vector<int> nOpCount_history;
+    stack_type stack;
+    stack_type altstack;
     const CScript& script;
     unsigned int flags;
     const BaseSignatureChecker& checker;
@@ -196,17 +202,17 @@ struct InterpreterEnv {
     opcodetype opcode;
     valtype vchPushValue;
     std::vector<bool> vfExec;
-    std::vector<valtype> altstack;
     int nOpCount;
     int curr_op_seq;
     bool fRequireMinimal;
     bool operational;
     bool done;
-    InterpreterEnv(std::vector<valtype>& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in, SigVersion sigversion_in, ScriptError* error_in = nullptr);
+    InterpreterEnv(stack_type& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in, SigVersion sigversion_in, ScriptError* error_in = nullptr);
 };
 
 bool StepScript(InterpreterEnv& env);
 bool ContinueScript(InterpreterEnv& env);
 bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_iterator& it, bool update_env);
+bool RewindScript(InterpreterEnv& env);
 
 #endif // BITCOIN_SCRIPT_INTERPRETER_H

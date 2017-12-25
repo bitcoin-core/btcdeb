@@ -1655,7 +1655,15 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
         // Size limits
         if (stack.size() + altstack.size() > MAX_STACK_SIZE)
             return set_error(serror, SCRIPT_ERR_STACK_SIZE);
+
+        // Success state; perform updates
         if (update_env) {
+            // Store history entry
+            env.stack_history.push_back(env.stack);
+            env.altstack_history.push_back(env.altstack);
+            env.pc_history.push_back(env.pc);
+            env.nOpCount_history.push_back(env.nOpCount);
+            // Update environment
             env.curr_op_seq++;
             env.nOpCount = nOpCount;
             env.pc = it;
@@ -1668,6 +1676,25 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
     {
         return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
     }
+    return true;
+}
+
+bool RewindScript(InterpreterEnv& env)
+{
+    if (env.stack_history.size() == 0) {
+        return false;
+    }
+    // Rewind from history
+    env.stack = env.stack_history.back();
+    env.altstack = env.altstack_history.back();
+    env.pc = env.pc_history.back();
+    env.curr_op_seq--;
+    env.nOpCount = env.nOpCount_history.back();
+    // Pop
+    env.stack_history.pop_back();
+    env.altstack_history.pop_back();
+    env.pc_history.pop_back();
+    env.nOpCount_history.pop_back();
     return true;
 }
 
