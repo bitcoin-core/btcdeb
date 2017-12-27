@@ -470,7 +470,7 @@ AC_SUBST(LIBTOOL_APP_LDFLAGS)
 AC_CONFIG_FILES([Makefile])
 
 ac_configure_args="${ac_configure_args} --disable-shared --with-pic --with-bignum=no --enable-module-recovery --disable-jni"
-AC_CONFIG_SUBDIRS([src/secp256k1])
+AC_CONFIG_SUBDIRS([secp256k1])
 
 AC_OUTPUT
 

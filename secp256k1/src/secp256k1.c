@@ -302,24 +302,9 @@ int secp256k1_ecdsa_verify(const secp256k1_context* ctx, const secp256k1_ecdsa_s
 
     secp256k1_scalar_set_b32(&m, msg32, NULL);
     secp256k1_ecdsa_signature_load(ctx, &r, &s, sig);
-    int r1 = !secp256k1_scalar_is_high(&s);
-    if (!r1) {
-        fprintf(stderr, "<secp256k1_ecdsa_verify()>: verify failure: !secp256k1_scalar_is_high() is false [scalar must not be high]\n");
-        return r1;
-    }
-    int r2 = secp256k1_pubkey_load(ctx, &q, pubkey);
-    if (!r2) {
-        fprintf(stderr, "<secp256k1_ecdsa_verify()>: verify failure: secp256k1_pubkey_load(ctx, &q, pubkey) failed [failed to load pubkey]\n");
-        return r2;
-    }
-    int r3 = secp256k1_ecdsa_sig_verify(&ctx->ecmult_ctx, &r, &s, &q, &m);
-    if (!r3) {
-        fprintf(stderr, "<secp256k1_ecdsa_verify()>: verify failure: secp256k1_ecdsa_sig_verify(&ctx->ecmult_ctx, &r, &s, &q, &m) failed\n");
-    }
-    return r3;
-    // return (!secp256k1_scalar_is_high(&s) &&
-    //         secp256k1_pubkey_load(ctx, &q, pubkey) &&
-    //         secp256k1_ecdsa_sig_verify(&ctx->ecmult_ctx, &r, &s, &q, &m));
+    return (!secp256k1_scalar_is_high(&s) &&
+            secp256k1_pubkey_load(ctx, &q, pubkey) &&
+            secp256k1_ecdsa_sig_verify(&ctx->ecmult_ctx, &r, &s, &q, &m));
 }
 
 static int nonce_function_rfc6979(unsigned char *nonce32, const unsigned char *msg32, const unsigned char *key32, const unsigned char *algo16, void *data, unsigned int counter) {

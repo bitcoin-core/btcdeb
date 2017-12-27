@@ -208,9 +208,6 @@ static int secp256k1_ecdsa_sig_verify(const secp256k1_ecmult_context *ctx, const
     secp256k1_gej pr;
 
     if (secp256k1_scalar_is_zero(sigr) || secp256k1_scalar_is_zero(sigs)) {
-        int r1 = secp256k1_scalar_is_zero(sigr);
-        int r2 = secp256k1_scalar_is_zero(sigs);
-        fprintf(stderr, "<secp256k1_ecdsa_sig_verify()>: verify failed: zero scalars are not allowed (sigr is %szero, sigs is %szero)\n", r1 ? "" : "not ", r2 ? "" : "not ");
         return 0;
     }
 
@@ -220,7 +217,6 @@ static int secp256k1_ecdsa_sig_verify(const secp256k1_ecmult_context *ctx, const
     secp256k1_gej_set_ge(&pubkeyj, pubkey);
     secp256k1_ecmult(ctx, &pr, &pubkeyj, &u2, &u1);
     if (secp256k1_gej_is_infinity(&pr)) {
-        fprintf(stderr, "<secp256k1_ecdsa_sig_verify()>: verify failed: group element is infinity [signature validation failed]\n");
         return 0;
     }
 
@@ -233,11 +229,7 @@ static int secp256k1_ecdsa_sig_verify(const secp256k1_ecmult_context *ctx, const
 
     secp256k1_fe_get_b32(c, &pr_ge.x);
     secp256k1_scalar_set_b32(&computed_r, c, NULL);
-    int r1 = secp256k1_scalar_eq(sigr, &computed_r);
-    if (!r1) {
-        fprintf(stderr, "<secp256k1_ecdsa_sig_verify()>: in EXHAUSTIVE_TEST_ORDER, secp256k1_scalar_eq(sigr, &computed_r) is false\n");
-    }
-    return r1;// secp256k1_scalar_eq(sigr, &computed_r);
+    return secp256k1_scalar_eq(sigr, &computed_r);
 }
 #else
     secp256k1_scalar_get_b32(c, sigr);
@@ -265,7 +257,6 @@ static int secp256k1_ecdsa_sig_verify(const secp256k1_ecmult_context *ctx, const
     }
     if (secp256k1_fe_cmp_var(&xr, &secp256k1_ecdsa_const_p_minus_order) >= 0) {
         /* xr + n >= p, so we can skip testing the second case. */
-        fprintf(stderr, "<secp256k1_ecdsa_sig_verify()>: secp256k1_fe_cmp_var(&xr, &secp256k1_ecdsa_const_p_minus_order) >= 0\n");
         return 0;
     }
     secp256k1_fe_add(&xr, &secp256k1_ecdsa_const_order_as_fe);
@@ -273,7 +264,6 @@ static int secp256k1_ecdsa_sig_verify(const secp256k1_ecmult_context *ctx, const
         /* (xr + n) * pr.z^2 mod p == pr.x, so the signature is valid. */
         return 1;
     }
-    fprintf(stderr, "<secp256k1_ecdsa_sig_verify()>: all validation cases exhausted; failed to verify signature\n");
     return 0;
 #endif
 }
