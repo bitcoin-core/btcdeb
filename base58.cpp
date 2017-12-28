@@ -17,6 +17,7 @@
 #include <assert.h>
 #include <string.h>
 
+std::vector<std::vector<unsigned char>> base58Prefixes;
 
 /** All alphanumeric characters except for "0", "I", "O", and "l" */
 static const char* pszBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";

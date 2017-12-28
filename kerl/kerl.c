@@ -14,6 +14,12 @@
 
 #include "kerl.h"
 
+#ifndef NO_AUTOMAKE
+#  ifdef HAVE_LIBREADLINE
+char *cmdline = NULL;
+#  endif
+#endif
+
 #ifndef whitespace
 #define whitespace(c) (((c) == ' ') || ((c) == '\t'))
 #endif

@@ -29,9 +29,9 @@
 #    elif defined(HAVE_READLINE_H)
 #      include <readline.h>
 #    else /* !defined(HAVE_READLINE_H) */
-       extern char *readline ();
+       char *readline ();
 #    endif /* !defined(HAVE_READLINE_H) */
-     char *cmdline = NULL;
+     extern char *cmdline;
 #  else /* !defined(HAVE_READLINE_READLINE_H) */
      /* no readline */
 #  endif /* HAVE_LIBREADLINE */

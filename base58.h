@@ -120,9 +120,9 @@ enum Base58Type {
     MAX_BASE58_TYPES
 };
 
-std::vector<std::vector<unsigned char>> base58Prefixes;
+extern std::vector<std::vector<unsigned char>> base58Prefixes;
 
-std::vector<unsigned char> Base58Prefix(Base58Type t) {
+inline std::vector<unsigned char> Base58Prefix(Base58Type t) {
     if (base58Prefixes.size() == 0) {
         base58Prefixes.resize(MAX_BASE58_TYPES);
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,0);
