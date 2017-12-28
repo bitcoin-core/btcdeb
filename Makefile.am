@@ -44,6 +44,7 @@ BITCOIN_CORE_H = \
 	compat/endian.h \
 	hash.h \
 	interpreter.h \
+	merkle.h \
 	policy/policy.h \
 	prevector.h \
 	primitives/transaction.h \
@@ -72,6 +73,7 @@ libbitcoin_a_SOURCES = \
 	crypto/sha512.cpp \
 	hash.cpp \
 	interpreter.cpp \
+	merkle.cpp \
 	primitives/transaction.cpp \
 	pubkey.cpp \
 	script.cpp \
