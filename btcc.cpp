@@ -17,7 +17,7 @@ int main(int argc, const char** argv)
     CScript script;
     for (int i = 1; i < argc; i++) {
         const char* v = argv[i];
-        const size_t vlen = strlen(v);
+        size_t vlen = strlen(v);
         // empty strings are ignored
         if (!v[0]) continue;
         // number?
@@ -45,6 +45,10 @@ int main(int argc, const char** argv)
         }
         // hex string?
         if (!(vlen & 1)) {
+            if (vlen > 1 && v[0] == '0' && v[1] == 'x') {
+                v = &v[2];
+                vlen -= 2;
+            }
             std::vector<unsigned char> pushData(ParseHex(v));
             if (pushData.size() == (vlen >> 1)) {
                 script << pushData;

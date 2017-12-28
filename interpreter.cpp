@@ -853,7 +853,9 @@ size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey,
 
 InterpreterEnv::InterpreterEnv(std::vector<valtype>& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in, SigVersion sigversion_in, ScriptError* error_in)
 : stack(stack_in)
+, scriptIn(script_in)
 , script(script_in)
+, tail_call_reverter(script.end())
 , flags(flags_in)
 , checker(checker_in)
 , sigversion(sigversion_in)
@@ -873,6 +875,7 @@ InterpreterEnv::InterpreterEnv(std::vector<valtype>& stack_in, const CScript& sc
     }
     nOpCount = 0;
     fRequireMinimal = (flags & SCRIPT_VERIFY_MINIMALDATA) != 0;
+    allow_tail_call = (flags & SCRIPT_VERIFY_TAIL_CALL) != 0;
 }
 
 bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_iterator& it, bool update_env)
@@ -889,6 +892,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
     auto& checker = env.checker;
     auto& pbegincodehash = env.pbegincodehash;
     auto& sigversion = env.sigversion;
+    auto& allow_tail_call = env.allow_tail_call;
 
     // updated on success only
     auto  vchPushValue = env.vchPushValue;
@@ -1838,30 +1842,36 @@ bool RewindScript(InterpreterEnv& env)
 
 bool StepScript(InterpreterEnv& env)
 {
-    static const CScriptNum bnZero(0);
-    static const CScriptNum bnOne(1);
-    static const valtype vchFalse(0);
-    static const valtype vchTrue(1, 1);
-    auto& opcode = env.opcode;
     auto& script = env.script;
     auto& serror = env.serror;
-    auto& fRequireMinimal = env.fRequireMinimal;
     auto& pend = env.pend;
     auto& vfExec = env.vfExec;
-    auto& flags = env.flags;
-    auto& checker = env.checker;
-    auto& pbegincodehash = env.pbegincodehash;
-    auto& sigversion = env.sigversion;
 
     // updated on success only
-    auto  vchPushValue = env.vchPushValue;
-    auto  nOpCount = env.nOpCount;
-    auto  stack = env.stack;
-    auto  altstack = env.altstack;
     auto  pc = env.pc;
 
     if (pc < pend) {
         return ExecIterator(env, script, pc, true);
+    }
+
+    auto& allow_tail_call = env.allow_tail_call;
+    auto& stack = env.stack;
+    auto& altstack = env.altstack;
+    auto& nOpCount = env.nOpCount;
+
+    if (allow_tail_call && !stack.empty() && ((stack.size() + altstack.size()) >= 2) && CastToBool(stack.back())) {
+        // Replace the script we just finished executing with the
+        // subscript from the top of the stack:
+        const valtype& policyScript = stacktop(-1);
+        script = CScript(policyScript.begin(), policyScript.end());
+        popstack(stack);
+        // Only allow one tail-call:
+        allow_tail_call = false;
+        // Disable nOpCount limit for subscript, effectively:
+        nOpCount = std::numeric_limits<int>::min();
+        // Go back to the top of this function:
+        // We don't actually do that
+        return true;
     }
 
     // we are at end; set done var

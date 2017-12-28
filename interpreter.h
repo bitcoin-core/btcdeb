@@ -112,6 +112,11 @@ enum
     //
     // See BIP116 for details
     SCRIPT_VERIFY_MERKLEBRANCHVERIFY = (1U << 16),
+
+    // Tail call recursion
+    //
+    // See BIP-117 for details.
+    SCRIPT_VERIFY_TAIL_CALL = (1U << 17),
 };
 
 bool CheckSignatureEncoding(const std::vector<unsigned char> &vchSig, unsigned int flags, ScriptError* serror);
@@ -194,9 +199,13 @@ struct InterpreterEnv {
     std::vector<stack_type> altstack_history;
     std::vector<CScript::const_iterator> pc_history;
     std::vector<int> nOpCount_history;
+    std::vector<const CScript> script_history;
     stack_type stack;
     stack_type altstack;
-    const CScript& script;
+    const CScript& scriptIn;
+    CScript script;
+    bool allow_tail_call;
+    CScript::const_iterator tail_call_reverter;
     unsigned int flags;
     const BaseSignatureChecker& checker;
     SigVersion sigversion;
