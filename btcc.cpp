@@ -21,11 +21,11 @@ int main(int argc, const char** argv)
         // empty strings are ignored
         if (!v[0]) continue;
         // number?
-        int n = atoi(v);
+        int64_t n = atoll(v);
         if (n != 0) {
             // verify
             char buf[vlen + 1];
-            sprintf(buf, "%d", n);
+            sprintf(buf, "%lld", n);
             if (!strcmp(buf, v)) {
                 // verified; can it be a hexstring too?
                 if (!(vlen & 1)) {
@@ -35,11 +35,11 @@ int main(int argc, const char** argv)
                         fprintf(stderr, "warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
                     }
                 }
-                // can it be an opcode too?
-                if (n < 16) {
-                    fprintf(stderr, "warning: ambiguous input %s is interpreted as a numeric value (%s), not as an opcode (OP_%s). Use OP_%s to force into op code interpretation\n", v, v, v, v);
-                }
-                script << (int64_t)n;
+                // // can it be an opcode too?
+                // if (n < 16) {
+                //     fprintf(stderr, "warning: ambiguous input %s is interpreted as a numeric value (%s), not as an opcode (OP_%s). Use OP_%s to force into op code interpretation\n", v, v, v, v);
+                // }
+                script << n;
                 continue;
             }
         }
