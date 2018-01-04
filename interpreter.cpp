@@ -1665,13 +1665,17 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                 }
 
                 // ([...verify hashes...] proof root {2*count+prehash})
+                btc_logf("[MBV] check: stack size %zu >= 3\n", stack.size());
                 if (stack.size() < 3) {
                     return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
                 }
 
                 valtype& vchCount = stacktop(-1);
+                btc_logf("[MBV] vchCount [%zu] = ", vchCount.size()); print_vec(vchCount); btc_logf("\n");
                 valtype& vchRoot  = stacktop(-2);
+                btc_logf("[MBV] vchRoot  [%zu] = ", vchRoot.size()); print_vec(vchRoot); btc_logf("\n");
                 valtype& vchProof = stacktop(-3);
+                btc_logf("[MBV] vchProof [%zu] = ", vchProof.size()); print_vec(vchProof); btc_logf("\n");
 
                 // vchCount is a minimally encoded CScriptNum
                 // encoding 2*N plus a Boolean value in the low
@@ -1705,6 +1709,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                 // There are count=N many leaf objects passed on
                 // the stack after the first three parameters
                 // which are always present.
+                btc_logf("[MBV] check: stack size %zu >= (3 + count %zu)\n", stack.size(), count);
                 if (stack.size() < (3 + count)) {
                     return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
                 }
@@ -1726,13 +1731,15 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                     Unserialize(proofStream, branch.m_proof);
                 } catch (const std::bad_alloc e) {
                     throw; // Don't mask a transient out-of-memory exception
-                } catch (...) {
+                } catch (const std::exception e) {
+                    btc_logf("[MBV] error: failed to deserialize proof stream: %s\n", e.what());
                     return set_error(serror, SCRIPT_ERR_BAD_DECODE_ARG3);
                 }
                 if (!proofStream.empty()) {
                     // Extra bytes remaining after the MerkleProof
                     // was deserialized, which could be a source
                     // of witness malleability.
+                    btc_logf("[MBV] error: proof stream has extra bytes\n");
                     return set_error(serror, SCRIPT_ERR_BAD_DECODE_ARG3);
                 }
                 if (branch.m_proof.m_path.dirty()) {
@@ -1740,6 +1747,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                     // serialization of the Merkle branch's path,
                     // which would otherwise be another source of
                     // witness malleability.
+                    btc_logf("[MBV] error: branch proof path is dirty\n");
                     return set_error(serror, SCRIPT_ERR_BAD_DECODE_ARG3);
                 }
                 if ((!branch.m_proof.m_path.empty() || count || !branch.m_proof.m_skip.empty()) &&
@@ -1752,6 +1760,12 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                     // this is a well-formed proof. Note that the
                     // special case of a 0-node, 0-verify, 0-skip
                     // tree is exempted from this requirement.
+                    btc_logf("[MBV] error: %s and count + branch proof skip size != branch proof path size + 1\n",
+                        !branch.m_proof.m_path.empty() ? "branch proof path not empty" :
+                        count ? "count is non-zero" :
+                        !branch.m_proof.m_skip.empty() ? "branch proof skip list not empty" :
+                        "?????"
+                    );
                     return set_error(serror, SCRIPT_ERR_BAD_DECODE_ARG3);
                 }
 
@@ -1816,6 +1830,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
     } // try
     catch (std::exception e)
     {
+        btc_logf("exception thrown: %s\n", e.what());
         return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
     }
     return true;

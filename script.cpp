@@ -285,7 +285,7 @@ opcodetype GetOpCode(const char* name)
     c(NOP1);
     c(CHECKLOCKTIMEVERIFY);
     c(CHECKSEQUENCEVERIFY);
-    c(NOP4);
+    c(MERKLEBRANCHVERIFY);
     c(NOP5);
     c(NOP6);
     c(NOP7);

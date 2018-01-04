@@ -145,7 +145,7 @@ int main(int argc, const char** argv)
     for (int i = arg_idx; i < argc; i++) {
         stack.push_back(ParseHex(argv[i]));
     }
-    env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS, *checker, SIGVERSION_BASE, &error);
+    env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, *checker, SIGVERSION_BASE, &error);
     if (!env->operational) {
         fprintf(stderr, "failed to initialize script environment: %s\n", ScriptErrorString(error));
         return 1;
