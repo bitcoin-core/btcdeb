@@ -1694,6 +1694,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                     }
                     prehashed = param & 1;
                     count = param >> 1;
+                    btc_logf("[MBV] count = %zu (prehashed = %s)\n", count, prehashed ? "true" : "false");
                 } catch (scriptnum_error e) {
                     // param is more than 2 bytes or not minimally encoded
                     return set_error(serror, SCRIPT_ERR_BAD_DECODE_ARG1);
@@ -1778,6 +1779,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                     // -1 through -3 are the count+prehashed, root
                     // hash, and MerkleProof we already extracted.
                     valtype& vchLeaf = stacktop(-4 - i);
+                    btc_logf("[MBV] get leaf %d = %s\n", i, HexStr(vchLeaf).c_str());
                     if (prehashed) {
                         // Require 32-byte hash values, no
                         // truncation of ending bytes.
@@ -1788,11 +1790,16 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                     } else {
                         branch.m_verify.emplace_back();
                         CHash256().Write(vchLeaf.data(), vchLeaf.size()).Finalize(branch.m_verify.back().begin());
+                        btc_logf("[MBV] leaf hash = %s\n", HexStr(branch.m_verify.back()).c_str());
                     }
                 }
 
                 // Compute Merkle root hash
-                uint256 result = branch.GetHash();
+                bool invalid = false;
+                uint256 result = branch.GetHash(&invalid);
+                if (invalid) btc_logf("[MBV] The branch input was NOT valid\n");
+                btc_logf("merkle root hash = %s\n", HexStr(result).c_str());
+                btc_logf("given root hash  = %s\n", HexStr(root).c_str());
 
                 // Do not pop arguments from the stack as we
                 // retain soft- fork compatibility. Scripts must
