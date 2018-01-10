@@ -1861,9 +1861,7 @@ bool StepScript(InterpreterEnv& env)
     auto& serror = env.serror;
     auto& pend = env.pend;
     auto& vfExec = env.vfExec;
-
-    // updated on success only
-    auto  pc = env.pc;
+    auto& pc = env.pc;
 
     if (pc < pend) {
         return ExecIterator(env, script, pc, true);
@@ -1875,10 +1873,13 @@ bool StepScript(InterpreterEnv& env)
     auto& nOpCount = env.nOpCount;
 
     if (allow_tail_call && !stack.empty() && ((stack.size() + altstack.size()) >= 2) && CastToBool(stack.back())) {
+        // Note that we are referencing all variables, so this will update env.*
         // Replace the script we just finished executing with the
         // subscript from the top of the stack:
         const valtype& policyScript = stacktop(-1);
         script = CScript(policyScript.begin(), policyScript.end());
+        pc = script.begin();
+        pend = script.end();
         popstack(stack);
         // Only allow one tail-call:
         allow_tail_call = false;
