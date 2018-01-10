@@ -74,7 +74,7 @@ struct Value {
             insert(data, it.data_value());
         }
     }
-    Value(const char* v, size_t vlen = 0, bool pushed = false) {
+    Value(const char* v, size_t vlen = 0, bool pushed = false, bool stack = false) {
         if (!vlen) vlen = strlen(v);
         str = v;
         type = T_STRING;
@@ -117,9 +117,12 @@ struct Value {
         // hex string?
         if (!(vlen & 1)) {
             data = ParseHex(v);
+            if (vlen > 2 && v[0] == '0' && v[1] == 'x') {
+                vlen--;
+            }
             if (data.size() == (vlen >> 1)) {
                 type = T_DATA;
-                if (data.size() < 16) {
+                if (data.size() < 16 && !stack) {
                     // pull out int64 and push that
                     int64_t i64 = int_value();
                     CScript s = CScript() << i64;
