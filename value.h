@@ -60,7 +60,6 @@ struct Value {
                 }
                 args_ptr[arg_idx] = strndup(&args_string[start], i - start);
                 args.push_back(args_ptr[arg_idx]);
-                printf("- arg: %s\n", args_ptr[arg_idx]);
                 arg_idx++;
                 start = i + 1;
             }
