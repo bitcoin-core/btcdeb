@@ -320,19 +320,20 @@ static const char* tfs[] = {
     nullptr
 };
 
-int _e_hex(const char* v)     { Value pv(v); printf("%s\n", pv.hex_str().c_str()); return 0; }
-int _e_int(const char* v)     { Value pv(v); printf("%lld\n", pv.int_value()); return 0; }
-int _e_reverse(const char* v) { Value pv(v); pv.do_reverse(); pv.println(); return 0; }
-int _e_sha256(const char* v)  { Value pv(v); pv.do_sha256(); pv.println(); return 0; }
-int _e_ripemd160(const char* v) { Value pv(v); pv.do_ripemd160(); pv.println(); return 0; }
-int _e_hash256(const char* v)  { Value pv(v); pv.do_hash256(); pv.println(); return 0; }
-int _e_hash160(const char* v)  { Value pv(v); pv.do_hash160(); pv.println(); return 0; }
-int _e_b58ce(const char* v)   { Value pv(v); pv.do_base58chkenc(); pv.println(); return 0; }
-int _e_b58cd(const char* v)   { Value pv(v); pv.do_base58chkdec(); pv.println(); return 0; }
-int _e_b32e(const char* v)    { Value pv(v); pv.do_bech32enc(); pv.println(); return 0; }
-int _e_b32d(const char* v)    { Value pv(v); pv.do_bech32dec(); pv.println(); return 0; }
+int _e_hex(Value&& pv)     { printf("%s\n", pv.hex_str().c_str()); return 0; }
+int _e_int(Value&& pv)     { printf("%lld\n", pv.int_value()); return 0; }
+int _e_reverse(Value&& pv) { pv.do_reverse(); pv.println(); return 0; }
+int _e_sha256(Value&& pv)  { pv.do_sha256(); pv.println(); return 0; }
+int _e_ripemd160(Value&& pv) { pv.do_ripemd160(); pv.println(); return 0; }
+int _e_hash256(Value&& pv)  { pv.do_hash256(); pv.println(); return 0; }
+int _e_hash160(Value&& pv)  { pv.do_hash160(); pv.println(); return 0; }
+int _e_b58ce(Value&& pv)   { pv.do_base58chkenc(); pv.println(); return 0; }
+int _e_b58cd(Value&& pv)   { pv.do_base58chkdec(); pv.println(); return 0; }
+int _e_b32e(Value&& pv)    { pv.do_bech32enc(); pv.println(); return 0; }
+int _e_b32d(Value&& pv)    { pv.do_bech32dec(); pv.println(); return 0; }
 
-static const kerl_bindable tffp[] = {
+typedef int (*btcdeb_tfun) (Value&&);
+static const btcdeb_tfun tffp[] = {
     _e_hex,
     _e_int,
     _e_reverse,
@@ -354,8 +355,8 @@ int fn_tf(const char* arg) {
         printf("user abort\n");
         return -1;
     }
-    if (argc != 2) {
-        printf("syntax: tf <command> <param1>\n");
+    if (argc < 2) {
+        printf("syntax: tf <command> <param1> [...]\n");
         printf("transform a value using some function\n");
         printf("available functions are:");
         for (int i = 0; tfs[i]; i++) {
@@ -370,7 +371,7 @@ int fn_tf(const char* arg) {
         printf("unknown function: %s\n", argv[0]);
         return -1;
     }
-    return tffp[i](argv[1]);
+    return tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1)));
 }
 
 char* compl_tf(const char* text, int continued) {
