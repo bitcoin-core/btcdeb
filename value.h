@@ -35,7 +35,7 @@ struct Value {
                 if (v[0] == '[' && v[vlen-1] == ']') {
                     result.emplace_back(parse_args(&v[1], vlen - 2));
                 } else {
-                    result.emplace_back(v, vlen, true);
+                    result.emplace_back(v, vlen, embedding);
                 }
             }
         }
@@ -116,13 +116,14 @@ struct Value {
         }
         // hex string?
         if (!(vlen & 1)) {
-            data = ParseHex(v);
             if (vlen > 2 && v[0] == '0' && v[1] == 'x') {
-                vlen--;
+                vlen -= 2;
+                v = &v[2];
             }
+            data = ParseHex(v);
             if (data.size() == (vlen >> 1)) {
                 type = T_DATA;
-                if (data.size() < 16 && !stack) {
+                if (data.size() < 2 && !stack) {
                     // pull out int64 and push that
                     int64_t i64 = int_value();
                     CScript s = CScript() << i64;
