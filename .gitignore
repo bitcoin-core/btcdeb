@@ -69,6 +69,7 @@ configure
 libtool
 .btcdeb_history
 btcdeb
+merklebranch
 
 # autoreconf
 Makefile.in
