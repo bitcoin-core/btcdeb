@@ -119,11 +119,7 @@ int main(int argc, const char** argv)
     }
     CScript script;
     if (script_str) {
-        std::vector<unsigned char> scriptData(ParseHex(script_str));
-        if (scriptData.size() != (strlen(script_str) >> 1)) {
-            fprintf(stderr, "failed to parse hex string\n");
-            return 1;
-        }
+        std::vector<unsigned char> scriptData = Value(script_str).data_value();
         script = CScript(scriptData.begin(), scriptData.end());
         if (script.HasValidOps()) {
             btc_logf("valid script\n");
