@@ -143,7 +143,7 @@ int main(int argc, const char** argv)
     
     ScriptError error;
     for (int i = arg_idx; i < argc; i++) {
-        stack.push_back(ParseHex(argv[i]));
+        stack.push_back(Value(argv[i]).data_value());
     }
     env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, *checker, SIGVERSION_BASE, &error);
     if (!env->operational) {
