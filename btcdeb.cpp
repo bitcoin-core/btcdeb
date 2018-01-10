@@ -45,7 +45,7 @@ int main(int argc, const char** argv)
     if (piping) btc_logf = btc_logf_dummy;
 
     if (argc == 2 && !strcmp(argv[1], "-h")) {
-        fprintf(stderr, "syntax: %s [tx=[amount1,amount2,..:]<hex> [<script> [<stack top item> [... [<stack bottom item>]]]]]\n", argv[0]);
+        fprintf(stderr, "syntax: %s [tx=[amount1,amount2,..:]<hex> [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
         fprintf(stderr, "if executed with no arguments, an empty script and empty stack is provided\n");
         fprintf(stderr, "to debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
             "as well as (SegWit only) every amount for the inputs\n");
