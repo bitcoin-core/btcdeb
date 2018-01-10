@@ -26,33 +26,47 @@ struct Value {
     int64_t i;
     std::vector<uint8_t> data;
     std::string str;
-    static std::vector<Value> parse_args(const size_t argc, const char** argv, size_t argi = 0, const size_t argv0idx = 0,
-            bool embedding = false, size_t* out_argi = nullptr, size_t* out_next_vlen = nullptr) {
+    static std::vector<Value> parse_args(const std::vector<const char*> args, bool embedding = false) {
         std::vector<Value> result;
-        size_t next_vlen = 0;
-        for (size_t i = argi; i < argc; ++i) {
-            const char* v = i == argi ? &argv[i][argv0idx] : argv[i];
-            size_t vlen =  next_vlen ?: strlen(v);
-            bool ends = false;
+        for (auto& v : args) {
+            size_t vlen = strlen(v);
             if (vlen > 0) {
-                // if we have a leading bracket, we are building an embedded value
-                if (v[0] == '[') {
-                    result.emplace_back(parse_args(argc - i, argv, i, i == argi ? argv0idx + 1 : 1, true, &i, &next_vlen));
-                } else if (v[vlen - 1] == ']') {
-                    if (!embedding) {
-                        throw std::runtime_error("Unexpected ending ']' bracket encountered in value");
-                    }
-                    ends = true;
-                    vlen--;
-                    *out_next_vlen = vlen;
+                // brackets embed
+                if (v[0] == '[' && v[vlen-1] == ']') {
+                    result.emplace_back(parse_args(&v[1], vlen - 2));
+                } else {
+                    result.emplace_back(v, vlen, true);
                 }
-                result.emplace_back(v, vlen, true);
-            }
-            if (ends) {
-                *out_argi = i;
-                break;
             }
         }
+        return result;
+    }
+    static std::vector<Value> parse_args(const size_t argc, const char** argv, size_t argidx = 0) {
+        std::vector<const char*> args;
+        for (size_t i = argidx; i < argc; i++) args.push_back(argv[i]);
+        return parse_args(args);
+    }
+    static std::vector<Value> parse_args(const char* args_string, const size_t args_len) {
+        std::vector<const char*> args;
+        char* args_ptr[args_len];
+        size_t arg_idx = 0;
+        size_t start = 0;
+        for (size_t i = 0; i <= args_len; i++) {
+            char ch = args_string[i - (i == args_len)];
+            if (i == args_len || (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')) {
+                if (start == i) {
+                    start++;
+                    continue;
+                }
+                args_ptr[arg_idx] = strndup(&args_string[start], i - start);
+                args.push_back(args_ptr[arg_idx]);
+                printf("- arg: %s\n", args_ptr[arg_idx]);
+                arg_idx++;
+                start = i + 1;
+            }
+        }
+        std::vector<Value> result = parse_args(args);
+        for (size_t i = 0; i < arg_idx; i++) free(args_ptr[i]);
         return result;
     }
     Value(std::vector<Value> v) {
@@ -65,6 +79,13 @@ struct Value {
         if (!vlen) vlen = strlen(v);
         str = v;
         type = T_STRING;
+        if (vlen > 0 && v[0] == '[' && v[vlen - 1] == ']') {
+            for (auto& it : parse_args(&v[1], vlen - 2)) {
+                insert(data, it.data_value());
+            }
+            type = T_DATA;
+            return;
+        }
         i = atoll(v);
         if (i != 0) {
             // verify
