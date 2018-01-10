@@ -33,7 +33,7 @@ struct Value {
             if (vlen > 0) {
                 // brackets embed
                 if (v[0] == '[' && v[vlen-1] == ']') {
-                    result.emplace_back(parse_args(&v[1], vlen - 2));
+                    result.emplace_back(parse_args(&v[1], vlen - 2, true));
                 } else {
                     result.emplace_back(v, vlen, embedding);
                 }
@@ -46,7 +46,7 @@ struct Value {
         for (size_t i = argidx; i < argc; i++) args.push_back(argv[i]);
         return parse_args(args);
     }
-    static std::vector<Value> parse_args(const char* args_string, const size_t args_len) {
+    static std::vector<Value> parse_args(const char* args_string, const size_t args_len, bool embedding = false) {
         std::vector<const char*> args;
         char* args_ptr[args_len];
         size_t arg_idx = 0;
@@ -64,7 +64,7 @@ struct Value {
                 start = i + 1;
             }
         }
-        std::vector<Value> result = parse_args(args);
+        std::vector<Value> result = parse_args(args, embedding);
         for (size_t i = 0; i < arg_idx; i++) free(args_ptr[i]);
         return result;
     }
@@ -79,7 +79,7 @@ struct Value {
         str = v;
         type = T_STRING;
         if (vlen > 0 && v[0] == '[' && v[vlen - 1] == ']') {
-            for (auto& it : parse_args(&v[1], vlen - 2)) {
+            for (auto& it : parse_args(&v[1], vlen - 2, true)) {
                 insert(data, it.data_value());
             }
             type = T_DATA;
