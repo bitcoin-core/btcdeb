@@ -111,12 +111,6 @@ int main(int argc, const char** argv)
         script_str = argc > arg_idx ? strdup(argv[arg_idx]) : NULL;
         arg_idx++;
     }
-    if (script_str) {
-        if (strlen(script_str) & 1) {
-            fprintf(stderr, "error: invalid hex string (length %zu is odd)\n", strlen(script_str));
-            return 1;
-        }
-    }
     CScript script;
     if (script_str) {
         std::vector<unsigned char> scriptData = Value(script_str).data_value();
