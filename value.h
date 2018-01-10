@@ -119,6 +119,14 @@ struct Value {
             data = ParseHex(v);
             if (data.size() == (vlen >> 1)) {
                 type = T_DATA;
+                if (data.size() < 16) {
+                    // pull out int64 and push that
+                    int64_t i64 = int_value();
+                    CScript s = CScript() << i64;
+                    data.clear();
+                    insert(data, s);
+                    return;
+                }
                 if (pushed) {
                     CScript s = CScript() << data;
                     data.clear();
