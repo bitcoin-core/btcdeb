@@ -1,7 +1,6 @@
-# Copyright (c) 2013-2016 The Bitcoin Core developers
+# Copyright (c) 2013-2018 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
 
 DIST_SUBDIRS = secp256k1
 
@@ -25,7 +24,7 @@ EXTRA_LIBRARIES += \
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc
+bin_PROGRAMS = btcdeb btcc merklebranch
 noinst_PROGRAMS =
 
 .PHONY: FORCE check-symbols check-security
@@ -101,11 +100,23 @@ btcdeb_LDADD = \
 	$(LIBSECP256K1)
 
 # btcc binary #
-btcc_SOURCES = btcc.cpp
+btcc_SOURCES = \
+	btcc.cpp \
+	value.h
 btcc_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 btcc_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 btcc_LDADD = \
+	$(LIBBITCOIN)
+
+# merklebranch binary #
+merklebranch_SOURCES = \
+	merklebranch.cpp \
+	value.h
+merklebranch_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+merklebranch_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+
+merklebranch_LDADD = \
 	$(LIBBITCOIN)
 
 clean-local:
