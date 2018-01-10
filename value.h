@@ -12,6 +12,11 @@
 #include <base58.h>
 #include <bech32.h>
 
+template<typename T1, typename T2>
+inline void insert(T1& a, T2&& b) {
+    a.insert(a.end(), b.begin(), b.end());
+}
+
 struct Value {
     enum {
         T_STRING,
@@ -21,8 +26,45 @@ struct Value {
     int64_t i;
     std::vector<uint8_t> data;
     std::string str;
-    Value(const char* v, size_t vlen = 0) {
+    static std::vector<Value> parse_args(const size_t argc, const char** argv, size_t argi = 0, const size_t argv0idx = 0,
+            bool embedding = false, size_t* out_argi = nullptr, size_t* out_next_vlen = nullptr) {
+        std::vector<Value> result;
+        size_t next_vlen = 0;
+        for (size_t i = argi; i < argc; ++i) {
+            const char* v = i == argi ? &argv[i][argv0idx] : argv[i];
+            size_t vlen =  next_vlen ?: strlen(v);
+            bool ends = false;
+            if (vlen > 0) {
+                // if we have a leading bracket, we are building an embedded value
+                if (v[0] == '[') {
+                    result.emplace_back(parse_args(argc - i, argv, i, i == argi ? argv0idx + 1 : 1, true, &i, &next_vlen));
+                } else if (v[vlen - 1] == ']') {
+                    if (!embedding) {
+                        throw std::runtime_error("Unexpected ending ']' bracket encountered in value");
+                    }
+                    ends = true;
+                    vlen--;
+                    *out_next_vlen = vlen;
+                }
+                result.emplace_back(v, vlen, true);
+            }
+            if (ends) {
+                *out_argi = i;
+                break;
+            }
+        }
+        return result;
+    }
+    Value(std::vector<Value> v) {
+        type = T_DATA;
+        for (auto& it : v) {
+            insert(data, it.data_value());
+        }
+    }
+    Value(const char* v, size_t vlen = 0, bool pushed = false) {
         if (!vlen) vlen = strlen(v);
+        str = v;
+        type = T_STRING;
         i = atoll(v);
         if (i != 0) {
             // verify
@@ -37,25 +79,42 @@ struct Value {
                         btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
                     }
                 }
-                // can it be an opcode too?
-                if (i >= 0 && i < 16) {
-                    btc_logf("warning: ambiguous input %s is interpreted as a numeric value (%s), not as an opcode (OP_%s). Use OP_%s to force into op code interpretation\n", v, v, v, v);
+                if (i >= 1 && i <= 16) {
+                    btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use OP_%s to force into opcode\n", v, v);
                 }
                 type = T_INT;
                 return;
             }
+        }
+        // opcode check
+        opcodetype opc = GetOpCode(v);
+        if (opc != OP_INVALIDOPCODE) {
+            type = T_DATA;
+            CScript script = CScript() << opc;
+            insert(data, script);
+            return;
         }
         // hex string?
         if (!(vlen & 1)) {
             data = ParseHex(v);
             if (data.size() == (vlen >> 1)) {
                 type = T_DATA;
+                if (pushed) {
+                    CScript s = CScript() << data;
+                    data.clear();
+                    insert(data, s);
+                }
                 return;
             }
         }
-        // string
-        str = v;
-        type = T_STRING;
+    }
+    Value& operator+=(const Value& other) {
+        data_value();
+        insert(data, other.data_value());
+        return *this;
+    }
+    std::vector<uint8_t> data_value() const {
+        return const_cast<Value*>(this)->data_value();
     }
     std::vector<uint8_t> data_value() {
         switch (type) {
