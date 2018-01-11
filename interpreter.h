@@ -199,7 +199,7 @@ struct InterpreterEnv {
     std::vector<stack_type> altstack_history;
     std::vector<CScript::const_iterator> pc_history;
     std::vector<int> nOpCount_history;
-    std::vector<const CScript> script_history;
+    std::vector<CScript> script_history;
     stack_type stack;
     stack_type altstack;
     const CScript& scriptIn;

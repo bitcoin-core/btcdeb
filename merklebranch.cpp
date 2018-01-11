@@ -8,8 +8,6 @@
 typedef std::vector<unsigned char> valtype;
 bool piping = false;
 
-void btc_logf_dummy(const char* fmt...) {}
-
 int main(int argc, const char** argv)
 {
     if (argc < 2) {
