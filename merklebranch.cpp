@@ -76,7 +76,12 @@ int main(int argc, const char** argv)
         } else {
             root = ComputeFastMerkleRoot(hashes);
         }
-        printf("root: %s\n", root.ToString().c_str());
+        printf("root: ");
+        for (int it = 0; it < 32; it++) {
+            printf("%02x", root.begin()[it]);
+        }
+        printf("\n");
+        // printf("root: %s\n", root.ToString().c_str());
         return 0;
     }
 
