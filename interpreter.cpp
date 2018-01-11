@@ -19,8 +19,8 @@
 
 namespace {
 
-template <typename T> static inline void print_vec(const T& v) {
-    for (unsigned char c : v) btc_logf("%02x", c);
+template <typename T> static inline void print_vec(const T& v, btc_logf_t fun) {
+    for (unsigned char c : v) fun("%02x", c);
 }
 
 static inline std::string hashtype_str(int h) {
@@ -294,9 +294,9 @@ public:
             if (opcode == OP_CODESEPARATOR)
                 nCodeSeparators++;
         }
-        btc_logf(" << scriptCode.size()=%zu - nCodeSeparators=%d\n", scriptCode.size(), nCodeSeparators);
+        btc_sign_logf(" << scriptCode.size()=%zu - nCodeSeparators=%d\n", scriptCode.size(), nCodeSeparators);
         ::WriteCompactSize(s, scriptCode.size() - nCodeSeparators);
-        btc_logf(" << script:"); print_vec(scriptCode); btc_logf("\n");
+        btc_sign_logf(" << script:"); print_vec(scriptCode, btc_sign_logf); btc_sign_logf("\n");
         it = itBegin;
         while (scriptCode.GetOp(it, opcode)) {
             if (opcode == OP_CODESEPARATOR) {
@@ -314,27 +314,27 @@ public:
         // In case of SIGHASH_ANYONECANPAY, only the input being signed is serialized
         if (fAnyoneCanPay) {
             nInput = nIn;
-            btc_logf("    (fAnyoneCanPay: nInput = nIn)\n");
+            btc_sign_logf("    (fAnyoneCanPay: nInput = nIn)\n");
         }
         // Serialize the prevout
-        btc_logf(" << txTo.vin[nInput=%d].prevout = %s\n", nInput, txTo.vin[nInput].prevout.ToString().c_str());
+        btc_sign_logf(" << txTo.vin[nInput=%d].prevout = %s\n", nInput, txTo.vin[nInput].prevout.ToString().c_str());
         ::Serialize(s, txTo.vin[nInput].prevout);
         // Serialize the script
         if (nInput != nIn) {
             // Blank out other inputs' signatures
-            btc_logf(" << [empty script] (reason: nInput != nIn)\n");
+            btc_sign_logf(" << [empty script] (reason: nInput != nIn)\n");
             ::Serialize(s, CScript());
         } else {
-            btc_logf("(SerializeScriptCode)\n");
+            btc_sign_logf("(SerializeScriptCode)\n");
             SerializeScriptCode(s);
         }
         // Serialize the nSequence
         if (nInput != nIn && (fHashSingle || fHashNone)) {
             // let the others update at will
-            btc_logf(" << sequence = 0 (nInput != nIn && (fHashSingle || fHashNone))\n");
+            btc_sign_logf(" << sequence = 0 (nInput != nIn && (fHashSingle || fHashNone))\n");
             ::Serialize(s, (int)0);
         } else {
-            btc_logf(" << txTo.vin[nInput].nSequence = %u [0x%x]\n", txTo.vin[nInput].nSequence, txTo.vin[nInput].nSequence);
+            btc_sign_logf(" << txTo.vin[nInput].nSequence = %u [0x%x]\n", txTo.vin[nInput].nSequence, txTo.vin[nInput].nSequence);
             ::Serialize(s, txTo.vin[nInput].nSequence);
         }
     }
@@ -344,10 +344,10 @@ public:
     void SerializeOutput(S &s, unsigned int nOutput) const {
         if (fHashSingle && nOutput != nIn) {
             // Do not lock-in the txout payee at other indices as txin
-            btc_logf(" << [empty txout] (reason: fHashSingle && nOutput=%d != nIn=%d)\n", nOutput, nIn);
+            btc_sign_logf(" << [empty txout] (reason: fHashSingle && nOutput=%d != nIn=%d)\n", nOutput, nIn);
             ::Serialize(s, CTxOut());
         } else {
-            btc_logf(" << txTo.vout[nOutput] = %s\n", txTo.vout[nOutput].ToString().c_str());
+            btc_sign_logf(" << txTo.vout[nOutput] = %s\n", txTo.vout[nOutput].ToString().c_str());
             ::Serialize(s, txTo.vout[nOutput]);
         }
     }
@@ -355,38 +355,38 @@ public:
     /** Serialize txTo */
     template<typename S>
     void Serialize(S &s) const {
-        btc_logf("Serializing transaction\n");
+        btc_sign_logf("Serializing transaction\n");
         // Serialize nVersion
-        btc_logf(" << txTo.nVersion (%08x)\n", txTo.nVersion);
+        btc_sign_logf(" << txTo.nVersion (%08x)\n", txTo.nVersion);
         ::Serialize(s, txTo.nVersion);
         // Serialize vin
         unsigned int nInputs = fAnyoneCanPay ? 1 : txTo.vin.size();
-        btc_logf(" << nInputs = %d [compact]\n", nInputs);
+        btc_sign_logf(" << nInputs = %d [compact]\n", nInputs);
         ::WriteCompactSize(s, nInputs);
         for (unsigned int nInput = 0; nInput < nInputs; nInput++) {
-            btc_logf("(serialize input %d)\n", nInput);
+            btc_sign_logf("(serialize input %d)\n", nInput);
             SerializeInput(s, nInput);
         }
         // Serialize vout
         unsigned int nOutputs = fHashNone ? 0 : (fHashSingle ? nIn+1 : txTo.vout.size());
-        btc_logf(" << nOutputs = %d [compact]\n", nOutputs);
+        btc_sign_logf(" << nOutputs = %d [compact]\n", nOutputs);
         ::WriteCompactSize(s, nOutputs);
         for (unsigned int nOutput = 0; nOutput < nOutputs; nOutput++) {
-            btc_logf("(serialize output %d)\n", nOutput);
+            btc_sign_logf("(serialize output %d)\n", nOutput);
             SerializeOutput(s, nOutput);
         }
         // Serialize nLockTime
-        btc_logf(" << txTo.nLockTime = %d [0x%x]\n", txTo.nLockTime, txTo.nLockTime);
+        btc_sign_logf(" << txTo.nLockTime = %d [0x%x]\n", txTo.nLockTime, txTo.nLockTime);
         ::Serialize(s, txTo.nLockTime);
     }
 };
 
 uint256 GetPrevoutHash(const CTransaction& txTo) {
     CHashWriter ss(SER_GETHASH, 0);
-    btc_logf("- generating prevout hash from %zu ins\n", txTo.vin.size());
+    btc_sign_logf("- generating prevout hash from %zu ins\n", txTo.vin.size());
     for (const auto& txin : txTo.vin) {
         ss << txin.prevout;
-        btc_logf("[+] %s\n", txin.prevout.ToString().c_str());
+        btc_sign_logf("[+] %s\n", txin.prevout.ToString().c_str());
     }
     return ss.GetHash();
 }
@@ -422,11 +422,11 @@ PrecomputedTransactionData::PrecomputedTransactionData(const CTransaction& txTo)
 
 uint256 SignatureHash(const CScript& scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache)
 {
-    btc_logf("SignatureHash(nIn=%d, nHashType=%02x)\n", nIn, nHashType);
+    btc_sign_logf("SignatureHash(nIn=%d, nHashType=%02x)\n", nIn, nHashType);
     assert(nIn < txTo.vin.size());
 
     if (sigversion == SIGVERSION_WITNESS_V0) {
-        btc_logf("- sigversion == SIGVERSION_WITNESS_V0\n");
+        btc_sign_logf("- sigversion == SIGVERSION_WITNESS_V0\n");
         uint256 hashPrevouts;
         uint256 hashSequence;
         uint256 hashOutputs;
@@ -434,60 +434,63 @@ uint256 SignatureHash(const CScript& scriptCode, const CTransaction& txTo, unsig
 
         if (!(nHashType & SIGHASH_ANYONECANPAY)) {
             hashPrevouts = cacheready ? cache->hashPrevouts : GetPrevoutHash(txTo);
-            btc_logf("  hashPrevouts = %s\n", hashPrevouts.ToString().c_str());
+            btc_sign_logf("  hashPrevouts = %s\n", hashPrevouts.ToString().c_str());
         }
 
         if (!(nHashType & SIGHASH_ANYONECANPAY) && (nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
             hashSequence = cacheready ? cache->hashSequence : GetSequenceHash(txTo);
-            btc_logf("  hashSequence = %s\n", hashSequence.ToString().c_str());
+            btc_sign_logf("  hashSequence = %s\n", hashSequence.ToString().c_str());
         }
 
 
         if ((nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
             hashOutputs = cacheready ? cache->hashOutputs : GetOutputsHash(txTo);
-            btc_logf("  hashOutputs [!single] = %s\n", hashOutputs.ToString().c_str());
+            btc_sign_logf("  hashOutputs [!single] = %s\n", hashOutputs.ToString().c_str());
         } else if ((nHashType & 0x1f) == SIGHASH_SINGLE && nIn < txTo.vout.size()) {
             CHashWriter ss(SER_GETHASH, 0);
             ss << txTo.vout[nIn];
             hashOutputs = ss.GetHash();
-            btc_logf("  hashOutputs [single] = %s\n", hashOutputs.ToString().c_str());
+            btc_sign_logf("  hashOutputs [single] = %s\n", hashOutputs.ToString().c_str());
         }
 
+        CHashWriter::debug = btc_enabled(btc_sighash_logf);
         CHashWriter ss(SER_GETHASH, 0);
         // Version
-        btc_logf("SERIALIZING:\n");
+        btc_sign_logf("SERIALIZING:\n");
         ss << txTo.nVersion;
-        btc_logf(" << txTo.nVersion = %d\n", txTo.nVersion);
+        btc_sign_logf(" << txTo.nVersion = %d\n", txTo.nVersion);
         // Input prevouts/nSequence (none/all, depending on flags)
         ss << hashPrevouts;
-        btc_logf(" << hashPrevouts\n");
+        btc_sign_logf(" << hashPrevouts\n");
         ss << hashSequence;
-        btc_logf(" << hashSequence\n");
+        btc_sign_logf(" << hashSequence\n");
         // The input being signed (replacing the scriptSig with scriptCode + amount)
         // The prevout may already be contained in hashPrevout, and the nSequence
         // may already be contain in hashSequence.
         ss << txTo.vin[nIn].prevout;
-        btc_logf(" << txTo.vin[nIn=%d].prevout = %s\n", nIn, txTo.vin[nIn].prevout.ToString().c_str());
+        btc_sign_logf(" << txTo.vin[nIn=%d].prevout = %s\n", nIn, txTo.vin[nIn].prevout.ToString().c_str());
         ss << scriptCode;
-        btc_logf(" << scriptCode\n");
+        btc_sign_logf(" << scriptCode\n");
         ss << amount;
-        btc_logf(" << amount = %lld\n", amount);
+        btc_sign_logf(" << amount = %lld\n", amount);
         ss << txTo.vin[nIn].nSequence;
-        btc_logf(" << txTo.vin[nIn].nSequence = %u (0x%x)\n", txTo.vin[nIn].nSequence, txTo.vin[nIn].nSequence);
+        btc_sign_logf(" << txTo.vin[nIn].nSequence = %u (0x%x)\n", txTo.vin[nIn].nSequence, txTo.vin[nIn].nSequence);
         // Outputs (none/one/all, depending on flags)
         ss << hashOutputs;
-        btc_logf(" << hashOutputs\n");
+        btc_sign_logf(" << hashOutputs\n");
         // Locktime
         ss << txTo.nLockTime;
-        btc_logf(" << txTo.nLockTime = %d\n", txTo.nLockTime);
+        btc_sign_logf(" << txTo.nLockTime = %d\n", txTo.nLockTime);
         // Sighash type
         ss << nHashType;
-        btc_logf(" << nHashType = %02x\n", nHashType);
-        btc_logf("RESULTING HASH = %s\n", ss.GetHash().ToString().c_str());
+        btc_sign_logf(" << nHashType = %02x\n", nHashType);
+        CHashWriter::debug = false;
+        uint256 sighash = ss.GetHash();
+        btc_sign_logf("RESULTING HASH = %s\n", sighash.ToString().c_str());
 
-        return ss.GetHash();
+        return sighash;
     }
-    btc_logf("- sigversion = SIGVERSION_BASE (non-segwit style)\n");
+    btc_sign_logf("- sigversion = SIGVERSION_BASE (non-segwit style)\n");
 
     static const uint256 one(uint256S("0000000000000000000000000000000000000000000000000000000000000001"));
 
@@ -495,7 +498,7 @@ uint256 SignatureHash(const CScript& scriptCode, const CTransaction& txTo, unsig
     if ((nHashType & 0x1f) == SIGHASH_SINGLE) {
         if (nIn >= txTo.vout.size()) {
             //  nOut out of range
-            btc_logf("  nIn >= txTo.vout.size()\n");
+            btc_sign_logf("  nIn >= txTo.vout.size()\n");
             return one;
         }
     }
@@ -511,39 +514,39 @@ uint256 SignatureHash(const CScript& scriptCode, const CTransaction& txTo, unsig
 
 bool TransactionSignatureChecker::VerifySignature(const std::vector<unsigned char>& vchSig, const CPubKey& pubkey, const uint256& sighash) const
 {
-    btc_logf("  pubkey.Verify(sig="); print_vec(vchSig); btc_logf(", sighash=%s):\n", sighash.ToString().c_str());
+    btc_sign_logf("  pubkey.Verify(sig="); print_vec(vchSig, btc_sign_logf); btc_sign_logf(", sighash=%s):\n", sighash.ToString().c_str());
     bool res = pubkey.Verify(sighash, vchSig);
-    btc_logf("  result: %s\n", res ? "success" : "FAILURE");
+    btc_sign_logf("  result: %s\n", res ? "success" : "FAILURE");
     return res;
 }
 
 bool TransactionSignatureChecker::CheckSig(const std::vector<unsigned char>& vchSigIn, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const
 {
-    btc_logf("TransactionSignatureChecker::CheckSig(%zu len sig, %zu len pubkey, sigversion=%d)\n", vchSigIn.size(), vchPubKey.size(), sigversion);
-    btc_logf("  sig         = "); print_vec(vchSigIn); btc_logf("\n");
-    btc_logf("  pub key     = "); print_vec(vchPubKey); btc_logf("\n");
-    btc_logf("  script code = "); print_vec(scriptCode); btc_logf("\n");
+    btc_sign_logf("TransactionSignatureChecker::CheckSig(%zu len sig, %zu len pubkey, sigversion=%d)\n", vchSigIn.size(), vchPubKey.size(), sigversion);
+    btc_sign_logf("  sig         = "); print_vec(vchSigIn, btc_sign_logf); btc_sign_logf("\n");
+    btc_sign_logf("  pub key     = "); print_vec(vchPubKey, btc_sign_logf); btc_sign_logf("\n");
+    btc_sign_logf("  script code = "); print_vec(scriptCode, btc_sign_logf); btc_sign_logf("\n");
     CPubKey pubkey(vchPubKey);
     if (!pubkey.IsValid()) {
-        btc_logf("- failed: pubkey is not valid\n");
+        btc_sign_logf("- failed: pubkey is not valid\n");
         return false;
     }
 
     // Hash type is one byte tacked on to the end of the signature
     std::vector<unsigned char> vchSig(vchSigIn);
     if (vchSig.empty()) {
-        btc_logf("- failed: signature is empty\n");
+        btc_sign_logf("- failed: signature is empty\n");
         return false;
     }
     int nHashType = vchSig.back();
     vchSig.pop_back();
-    btc_logf("  hash type   = %02x (%s)\n", nHashType, hashtype_str(nHashType).c_str());
+    btc_sign_logf("  hash type   = %02x (%s)\n", nHashType, hashtype_str(nHashType).c_str());
 
     uint256 sighash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, sigversion, this->txdata);
-    btc_logf("  sighash     = %s\n", sighash.ToString().c_str());
+    btc_sign_logf("  sighash     = %s\n", sighash.ToString().c_str());
 
     if (!VerifySignature(vchSig, pubkey, sighash)) {
-        btc_logf("- failed: VerifySignature() failed\n");
+        btc_sign_logf("- failed: VerifySignature() failed\n");
         return false;
     }
 
@@ -1588,23 +1591,30 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                         scriptCode.FindAndDelete(CScript(vchSig));
                     }
                 }
+                btc_sign_logf("scriptCode = %s\n", HexStr(scriptCode).c_str());
 
                 bool fSuccess = true;
+                btc_sign_logf("looping for multisig\n");
                 while (fSuccess && nSigsCount > 0)
                 {
+                    btc_sign_logf("loop: sigs = %d, keys = %d\n", nSigsCount, nKeysCount);
                     valtype& vchSig    = stacktop(-isig);
                     valtype& vchPubKey = stacktop(-ikey);
+                    btc_sign_logf("- got sig %s\n", HexStr(vchSig).c_str());
+                    btc_sign_logf("- got key %s\n", HexStr(vchPubKey).c_str());
 
                     // Note how this makes the exact order of pubkey/signature evaluation
                     // distinguishable by CHECKMULTISIG NOT if the STRICTENC flag is set.
                     // See the script_(in)valid tests for details.
                     if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
                         // serror is set
+                        btc_sign_logf("! CheckSignatureEncoding() or CheckPubKeyEncoding() failed!\n");
                         return false;
                     }
 
                     // Check signature
                     bool fOk = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
+                    btc_sign_logf("- sig check %s\n", fOk ? "succeeded" : "failed");
 
                     if (fOk) {
                         isig++;
@@ -1619,6 +1629,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                     if (nSigsCount > nKeysCount)
                         fSuccess = false;
                 }
+                btc_sign_logf("loop ended in %s state\n", fSuccess ? "successful" : "failure");
 
                 // Clean up stack of actual arguments
                 while (i-- > 1) {
@@ -1671,11 +1682,11 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                 }
 
                 valtype& vchCount = stacktop(-1);
-                btc_logf("[MBV] vchCount [%zu] = ", vchCount.size()); print_vec(vchCount); btc_logf("\n");
+                btc_logf("[MBV] vchCount [%zu] = ", vchCount.size()); print_vec(vchCount, btc_logf); btc_logf("\n");
                 valtype& vchRoot  = stacktop(-2);
-                btc_logf("[MBV] vchRoot  [%zu] = ", vchRoot.size()); print_vec(vchRoot); btc_logf("\n");
+                btc_logf("[MBV] vchRoot  [%zu] = ", vchRoot.size()); print_vec(vchRoot, btc_logf); btc_logf("\n");
                 valtype& vchProof = stacktop(-3);
-                btc_logf("[MBV] vchProof [%zu] = ", vchProof.size()); print_vec(vchProof); btc_logf("\n");
+                btc_logf("[MBV] vchProof [%zu] = ", vchProof.size()); print_vec(vchProof, btc_logf); btc_logf("\n");
 
                 // vchCount is a minimally encoded CScriptNum
                 // encoding 2*N plus a Boolean value in the low

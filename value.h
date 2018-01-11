@@ -76,6 +76,11 @@ struct Value {
     }
     Value(const char* v, size_t vlen = 0, bool pushed = false, bool stack = false) {
         if (!vlen) vlen = strlen(v);
+        if (vlen == 2 && v[0] == '0' && v[1] == 'x') {
+            type = T_DATA;
+            data.clear();
+            return;
+        }
         str = v;
         type = T_STRING;
         if (vlen > 0 && v[0] == '[' && v[vlen - 1] == ']') {

@@ -15,7 +15,10 @@
 #include <crypto/common.h>
 
 typedef void (*btc_logf_t) (const char *fmt...);
-extern btc_logf_t btc_logf;
+extern btc_logf_t btc_logf, btc_sighash_logf, btc_sign_logf;
+void btc_logf_dummy(const char* fmt...);
+void btc_logf_stderr(const char* fmt...);
+inline bool btc_enabled(btc_logf_t logger) { return logger != btc_logf_dummy; }
 
 // Maximum script length in bytes
 static const int MAX_SCRIPT_SIZE = 10000;

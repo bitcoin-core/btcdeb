@@ -36,8 +36,6 @@ char** script_lines;
 
 void print_dualstack();
 
-void btc_logf_dummy(const char* fmt...) {}
-
 int main(int argc, const char** argv)
 {
     ECCVerifyHandle evh;
@@ -55,9 +53,16 @@ int main(int argc, const char** argv)
     } else{
         btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
     }
+
+    if (!piping) {
+        if (std::getenv("DEBUG_SIGHASH")) btc_sighash_logf = btc_logf_stderr;
+        if (std::getenv("DEBUG_SIGNING")) btc_sign_logf = btc_logf_stderr;
+    }
+
     int arg_idx = 1;
     // crude check for tx=
     CTransactionRef tx;
+    auto sigver = SIGVERSION_BASE;
     std::vector<CAmount> amounts;
     if (argc > 1 && !strncmp(argv[1], "tx=", 3)) {
         const char* txdata = &argv[1][3];
@@ -97,8 +102,9 @@ int main(int argc, const char** argv)
         UnserializeTransaction(mtx, ss);
         tx = MakeTransactionRef(CTransaction(mtx));
         while (amounts.size() < tx->vin.size()) amounts.push_back(0);
+        if (tx->vin[0].scriptSig.size() == 0) sigver = SIGVERSION_WITNESS_V0;
         arg_idx++;
-        fprintf(stderr, "got transaction:\n%s\n", tx->ToString().c_str());
+        fprintf(stderr, "got %stransaction:\n%s\n", sigver == SIGVERSION_WITNESS_V0 ? "segwit " : "", tx->ToString().c_str());
     }
     char* script_str = NULL;
     if (piping) {
@@ -135,7 +141,7 @@ int main(int argc, const char** argv)
     for (int i = arg_idx; i < argc; i++) {
         stack.push_back(Value(argv[i], 0, false, true).data_value());
     }
-    env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, *checker, SIGVERSION_BASE, &error);
+    env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, *checker, sigver, &error);
     if (!env->operational) {
         fprintf(stderr, "failed to initialize script environment: %s\n", ScriptErrorString(error));
         return 1;
