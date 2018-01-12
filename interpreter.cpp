@@ -881,7 +881,7 @@ InterpreterEnv::InterpreterEnv(std::vector<valtype>& stack_in, const CScript& sc
     allow_tail_call = (flags & SCRIPT_VERIFY_TAIL_CALL) != 0;
 }
 
-bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_iterator& it, bool update_env)
+bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_iterator& it_in, bool update_env)
 {
     static const CScriptNum bnZero(0);
     static const CScriptNum bnOne(1);
@@ -895,13 +895,13 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
     auto& checker = env.checker;
     auto& pbegincodehash = env.pbegincodehash;
     auto& sigversion = env.sigversion;
-    auto& allow_tail_call = env.allow_tail_call;
 
     // updated on success only
     auto  vchPushValue = env.vchPushValue;
     auto  nOpCount = env.nOpCount;
     auto  stack = env.stack;
     auto  altstack = env.altstack;
+    auto  it = it_in;
 
     try {
         bool fExec = !count(vfExec.begin(), vfExec.end(), false);
