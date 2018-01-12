@@ -77,26 +77,14 @@ int main(int argc, const char** argv)
         } else {
             root = ComputeFastMerkleRoot(hashes);
         }
-        btc_logf("root: ");
         if (!btcdeb) {
-            for (int it = 0; it < 32; it++) {
-                printf("%02x", root.begin()[it]);
-            }
-            printf("\n");
+            btc_logf("root: %s\n", HexStr(root).c_str());
         }
         if (!piping) {
-            printf("proposal (1 parameter): TOALTSTACK ");
-            for (int it = 0; it < 32; it++) {
-                printf("%02x", root.begin()[it]);
-            }
-            printf(" OP_%d OP_MERKLEBRANCHVERIFY 2DROP DROP\n", 2 + preprocessed);
+            printf("proposal (1 parameter): TOALTSTACK %s OP_%d OP_MERKLEBRANCHVERIFY 2DROP DROP\n", HexStr(root).c_str(), 2 + preprocessed);
         }
         if (!piping || btcdeb) {
-            printf(piping ? "6b20" : "proposal 1 hex:         6b20");
-            for (int it = 0; it < 32; it++) {
-                printf("%02x", root.begin()[it]);
-            }
-            printf("5%db36d75\n", 2 + preprocessed);
+            printf(piping ? "6b20" : "proposal 1 hex:         6b20%s5%db36d75\n", HexStr(root).c_str(), 2 + preprocessed);
         }
         return 0;
     }
@@ -140,20 +128,11 @@ int main(int argc, const char** argv)
         ssProof << subtrees[0].m_proof;
     }
 
-    // printf("root: %s\n", root.ToString().c_str());
     if (!piping) {
-        printf("root: ");
-        for (int it = 0; it < 32; it++) {
-            printf("%02x", root.begin()[it]);
-        }
-        printf("\n");
+        printf("root: %s\n", HexStr(root).c_str());
         printf("branch: [\n");
         for (auto h = branch.begin(); h != branch.end(); ++h) {
-            printf("\t");
-            for (int it = 0; it < 32; it++) {
-                printf("%02x", h->begin()[it]);
-            }
-            printf("\n");
+            printf("\t%s\n", HexStr(*h).c_str());
         }
         printf("]\n");
         printf("path: %d\n", path);
@@ -165,18 +144,15 @@ int main(int argc, const char** argv)
         if (!piping) {
             printf("proof: %s\n", HexStr(proof).c_str());
             printf("unlocking proposal (1 parameter):\n");
-            printf("- script:       TOALTSTACK ");
-            for (int it = 0; it < 32; it++) {
-                printf("%02x", root.begin()[it]);
-            }
-            printf(" OP_%d OP_MERKLEBRANCHVERIFY 2DROP DROP\n", 2 + preprocessed);
+            printf("- script:       TOALTSTACK %s OP_%d OP_MERKLEBRANCHVERIFY 2DROP DROP\n", HexStr(root).c_str(), 2 + preprocessed);
         }
         if (!piping || btcdeb) {
-            printf(piping ? "6b20" : "- script (hex): 6b20");
-            for (int it = 0; it < 32; it++) {
-                printf("%02x", root.begin()[it]);
-            }
-            printf("5%db36d75\n", 2 + preprocessed);
+            printf(piping
+                ? "6b20%s5%db36d75\n"
+                : "- script (hex): 6b20%s5%db36d75\n",
+                HexStr(root).c_str(),
+                2 + preprocessed
+            );
             btc_logf("stack:\n");
         }
         if (!piping) printf("- item #1:       %s\n", argv[argi + pos]);
