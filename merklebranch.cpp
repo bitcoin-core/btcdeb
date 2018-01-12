@@ -57,7 +57,7 @@ int main(int argc, const char** argv)
                 fprintf(stderr, "preprocessed hashes must be hex-encoded 32-bytes: %s\n", leaf.c_str());
                 return -1;
             }
-            hashes.push_back(uint256S(leaf));
+            hashes.push_back(uint256(leaves[i].data));
         }
     } else {
         for (size_t i = 0; i < leaves.size(); ++i) {
@@ -66,6 +66,13 @@ int main(int argc, const char** argv)
             CHash256().Write(&leaf[0], leaf.size()).Finalize(hash.begin());
             hashes.push_back(hash);
         }
+    }
+    if (!piping) {
+        printf("leaves: [\n");
+        for (size_t i = 0; i < hashes.size(); ++i) {
+            printf("\t%s\n", HexStr(hashes[i]).c_str());
+        }
+        printf("]\n");
     }
     uint256 root;
     std::vector<uint256> branch;
