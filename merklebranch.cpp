@@ -89,14 +89,14 @@ int main(int argc, const char** argv)
             for (int it = 0; it < 32; it++) {
                 printf("%02x", root.begin()[it]);
             }
-            printf(" OP_2 OP_MERKLEBRANCHVERIFY 2DROP DROP\n");
+            printf(" OP_%d OP_MERKLEBRANCHVERIFY 2DROP DROP\n", 2 + preprocessed);
         }
         if (!piping || btcdeb) {
             printf(piping ? "6b20" : "proposal 1 hex:         6b20");
             for (int it = 0; it < 32; it++) {
                 printf("%02x", root.begin()[it]);
             }
-            printf("52b36d75\n");
+            printf("5%db36d75\n", 2 + preprocessed);
         }
         return 0;
     }
@@ -149,7 +149,11 @@ int main(int argc, const char** argv)
         printf("\n");
         printf("branch: [\n");
         for (auto h = branch.begin(); h != branch.end(); ++h) {
-            printf("\t%s\n", h->GetHex().c_str());
+            printf("\t");
+            for (int it = 0; it < 32; it++) {
+                printf("%02x", h->begin()[it]);
+            }
+            printf("\n");
         }
         printf("]\n");
         printf("path: %d\n", path);
@@ -165,14 +169,14 @@ int main(int argc, const char** argv)
             for (int it = 0; it < 32; it++) {
                 printf("%02x", root.begin()[it]);
             }
-            printf(" OP_2 OP_MERKLEBRANCHVERIFY 2DROP DROP\n");
+            printf(" OP_%d OP_MERKLEBRANCHVERIFY 2DROP DROP\n", 2 + preprocessed);
         }
         if (!piping || btcdeb) {
             printf(piping ? "6b20" : "- script (hex): 6b20");
             for (int it = 0; it < 32; it++) {
                 printf("%02x", root.begin()[it]);
             }
-            printf("52b36d75\n");
+            printf("5%db36d75\n", 2 + preprocessed);
             btc_logf("stack:\n");
         }
         if (!piping) printf("- item #1:       %s\n", argv[argi + pos]);
