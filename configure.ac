@@ -94,6 +94,13 @@ AC_PATH_TOOL(OBJCOPY, objcopy)
 
 AC_ARG_VAR(PYTHONPATH, Augments the default search path for python module files)
 
+# Enable dangerous stuff
+AC_ARG_ENABLE([dangerous],
+  [AS_HELP_STRING([--enable-dangerous],
+  [enable dangerous features (privkey WIF conversion tools etc) (disabled by default)])],
+  [enable_dangerous=$enableval],
+  [enable_dangerous=no])
+
 AC_LANG_PUSH([C++])
 AX_CHECK_COMPILE_FLAG([-Werror],[CXXFLAG_WERROR="-Werror"],[CXXFLAG_WERROR=""])
 
@@ -432,6 +439,15 @@ fi
 
 AC_LANG_POP
 
+dnl enable dangerous features
+AC_MSG_CHECKING([if dangerous features should be enabled])
+if test x$enable_dangerous != xno; then
+  AC_MSG_RESULT(yes)
+  AC_DEFINE_UNQUOTED([ENABLE_DANGEROUS],[1],[Define to 1 to enable dangerous features])
+else
+  AC_MSG_RESULT(no)
+fi
+
 AM_CONDITIONAL([TARGET_DARWIN], [test x$TARGET_OS = xdarwin])
 AM_CONDITIONAL([BUILD_DARWIN], [test x$BUILD_OS = xdarwin])
 AM_CONDITIONAL([TARGET_WINDOWS], [test x$TARGET_OS = xwindows])
@@ -495,6 +511,13 @@ esac
 
 echo 
 echo "Options used to compile and link:"
+echo "  dangerous     = $enable_dangerous"
+if test x$enable_dangerous != xno; then
+  echo "    *NOTE:* If someone gave you a modified version of this code, and you passed in a private key"
+  echo "            with bitcoin in it, they could easily send that key to themselves and steal from you."
+  echo "            Make sure you got this from https://github.com/kallewoof/btcdeb or from some other"
+  echo "            source that you trust. You should preferably also verify the source code."
+fi
 echo "  target os     = $TARGET_OS"
 echo "  build os      = $BUILD_OS"
 echo

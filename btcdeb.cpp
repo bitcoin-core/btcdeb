@@ -323,6 +323,10 @@ static const char* tfs[] = {
     "base58chk-decode",
     "bech32-encode",
     "bech32-decode",
+#ifdef ENABLE_DANGEROUS
+    "encode-wif",
+    "decode-wif",
+#endif // ENABLE_DANGEROUS
     nullptr
 };
 
@@ -337,6 +341,10 @@ int _e_b58ce(Value&& pv)   { pv.do_base58chkenc(); pv.println(); return 0; }
 int _e_b58cd(Value&& pv)   { pv.do_base58chkdec(); pv.println(); return 0; }
 int _e_b32e(Value&& pv)    { pv.do_bech32enc(); pv.println(); return 0; }
 int _e_b32d(Value&& pv)    { pv.do_bech32dec(); pv.println(); return 0; }
+#ifdef ENABLE_DANGEROUS
+int _e_encode_wif(Value&& pv)    { pv.do_encode_wif(); pv.println(); return 0; }
+int _e_decode_wif(Value&& pv)    { pv.do_decode_wif(); pv.println(); return 0; }
+#endif // ENABLE_DANGEROUS
 
 typedef int (*btcdeb_tfun) (Value&&);
 static const btcdeb_tfun tffp[] = {
@@ -351,6 +359,10 @@ static const btcdeb_tfun tffp[] = {
     _e_b58cd,
     _e_b32e,
     _e_b32d,
+#ifdef ENABLE_DANGEROUS
+    _e_encode_wif,
+    _e_decode_wif,
+#endif // ENABLE_DANGEROUS
     nullptr
 };
 
@@ -377,7 +389,7 @@ int fn_tf(const char* arg) {
         printf("unknown function: %s\n", argv[0]);
         return -1;
     }
-    return tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1)));
+    return tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1), true));
 }
 
 char* compl_tf(const char* text, int continued) {

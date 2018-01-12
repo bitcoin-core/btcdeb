@@ -68,7 +68,14 @@ struct Value {
         for (size_t i = 0; i < arg_idx; i++) free(args_ptr[i]);
         return result;
     }
-    Value(std::vector<Value> v) {
+    Value(std::vector<Value> v, bool fallthrough_single = false) {
+        if (fallthrough_single && v.size() == 1) {
+            type = v[0].type;
+            data = v[0].data;
+            str = v[0].str;
+            i = v[0].i;
+            return;
+        }
         type = T_DATA;
         for (auto& it : v) {
             insert(data, it.data_value());
@@ -253,6 +260,21 @@ struct Value {
         do_sha256();
         do_ripemd160();
     }
+    void do_base58enc() {
+        data_value();
+        str = EncodeBase58(data);
+        type = T_STRING;
+    }
+    void do_base58dec() {
+        if (type != T_STRING) {
+            fprintf(stderr, "cannot base58-decode non-string value\n");
+            return;
+        }
+        if (!DecodeBase58(str, data)) {
+            fprintf(stderr, "decode failed\n");
+        }
+        type = T_DATA;
+    }
     void do_base58chkenc() {
         data_value();
         str = EncodeBase58Check(data);
@@ -325,6 +347,44 @@ struct Value {
             return;
         }
     }
+#ifdef ENABLE_DANGEROUS
+    void do_encode_wif() {
+        data_value();
+        data.insert(data.begin(), 0x80);    // main net
+        // data.insert(data.end(),   0x01);    // compressed
+        Value hashed(*this);
+        hashed.do_hash256();
+        data.insert(data.end(), hashed.data.begin(), hashed.data.begin() + 4);
+        do_base58enc();
+    }
+    void do_decode_wif() {
+        if (type != T_STRING) {
+            fprintf(stderr, "input must be a WIF string; type = %d\n", type);
+            return;
+        }
+        do_base58dec();
+        if (data.size() < 4) {
+            fprintf(stderr, "base58 decoding failed\n");
+            return;
+        }
+        std::vector<uint8_t> chksum(data.end() - 4, data.end());
+        data.resize(data.size() - 4);
+        if (data[0] != 0x80) {
+            fprintf(stderr, "unexpected prefix 0x%02x (expected 0x80)\n", data[0]);
+        }
+        // check sum validation part before removing prefixes/suffixes
+        Value hashed(*this);
+        hashed.do_hash256();
+        hashed.data.resize(4);
+        for (int i = 0; i < 4; i++) {
+            if (hashed.data[i] != chksum[i]) {
+                fprintf(stderr, "checksum failure for byte %d: 0x%02x != 0x%02x\n", i, chksum[i], hashed.data[i]);
+                return;
+            }
+        }
+        data = std::vector<uint8_t>(data.begin() + 1, data.end());
+    }
+#endif // ENABLE_DANGEROUS
     void println() {
         switch (type) {
         case T_INT:
