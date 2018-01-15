@@ -92,7 +92,7 @@ void interpret_opcode(std::vector<CodePath>& paths, opcodetype opcode) {
     case OP_NOTIF: {
         int activation = opcode == OP_IF;
         CScript scripts[2];
-        scripts[1 - activation] << OP_NOT << OP_0 << OP_EQUALVERIFY;
+        scripts[1 - activation] << OP_VERIFY;
         scripts[activation] << OP_NOT << OP_VERIFY;
         split_codepaths(paths, scripts[0], scripts[1]);
     } break;
