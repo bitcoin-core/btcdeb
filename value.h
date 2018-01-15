@@ -75,6 +75,11 @@ struct Value {
         for (size_t i = 0; i < arg_idx; i++) free(args_ptr[i]);
         return result;
     }
+    Value(const CScript& script) {
+        data.clear();
+        insert(data, script);
+        type = T_DATA;
+    }
     Value(std::vector<Value> v, bool fallthrough_single = false) {
         if (fallthrough_single && v.size() == 1) {
             type = v[0].type;
