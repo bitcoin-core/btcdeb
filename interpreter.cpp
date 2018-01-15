@@ -1944,6 +1944,7 @@ bool StepScript(InterpreterEnv& env)
         script = CScript(policyScript.begin(), policyScript.end());
         pc = script.begin();
         pend = script.end();
+        env.pbegincodehash = pc;
         // Only allow one tail-call:
         allow_tail_call = false;
         // Disable nOpCount limit for subscript, effectively:
