@@ -24,7 +24,7 @@ EXTRA_LIBRARIES += \
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc merklebranch
+bin_PROGRAMS = btcdeb btcc merklebranch mastify
 noinst_PROGRAMS =
 
 .PHONY: FORCE check-symbols check-security
@@ -117,6 +117,16 @@ merklebranch_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 merklebranch_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 merklebranch_LDADD = \
+	$(LIBBITCOIN)
+
+# mastify binary #
+mastify_SOURCES = \
+	mastify.cpp \
+	value.h
+mastify_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+mastify_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+
+mastify_LDADD = \
 	$(LIBBITCOIN)
 
 clean-local:

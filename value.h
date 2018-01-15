@@ -85,7 +85,7 @@ struct Value {
         }
         type = T_DATA;
         for (auto& it : v) {
-            insert(data, it.data_value());
+            insert(data, it.data_value(true));
         }
     }
     Value(const char* v, size_t vlen = 0, bool pushed = false, bool stack = false) {
@@ -99,7 +99,7 @@ struct Value {
         type = T_STRING;
         if (vlen > 1 && v[0] == '[' && v[vlen - 1] == ']') {
             for (auto& it : parse_args(&v[1], vlen - 2, true)) {
-                insert(data, it.data_value());
+                insert(data, it.data_value(true));
             }
             type = T_DATA;
             return;
@@ -164,10 +164,16 @@ struct Value {
         insert(data, other.data_value());
         return *this;
     }
-    std::vector<uint8_t> data_value() const {
-        return const_cast<Value*>(this)->data_value();
+    std::vector<uint8_t> data_value(bool script = false) const {
+        return const_cast<Value*>(this)->data_value(script);
     }
-    std::vector<uint8_t> data_value() {
+    std::vector<uint8_t> data_value(bool script = false) {
+        if (type == T_DATA) return data;
+        if (script && type == T_INT) {
+            data.clear();
+            insert(data, CScript() << i);
+            return data;
+        }
         switch (type) {
         case T_INT:
             if (i < 256) {
@@ -182,8 +188,6 @@ struct Value {
             }
             data.resize(8);
             memcpy(data.data(), &i, 8);
-            return data;
-        case T_DATA:
             return data;
         default:
             // ascii representation
