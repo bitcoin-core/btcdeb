@@ -331,7 +331,7 @@ static const char* tfs[] = {
 };
 
 int _e_hex(Value&& pv)     { printf("%s\n", pv.hex_str().c_str()); return 0; }
-int _e_int(Value&& pv)     { printf("%lld\n", pv.int_value()); return 0; }
+int _e_int(Value&& pv)     { printf("%" PRId64 "\n", pv.int_value()); return 0; }
 int _e_reverse(Value&& pv) { pv.do_reverse(); pv.println(); return 0; }
 int _e_sha256(Value&& pv)  { pv.do_sha256(); pv.println(); return 0; }
 int _e_ripemd160(Value&& pv) { pv.do_ripemd160(); pv.println(); return 0; }

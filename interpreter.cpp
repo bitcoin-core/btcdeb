@@ -5,6 +5,7 @@
 
 #include <interpreter.h>
 
+#include <inttypes.h>
 #include <primitives/transaction.h>
 #include <hash.h>
 #include <crypto/ripemd160.h>
@@ -472,7 +473,7 @@ uint256 SignatureHash(const CScript& scriptCode, const CTransaction& txTo, unsig
         ss << scriptCode;
         btc_sign_logf(" << scriptCode\n");
         ss << amount;
-        btc_sign_logf(" << amount = %lld\n", amount);
+        btc_sign_logf(" << amount = %" PRId64 "\n", amount);
         ss << txTo.vin[nIn].nSequence;
         btc_sign_logf(" << txTo.vin[nIn].nSequence = %u (0x%x)\n", txTo.vin[nIn].nSequence, txTo.vin[nIn].nSequence);
         // Outputs (none/one/all, depending on flags)

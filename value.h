@@ -1,6 +1,7 @@
 #ifndef included_value_h_
 #define included_value_h_
 
+#include <inttypes.h>
 #include <vector>
 #include <string>
 #include <utilstrencodings.h>
@@ -113,7 +114,7 @@ struct Value {
         if (i != 0) {
             // verify
             char buf[vlen + 1];
-            sprintf(buf, "%lld", i);
+            sprintf(buf, "%" PRId64, i);
             if (!strcmp(buf, v)) {
                 // verified; can it be a hexstring too?
                 if (!(vlen & 1)) {
@@ -404,7 +405,7 @@ struct Value {
     void println() {
         switch (type) {
         case T_INT:
-            printf("%lld\n", i);
+            printf("%" PRId64 "\n", i);
             return;
         case T_DATA:
             for (auto it : data) printf("%02x", it);
