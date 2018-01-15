@@ -70,6 +70,7 @@ libtool
 .btcdeb_history
 btcdeb
 merklebranch
+mastify
 
 # autoreconf
 Makefile.in
