@@ -188,6 +188,7 @@ static const unsigned int MAX_OPCODE = OP_NOP10;
 
 const char* GetOpName(opcodetype opcode);
 opcodetype GetOpCode(const char* name);
+void GetStackFeatures(opcodetype opcode, size_t& spawns, size_t& slays);
 
 class scriptnum_error : public std::runtime_error
 {
