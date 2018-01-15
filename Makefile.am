@@ -125,9 +125,11 @@ mastify_SOURCES = \
 	value.h
 mastify_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 mastify_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+mastify_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 mastify_LDADD = \
-	$(LIBBITCOIN)
+	$(LIBBITCOIN) \
+	$(LIBSECP256K1)
 
 clean-local:
 	-rm -f config.h
