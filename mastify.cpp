@@ -298,20 +298,20 @@ int main(int argc, const char** argv)
         CHash256().Write(&leaf[0], leaf.size()).Finalize(hash.begin());
         hashes.push_back(hash);
     }
-    if (!piping) {
-        printf("leaves: [\n");
-        for (size_t i = 0; i < hashes.size(); ++i) {
-            printf("\t%s\n", HexStr(hashes[i]).c_str());
-        }
-        printf("]\n");
-    }
-    uint256 root;
-    std::vector<uint256> branch;
-    uint32_t path;
-    std::vector<unsigned char> proof;
-
+    // if (!piping) {
+    //     printf("leaves: [\n");
+    //     for (size_t i = 0; i < hashes.size(); ++i) {
+    //         printf("\t%s\n", HexStr(hashes[i]).c_str());
+    //     }
+    //     printf("]\n");
+    // }
     size_t cap = selected_path ? current_path + 1 : leaves.size();
     for (int pos = selected_path ? current_path : 0; pos < cap; pos++) {
+        uint256 root;
+        std::vector<uint256> branch;
+        uint32_t path;
+        std::vector<unsigned char> proof;
+
         if (!selected_path) printf("path #%d proposal:\n", pos);
         size_t params = paths[pos].params;
         if (!fast) {
