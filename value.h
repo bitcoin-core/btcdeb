@@ -53,15 +53,22 @@ struct Value {
         size_t start = 0;
         for (size_t i = 0; i <= args_len; i++) {
             char ch = args_string[i - (i == args_len)];
-            if (i == args_len || (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')) {
+            if (i == args_len || (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '#')) {
                 if (start == i) {
                     start++;
-                    continue;
+                } else {
+                    args_ptr[arg_idx] = strndup(&args_string[start], i - start);
+                    args.push_back(args_ptr[arg_idx]);
+                    arg_idx++;
+                    start = i + 1;
                 }
-                args_ptr[arg_idx] = strndup(&args_string[start], i - start);
-                args.push_back(args_ptr[arg_idx]);
-                arg_idx++;
-                start = i + 1;
+                if (ch == '#') {
+                    // trim out remainder of this line
+                    while (i < args_len && args_string[i] != '\n' && args_string[i] != '\r') {
+                        i++;
+                    }
+                    start = i + 1;
+                }
             }
         }
         std::vector<Value> result = parse_args(args, embedding);
@@ -90,7 +97,7 @@ struct Value {
         }
         str = v;
         type = T_STRING;
-        if (vlen > 0 && v[0] == '[' && v[vlen - 1] == ']') {
+        if (vlen > 1 && v[0] == '[' && v[vlen - 1] == ']') {
             for (auto& it : parse_args(&v[1], vlen - 2, true)) {
                 insert(data, it.data_value());
             }
