@@ -170,6 +170,12 @@ struct Value {
         insert(data, other.data_value());
         return *this;
     }
+    bool operator==(const Value& other) const {
+        return type == other.type &&
+            (type == T_INT    ? i == other.i :
+             type == T_STRING ? str == other.str :
+             data == other.data);
+    }
     std::vector<uint8_t> data_value(bool script = false) const {
         return const_cast<Value*>(this)->data_value(script);
     }
