@@ -1846,6 +1846,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
         env.vchPushValue = vchPushValue;
         env.stack = stack;
         env.altstack = altstack;
+        it_in = it;
     } // try
     catch (std::exception e)
     {
