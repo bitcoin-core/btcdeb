@@ -4,6 +4,10 @@ Bitcoin Script debugging utilities.
 
 This is a set of tools used to debug or construct scripts for use in Bitcoin.
 
+btcdeb depends on the following libraries:
+
+* boost
+
 ## Installation
 
 On linux or mac, grab the source code and do:
