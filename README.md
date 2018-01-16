@@ -4,9 +4,14 @@ Bitcoin Script debugging utilities.
 
 This is a set of tools used to debug or construct scripts for use in Bitcoin.
 
+## Dependencies
+
 btcdeb depends on the following libraries:
 
-* boost
+* libssl
+* libboost
+
+Mac users can do `brew install boost`, ubuntu/debian users can do `apt-get install libboost-all-dev` (with `sudo` prepended if necessary).
 
 ## Installation
 
