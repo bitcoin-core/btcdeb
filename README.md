@@ -11,7 +11,7 @@ btcdeb depends on the following libraries:
 * libssl
 * libboost
 
-Mac users can do `brew install boost`, ubuntu/debian users can do `apt-get install libboost-all-dev` (with `sudo` prepended if necessary).
+Mac users can do `brew install boost`, ubuntu/debian users can do `apt-get install libboost-all-dev libssl-dev` (with `sudo` prepended if necessary).
 
 ## Installation
 
