@@ -478,6 +478,7 @@ int fn_exec(const char* arg) {
     while (it != script.end()) {
         if (!ExecIterator(*env, script, it, false)) {
             fprintf(stderr, "Error: %s\n", ScriptErrorString(*env->serror));
+            return 0;
         }
     }
     print_dualstack();
