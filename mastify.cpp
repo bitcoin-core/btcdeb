@@ -27,6 +27,16 @@ struct CodePath {
     , active(active_in)
     , path_index(0)
     {}
+    CodePath(std::vector<Value>& pubkeys) : CodePath()
+    {
+        // we want to create a series of OP_CHECKSEQUENCE{VERIFY} calls, one per
+        // pubkey, the final one missing the VERIFY part
+        auto& noverify = pubkeys.back();
+        for (auto& key : pubkeys) {
+            script << key.data_value() << (noverify == key ? OP_CHECKSIG : OP_CHECKSIGVERIFY);
+        }
+        params = pubkeys.size(); // one signature per pubkey
+    }
     CodePath split(CScript& left, CScript& right, size_t other_index) {
         CodePath c{script, params, stack_size, active};
         script += left;
@@ -136,10 +146,46 @@ void update_path(size_t& idx, std::vector<CodePath>& paths, opcodetype opcode, s
     }
 }
 
+int iterate_multisig(std::string indent, std::vector<CodePath>& paths, int required, std::vector<Value>& pubkeys, std::vector<bool>& selected, int selected_now, std::vector<Value>& picked, size_t cursor) {
+    // if cursor >= pubkeys.size(), we are out of bounds
+    if (cursor >= pubkeys.size() || picked.size() >= required) return -1;
+    // if picked.size() < required, we can try with the cursor element enabled
+    // note: we use a ref to a single vector for picked; this is fine, because
+    // we always reset to the incoming state before we exit (by removing the pubkey we pushed)
+    picked.push_back(pubkeys[cursor]);
+    int rval = -1;
+    if (selected[cursor]) {
+        selected_now++;
+        if (selected_now == required) rval = paths.size();
+    }
+    // printf("%s* picking %zu=%s [%zu picked; selected=%s; selected_now=%d, rval=%d]\n", indent.c_str(), cursor, pubkeys[cursor].hex_str().c_str(), picked.size(), selected[cursor] ? "true" : "false", selected_now, rval);
+    // if this results in picked.size() == required, we have a combo; this
+    // also means we have no other combinations through recursion, when this
+    // is enabled
+    if (picked.size() == required) {
+        paths.emplace_back(picked);
+    } else {
+        int rval2 = iterate_multisig(indent + " ", paths, required, pubkeys, selected, selected_now, picked, cursor + 1);
+        // printf("%s* got back %d\n", indent.c_str(), rval2);
+        rval = rval == -1 ? rval2 : rval;
+    }
+    selected_now -= selected[cursor];
+    assert(picked.back() == pubkeys[cursor]);
+    picked.pop_back();
+    int rval2 = iterate_multisig(indent + " ", paths, required, pubkeys, selected, selected_now, picked, cursor + 1);
+    // printf("%s* got back %d :: result %d\n", indent.c_str(), rval2, rval == -1 ? rval2 : rval);
+    return rval == -1 ? rval2 : rval;
+}
+
+int iterate_multisig(std::vector<CodePath>& paths, int required, std::vector<Value>& pubkeys, std::vector<bool>& selected) {
+    std::vector<Value> picked;
+    return iterate_multisig("", paths, required, pubkeys, selected, 0, picked, 0);
+}
+
 int main(int argc, const char** argv)
 {
     if (argc < 2) {
-        fprintf(stderr, "syntax: %s [--trimmable] <script> [<arg1> [<arg2> [...]]]\n", argv[0]);
+        fprintf(stderr, "syntax: %s [--trimmable] [--multisig=<required>] <script> [<arg1> [<arg2> [...]]]\n", argv[0]);
         fprintf(stderr,
             "e.g.: %s --trimmable \"[\n"
             // "   # Source: https://lists.linuxfoundation.org/pipermail/lightning-dev/2015-July/000021.html\n"
@@ -183,6 +229,19 @@ int main(int argc, const char** argv)
             "- general mode, which simply gives you the possible outcomes and scripts, as well as the merkle tree; this is the behavior when no arguments are provided to the input\n"
             "- execution mode, which gives you the solution to spending an existing mastified script; this is the behavior when 1 or more arguments are provided\n"
         );
+        fprintf(stderr,
+            "you can also provide a series of pubkeys for a multisig funding construct, when using --multisig=<required>, where <required> is the required number of signatures to allow spending\n"
+            "e.g.: %s --multisig=2 \\\n"
+            "            020c23a5f833b3cb2a29bf81e246886e0ea098989b359c401655c96d3f1a37567a \\\n"
+            "            0375ceeb0d9d99ff238f85aa5d18e318c7f0a84d3b7bec31a99df66df0bf887ee4 \\\n"
+            "            02be3d85951a06478e60d7663a8788e91c04923f23a5f0118794cdaef8ec31cb74\n"
+            "you can associate keys with signatures, if you want a spending solution.\n"
+            "e.g.: %s --multisig=2  \\\n"
+            "            020c23a5f833b3cb2a29bf81e246886e0ea098989b359c401655c96d3f1a37567a=3044022000f82e4815585181fb1dd42155263044e556f5f3204119a9c54f3892eadb123802202f1480caf1cda19c39dae5826f3079a7775f1336174e13b394fb59107e5f808001 \\\n"
+            "            0375ceeb0d9d99ff238f85aa5d18e318c7f0a84d3b7bec31a99df66df0bf887ee4 \\\n"
+            "            02be3d85951a06478e60d7663a8788e91c04923f23a5f0118794cdaef8ec31cb74=30440220526b8f15de0c6d3c3988d4565e2f22f034d7d904bf1c8b9251e67777c50230060220346dcbd3309880ec0ff69cbb6467c456ecb7621fefcd845c62e42e3b6a4be30001\n"
+            , argv[0], argv[0]
+        );
         return 1;
     }
     // process -- args until we run out of them; remainder = leaves
@@ -191,6 +250,8 @@ int main(int argc, const char** argv)
     bool legacy = false;
     bool btcdeb = false;
     bool trimmable = false;
+    bool multisig = false;
+    int multisig_required;
     while (argi < argc && strlen(argv[argi]) > 7 && argv[argi][0] == '-') {
         const char* v = argv[argi];
         if (!strcmp(v, "--legacy")) {
@@ -199,6 +260,9 @@ int main(int argc, const char** argv)
             btcdeb = true;
         } else if (!strcmp(v, "--trimmable")) {
             trimmable = true;
+        } else if (!strncmp(v, "--multisig=", strlen("--multisig="))) {
+            multisig = true;
+            multisig_required = atoi(&v[strlen("--multisig=")]);
         } else {
             fprintf(stderr, "unknown argument: %s\n", v);
             return -1;
@@ -209,62 +273,83 @@ int main(int argc, const char** argv)
     piping = btcdeb || !isatty(fileno(stdin));
     if (piping) btc_logf = btc_logf_dummy;
 
-    Value script(argv[argi]);
     std::vector<Value> args;
-    for (int i = argi + 1; i < argc; i++) {
-        args.push_back(Value(argv[i], 0, false, true));
-    }
-    // printf("script: %s\n", script.hex_str().c_str());
-    CScript spt = CScript(script.data.begin(), script.data.end());
-    // determine conditional branches, and parameter counts
     std::vector<CodePath> paths;
-    paths.emplace_back();
-    auto it = spt.begin();
-    opcodetype opcode;
-    valtype vchPushValue;
-    while (spt.GetOp(it, opcode, vchPushValue)) {
-        if (vchPushValue.size() > 0) {
-            for (auto& path : paths) {
-                if (path.is_active()) {
-                    path.touch(1, 0);
-                    path.script << vchPushValue;
-                }
-            }
-            // printf("%s\n", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
-        } else {
-            interpret_opcode(paths, opcode);
-            // for (auto& path : paths) {
-            //     if (path.is_active()) {
-            //         path.script << opcode;
-            //     }
-            // }
-            // printf("%s\n", GetOpName(opcode));
-        }
-    }
+    size_t current_path;
+    bool selected_path;
 
-    // if arguments were provided, execute the original script and determine which path was selected
-    size_t current_path = 0;
-    bool selected_path = args.size() > 0;
-    if (args.size()) {
-        btc_logf = btc_logf_dummy;
-        std::vector<valtype> stack;
-        BaseSignatureChecker checker;
-        ScriptError error;
-        for (auto p : args) {
-            stack.push_back(p.data_value());
-        }
-        auto env = new InterpreterEnv(stack, spt, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, checker, SIGVERSION_WITNESS_V0, &error);
-        while (!env->done) {
-            // iterate
-            if (!StepScript(*env)) {
-                fprintf(stderr, "error: script failure: %s\n", ScriptErrorString(error));
-                return -1;
+    if (multisig) {
+        std::vector<Value> pubkeys;
+        std::vector<Value*> sigs;
+        std::vector<bool> selected;
+        for (; argi < argc; ++argi) {
+            const char* sigpos = strchr(argv[argi], '=');
+            if (sigpos) {
+                char* pubkey = strndup(argv[argi], sigpos - argv[argi]);
+                pubkeys.emplace_back(pubkey);
+                args.insert(args.begin(), Value(&sigpos[1]));
+                sigs.push_back(new Value(&sigpos[1]));
+                free(pubkey);
+                selected.push_back(true);
+            } else {
+                pubkeys.emplace_back(argv[argi]);
+                sigs.push_back(nullptr);
+                selected.push_back(false);
             }
-            // update path
-            update_path(current_path, paths, env->opcode, env->vfExec);
         }
-        btc_logf("resulting path: %zu\n", current_path);
-        delete env;
+
+        // do all path combinations
+        current_path = iterate_multisig(paths, multisig_required, pubkeys, selected);
+        selected_path = current_path != -1;
+    } else {
+        Value script(argv[argi]);
+        for (int i = argi + 1; i < argc; i++) {
+            args.push_back(Value(argv[i], 0, false, true));
+        }
+        // printf("script: %s\n", script.hex_str().c_str());
+        CScript spt = CScript(script.data.begin(), script.data.end());
+        // determine conditional branches, and parameter counts
+        paths.emplace_back();
+        auto it = spt.begin();
+        opcodetype opcode;
+        valtype vchPushValue;
+        while (spt.GetOp(it, opcode, vchPushValue)) {
+            if (vchPushValue.size() > 0) {
+                for (auto& path : paths) {
+                    if (path.is_active()) {
+                        path.touch(1, 0);
+                        path.script << vchPushValue;
+                    }
+                }
+            } else {
+                interpret_opcode(paths, opcode);
+            }
+        }
+
+        // if arguments were provided, execute the original script and determine which path was selected
+        current_path = 0;
+        selected_path = args.size() > 0;
+        if (args.size()) {
+            btc_logf = btc_logf_dummy;
+            std::vector<valtype> stack;
+            BaseSignatureChecker checker;
+            ScriptError error;
+            for (auto p : args) {
+                stack.push_back(p.data_value());
+            }
+            auto env = new InterpreterEnv(stack, spt, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, checker, SIGVERSION_WITNESS_V0, &error);
+            while (!env->done) {
+                // iterate
+                if (!StepScript(*env)) {
+                    fprintf(stderr, "error: script failure: %s\n", ScriptErrorString(error));
+                    return -1;
+                }
+                // update path
+                update_path(current_path, paths, env->opcode, env->vfExec);
+            }
+            btc_logf("resulting path: %zu\n", current_path);
+            delete env;
+        }
     }
 
     for (auto& path : paths) path.add_fromaltstacks();
@@ -273,8 +358,10 @@ int main(int argc, const char** argv)
         printf("%zu paths:\n", paths.size());
         for (size_t i = 0; i < paths.size(); i++) {
             printf("path #%zu (%zu arguments):\n", i, paths[i].params);
-            spt = paths[i].script;
-            it = spt.begin();
+            CScript spt = paths[i].script;
+            auto it = spt.begin();
+            opcodetype opcode;
+            valtype vchPushValue;
             while (spt.GetOp(it, opcode, vchPushValue)) {
                 if (vchPushValue.size() > 0) {
                     printf("%s\n", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
