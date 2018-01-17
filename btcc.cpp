@@ -13,7 +13,7 @@ int main(int argc, const char** argv)
     }
     std::vector<Value> result = Value::parse_args(argc, argv, 1);
     for (auto& it : result) {
-        fputs(it.hex_str().c_str(), stdout);
+        fputs(HexStr(it.data_value(true)).c_str(), stdout);
     }
     fputc('\n', stdout);
 }
