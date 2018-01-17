@@ -132,7 +132,7 @@ mastify_LDADD = \
 	$(LIBSECP256K1)
 
 clean-local:
-	-rm -f config.h
+	-rm -f config.h $(LIBBITCOIN) $(LIBKERL) $(LIBSECP256K1)
 
 .rc.o:
 	@test -f $(WINDRES)
