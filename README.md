@@ -25,6 +25,20 @@ $ make
 If any of those give an error, please file an issue and I'll take a look. It could
 be a dependency that I forgot about.
 
+## Emscripten
+
+You can compile btcdeb tools into JavaScript using [emscripten](http://kripken.github.io/emscripten-site/).
+
+After installing the SDK, compile btcdeb tools with the following commands:
+```Bash
+$ make clean
+$ emconfigure ./configure
+$ emmake make
+$ for i in btcdeb btcc mastify merklebranch; do mv $i $i.bc && emcc -O2 $i.bc libbitcoin.a -o $i.js; done
+```
+
+The last part is dome because emscripten's `emcc` expects the input bytecode file to have the `.bc` extension, whereas the makefile generates files with no extension.
+
 ## Script debugger
 
 The `btcdeb` command can step through a Bitcoin Script and show stack content and operations on a per op level.
