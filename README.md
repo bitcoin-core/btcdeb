@@ -36,6 +36,7 @@ $ emconfigure ./configure
 $ emmake make
 $ for i in btcdeb btcc mastify merklebranch; do mv $i $i.bc && emcc -O2 $i.bc libbitcoin.a -o $i.js; done
 ```
+and then instead of doing `./btcdeb` you do `node btcdeb.js` (or `mastify.js`, etc).
 
 The last part is done because emscripten's `emcc` expects the input bytecode file to have the `.bc` extension, whereas the makefile generates files with no extension.
 
