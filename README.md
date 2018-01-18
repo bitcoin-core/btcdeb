@@ -37,7 +37,9 @@ $ emmake make
 $ for i in btcdeb btcc mastify merklebranch; do mv $i $i.bc && emcc -O2 $i.bc libbitcoin.a -o $i.js; done
 ```
 
-The last part is dome because emscripten's `emcc` expects the input bytecode file to have the `.bc` extension, whereas the makefile generates files with no extension.
+The last part is done because emscripten's `emcc` expects the input bytecode file to have the `.bc` extension, whereas the makefile generates files with no extension.
+
+Note: most things work, but the console in btcdeb does not. You can work around this by doing `echo -n -e "step\n\n\n"` (with sufficient `\n`s).
 
 ## Script debugger
 
