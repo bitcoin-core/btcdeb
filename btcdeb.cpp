@@ -237,7 +237,6 @@ void print_dualstack() {
     int rmax = 0;
     while (env->script.GetOp(it, opcode, vchPushValue)) {
         char* pbuf = buf;
-        // pbuf += sprintf(pbuf, "#%04d ", i);
         if (vchPushValue.size() > 0) {
             sprintf(pbuf, "%s", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
         } else {
@@ -249,7 +248,7 @@ void print_dualstack() {
     }
     for (int j = env->stack.size() - 1; j >= 0; j--) {
         auto& it = env->stack[j];
-        auto s = HexStr(it.begin(), it.end());
+        auto s = it.begin() == it.end() ? "0x" : HexStr(it.begin(), it.end());
         if (s.length() > rmax) rmax = s.length();
         r.push_back(s);
     }
