@@ -84,6 +84,7 @@ libbitcoin_a_SOURCES = \
 
 # kerl library #
 libkerl_a_CPPFLAGS = $(AM_CPPFLAGS) -Ikerl
+libkerl_a_CFLAGS = -std=gnu99
 libkerl_a_SOURCES = kerl/kerl.c kerl/kerl.h
 
 # btcdeb binary #
