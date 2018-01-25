@@ -11,9 +11,10 @@ This is a set of tools used to debug or construct scripts for use in Bitcoin.
 btcdeb depends on the following libraries:
 
 * libssl
-* libboost
 
-Mac users can do `brew install boost`, ubuntu/debian users can do `apt-get install libboost-all-dev libssl-dev` (with `sudo` prepended if necessary).
+Ubuntu/debian users can do `apt-get install libssl-dev` (with `sudo` prepended if necessary).
+
+Mac users most likely have libssl already ([let me know if not](mailto:kalle.alm@gmail.com)).
 
 ## Installation
 
