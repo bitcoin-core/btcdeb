@@ -20,18 +20,18 @@ env:
     - SDK_URL=https://bitcoincore.org/depends-sources/sdks
     - WINEDEBUG=fixme-all
   matrix:
-# ARM
-    - HOST=arm-linux-gnueabihf PACKAGES="g++-arm-linux-gnueabihf" DEP_OPTS="NO_QT=1" CHECK_DOC=1 GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports"
-# Win32
-    - HOST=i686-w64-mingw32 DPKG_ADD_ARCH="i386" PACKAGES="nsis g++-mingw-w64-i686 wine1.6" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-reduce-exports"
+# # Win32
+#     - HOST=i686-w64-mingw32 DPKG_ADD_ARCH="i386" PACKAGES="nsis g++-mingw-w64-i686 wine1.6" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-reduce-exports"
 # System libs
-    - HOST=x86_64-unknown-linux-gnu PACKAGES="libssl-dev libevent-dev bsdmainutils xvfb" NO_DEPENDS=1 NEED_XVFB=1 RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports CPPFLAGS=-DDEBUG_LOCKORDER"
-# 32-bit + dash
-    - HOST=i686-pc-linux-gnu PACKAGES="g++-multilib" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++" USE_SHELL="/bin/dash"
-# Win64
-    - HOST=x86_64-w64-mingw32 DPKG_ADD_ARCH="i386" PACKAGES="nsis g++-mingw-w64-x86-64 wine1.6" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-reduce-exports"
-# Cross-Mac
-    - HOST=x86_64-apple-darwin11 PACKAGES="cmake imagemagick libcap-dev librsvg2-bin libz-dev libbz2-dev libtiff-tools python-dev" BITCOIN_CONFIG="--enable-gui --enable-reduce-exports --enable-werror" OSX_SDK=10.11 GOAL="deploy"
+    - HOST=x86_64-unknown-linux-gnu PACKAGES="libssl-dev bsdmainutils xvfb" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports
+# # 32-bit + dash
+#     - HOST=i686-pc-linux-gnu PACKAGES="g++-multilib" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++" USE_SHELL="/bin/dash"
+# # Win64
+#     - HOST=x86_64-w64-mingw32 DPKG_ADD_ARCH="i386" PACKAGES="nsis g++-mingw-w64-x86-64 wine1.6" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-reduce-exports"
+# # Cross-Mac
+#     - HOST=x86_64-apple-darwin11 PACKAGES="cmake imagemagick libcap-dev librsvg2-bin libz-dev libbz2-dev libtiff-tools python-dev" BITCOIN_CONFIG="--enable-gui --enable-reduce-exports --enable-werror" OSX_SDK=10.11 GOAL="install"
+# # ARM w/ dangerous
+#     - HOST=arm-linux-gnueabihf PACKAGES="g++-arm-linux-gnueabihf" GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports"
 
 before_install:
     - export PATH=$(echo $PATH | tr ':' "\n" | sed '/\/opt\/python/d' | tr "\n" ":" | sed "s|::|:|g")
