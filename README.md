@@ -4,6 +4,8 @@ Bitcoin Script debugging utilities.
 
 This is a set of tools used to debug or construct scripts for use in Bitcoin.
 
+[![Build Status](https://travis-ci.org/kallewoof/btcdeb.svg?branch=master)](https://travis-ci.org/kallewoof/btcdeb)
+
 ## Dependencies
 
 btcdeb depends on the following libraries:
