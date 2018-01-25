@@ -14,17 +14,19 @@ BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
 LIBBITCOIN=libbitcoin.a
 LIBKERL=libkerl.a
 LIBSECP256K1=secp256k1/libsecp256k1.la
+LIBBTCDEB=libbtcdeb.a
 
 $(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
 
 EXTRA_LIBRARIES += \
   $(LIBBITCOIN) \
-  $(LIBKERL)
+  $(LIBKERL) \
+  $(LIBBTCDEB)
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc merklebranch mastify
+bin_PROGRAMS = btcdeb btcc merklebranch mastify test-btcdeb
 noinst_PROGRAMS =
 
 .PHONY: FORCE check-symbols check-security
@@ -87,18 +89,26 @@ libkerl_a_CPPFLAGS = $(AM_CPPFLAGS) -Ikerl
 libkerl_a_CFLAGS = -std=gnu99
 libkerl_a_SOURCES = kerl/kerl.c kerl/kerl.h
 
+# btcdeb library #
+libbtcdeb_a_LIBADD = $(LIBBITCOIN)
+libbtcdeb_a_SOURCES = \
+	instance.h \
+	instance.cpp
+libbtcdeb_a_CPPFLAGS = $(AM_CPPFLAGS)
+
 # btcdeb binary #
 btcdeb_SOURCES = \
 	btcdeb.cpp \
 	value.h
-btcdeb_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+btcdeb_CPPFLAGS = $(AM_CPPFLAGS)
 btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
+	$(LIBBTCDEB) \
 	$(LIBBITCOIN) \
-	$(LIBKERL) \
-	$(LIBSECP256K1)
+	$(LIBSECP256K1) \
+	$(LIBKERL)
 
 # btcc binary #
 btcc_SOURCES = \
@@ -130,6 +140,21 @@ mastify_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 mastify_LDADD = \
 	$(LIBBITCOIN) \
+	$(LIBSECP256K1)
+
+# test-btcdeb binary #
+test_btcdeb_SOURCES = \
+	test/catch.hpp \
+	test/value.cpp \
+	test/test-btcdeb.cpp \
+	value.h
+test_btcdeb_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+test_btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+test_btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
+
+test_btcdeb_LDADD = \
+	$(LIBBITCOIN) \
+	$(LIBKERL) \
 	$(LIBSECP256K1)
 
 clean-local:

@@ -1,21 +1,13 @@
 #include <cstdio>
 #include <unistd.h>
 
-#include <script.h>
-#include <interpreter.h>
-#include <utilstrencodings.h>
-#include <policy/policy.h>
-#include <primitives/transaction.h>
-#include <streams.h>
-#include <pubkey.h>
+#include <instance.h>
+
 #include <tinyformat.h>
-#include <value.h>
 
 extern "C" {
 #include <kerl/kerl.h>
 }
-
-typedef std::vector<unsigned char> valtype;
 
 int fn_step(const char*);
 int fn_rewind(const char*);
@@ -28,17 +20,16 @@ char* compl_exec(const char*, int);
 char* compl_tf(const char*, int);
 int print_stack(std::vector<valtype>&, bool raw = false);
 
-InterpreterEnv* env;
-
 bool piping = false;
 int count = 0;
 char** script_lines;
+Instance instance;
+InterpreterEnv* env;
 
 void print_dualstack();
 
 int main(int argc, const char** argv)
 {
-    ECCVerifyHandle evh;
     piping = !isatty(fileno(stdin));
     if (piping) btc_logf = btc_logf_dummy;
 
@@ -50,7 +41,7 @@ int main(int argc, const char** argv)
         fprintf(stderr, "e.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
         fprintf(stderr, "you do not need the amounts for non-SegWit transactions\n");
         return 1;
-    } else{
+    } else {
         btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
     }
 
@@ -61,50 +52,13 @@ int main(int argc, const char** argv)
 
     int arg_idx = 1;
     // crude check for tx=
-    CTransactionRef tx;
-    auto sigver = SIGVERSION_BASE;
-    std::vector<CAmount> amounts;
     if (argc > 1 && !strncmp(argv[1], "tx=", 3)) {
         const char* txdata = &argv[1][3];
-        // parse until we run out of amounts
-        const char* p = txdata;
-        while (1) {
-            const char* c = p;
-            while (*c && *c != ',' && *c != ':') ++c;
-            if (!*c) {
-                if (amounts.size() == 0) {
-                    // no amounts provided
-                    break;
-                }
-                fprintf(stderr, "error: tx hex missing from input\n");
-                return 1;
-            }
-            char* s = strndup(p, c-p);
-            std::string ss = s;
-            free(s);
-            CAmount a;
-            if (!ParseFixedPoint(ss, 8, &a)) {
-                fprintf(stderr, "failed to parse amount: %s\n", ss.c_str());
-                return 1;
-            }
-            amounts.push_back(a);
-            p = c + 1;
-            if (*c == ':') break;
-        }
-        std::vector<unsigned char> txData = ParseHex(p);
-        if (txData.size() != (strlen(p) >> 1)) {
-            fprintf(stderr, "failed to parse tx hex string\n");
+        if (!instance.parse_transaction(txdata, true)) {
             return 1;
         }
-        CDataStream ss(txData, SER_DISK, 0);
-        // tx = new CTransaction();
-        CMutableTransaction mtx;
-        UnserializeTransaction(mtx, ss);
-        tx = MakeTransactionRef(CTransaction(mtx));
-        while (amounts.size() < tx->vin.size()) amounts.push_back(0);
-        if (tx->vin[0].scriptSig.size() == 0) sigver = SIGVERSION_WITNESS_V0;
         arg_idx++;
-        fprintf(stderr, "got %stransaction:\n%s\n", sigver == SIGVERSION_WITNESS_V0 ? "segwit " : "", tx->ToString().c_str());
+        fprintf(stderr, "got %stransaction:\n%s\n", instance.sigver == SIGVERSION_WITNESS_V0 ? "segwit " : "", instance.tx->ToString().c_str());
     }
     char* script_str = NULL;
     if (piping) {
@@ -119,9 +73,7 @@ int main(int argc, const char** argv)
     }
     CScript script;
     if (script_str) {
-        std::vector<unsigned char> scriptData = Value(script_str, 0, false, false, true).data_value();
-        script = CScript(scriptData.begin(), scriptData.end());
-        if (script.HasValidOps()) {
+        if (instance.parse_script(script_str)) {
             btc_logf("valid script\n");
         } else {
             fprintf(stderr, "invalid script\n");
@@ -129,23 +81,15 @@ int main(int argc, const char** argv)
         }
     }
     free(script_str);
-    std::vector<valtype> stack;
-    BaseSignatureChecker* checker;
-    if (tx) {
-        checker = new TransactionSignatureChecker(tx.get(), 0, amounts[0]);
-    } else {
-        checker = new BaseSignatureChecker();
-    }
-    
-    ScriptError error;
-    for (int i = arg_idx; i < argc; i++) {
-        stack.push_back(Value(argv[i], 0, false, true).data_value());
-    }
-    env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, *checker, sigver, &error);
-    if (!env->operational) {
-        fprintf(stderr, "failed to initialize script environment: %s\n", ScriptErrorString(error));
+
+    instance.parse_stack_args(argc, argv, arg_idx);
+
+    if (!instance.setup_environment()) {
+        fprintf(stderr, "failed to initialize script environment: %s\n", instance.error_string());
         return 1;
     }
+
+    env = instance.env;
 
     auto it = env->script.begin();
     opcodetype opcode;
@@ -195,15 +139,13 @@ int main(int argc, const char** argv)
         }
         kerl_run("btcdeb> ");
     }
-
-    delete env;
 }
 
 #define fail(msg...) do { fprintf(stderr, msg); return 0; } while (0)
 
 int fn_step(const char* arg) {
     if (env->done) fail("at end of script\n");
-    if (!StepScript(*env)) fail("error: %s\n", ScriptErrorString(*env->serror));
+    if (!instance.step()) fail("error: %s\n", instance.error_string());
     print_dualstack();
     if (env->curr_op_seq < count) {
         printf("%s\n", script_lines[env->curr_op_seq]);
@@ -212,10 +154,8 @@ int fn_step(const char* arg) {
 }
 
 int fn_rewind(const char* arg) {
-    if (env->done) {
-        env->done = false;
-    }
-    if (!RewindScript(*env)) fail("error: no history to rewind\n");
+    if (instance.at_start()) fail("error: no history to rewind\n");
+    if (!instance.rewind()) fail("error: failed to rewind; this is a bug\n");
     print_dualstack();
     if (env->curr_op_seq < count) {
         printf("%s\n", script_lines[env->curr_op_seq]);
@@ -427,78 +367,13 @@ int fn_exec(const char* arg) {
         printf("to push to stack, simply execute the numeric or hexadecimal value\n");
         return 0;
     }
-    CScript script;
-    for (int i = 0; i < argc; i++) {
-        const char* v = argv[i];
-        const size_t vlen = strlen(v);
-        // empty strings are ignored
-        if (!v[0]) continue;
-        // number?
-        int n = atoi(v);
-        if (n != 0) {
-            // verify
-            char buf[vlen + 1];
-            sprintf(buf, "%d", n);
-            if (!strcmp(buf, v)) {
-                // verified; can it be a hexstring too?
-                if (!(vlen & 1)) {
-                    std::vector<unsigned char> pushData(ParseHex(v));
-                    if (pushData.size() == (vlen >> 1)) {
-                        // it can; warn about using 0x for hex
-                        btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
-                    }
-                }
-                // can it be an opcode too?
-                if (n < 16) {
-                    btc_logf("warning: ambiguous input %s is interpreted as a numeric value (%s), not as an opcode (OP_%s). Use OP_%s to force into op code interpretation\n", v, v, v, v);
-                }
-                
-                script << (int64_t)n;
-                continue;
-            }
-        }
-        // hex string?
-        if (!(vlen & 1)) {
-            std::vector<unsigned char> pushData(ParseHex(v));
-            if (pushData.size() == (vlen >> 1)) {
-                script << pushData;
-                continue;
-            }
-        }
-        opcodetype opc = GetOpCode(v);
-        if (opc != OP_INVALIDOPCODE) {
-            script << opc;
-            continue;
-        }
-        fprintf(stderr, "error: invalid opcode %s\n", v);
-        return 0;
-    }
-    CScript::const_iterator it = script.begin();
-    while (it != script.end()) {
-        if (!ExecIterator(*env, script, it, false)) {
-            fprintf(stderr, "Error: %s\n", ScriptErrorString(*env->serror));
-            return 0;
-        }
-    }
+    instance.eval(argc, (const char **)argv);
     print_dualstack();
     return 0;
 }
 
 int fn_print(const char*) {
     for (int i = 0; i < count; i++) printf("%s%s\n", i == env->curr_op_seq ? " -> " : "    ", script_lines[i]);
-    // auto it = env->script.begin();
-    // opcodetype opcode;
-    // valtype vchPushValue;
-    // int i = 0;
-    // while (env->script.GetOp(it, opcode, vchPushValue)) {
-    //     ++i;
-    //     printf("%s#%04d ", i - 1 == env->curr_op_seq ? " -> " : "    ", i);
-    //     if (vchPushValue.size() > 0) {
-    //         printf("%s\n", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
-    //     } else {
-    //         printf("%s\n", GetOpName(opcode));
-    //     }
-    // }
     return 0;
 }
 
