@@ -9,9 +9,10 @@
 #include <tinyformat.h>
 #include <crypto/sha256.h>
 #include <crypto/ripemd160.h>
-// #include <hash.h>
 #include <base58.h>
 #include <bech32.h>
+
+static bool VALUE_WARN = true;
 
 template<typename T1, typename T2>
 inline void insert(T1& a, T2&& b) {
@@ -94,7 +95,7 @@ struct Value {
             insert(data, it.data_value(true));
         }
     }
-    Value(const char* v, size_t vlen = 0, bool pushed = false, bool stack = false) {
+    Value(const char* v, size_t vlen = 0, bool pushed = false, bool stack = false, bool non_numeric = false) {
         if (!vlen) vlen = strlen(v);
         if (vlen == 2 && v[0] == '0' && v[1] == 'x') {
             type = T_DATA;
@@ -110,7 +111,7 @@ struct Value {
             type = T_DATA;
             return;
         }
-        i = atoll(v);
+        i = non_numeric ? 0 : atoll(v);
         if (i != 0) {
             // verify
             char buf[vlen + 1];
@@ -121,11 +122,11 @@ struct Value {
                     std::vector<unsigned char> pushData(ParseHex(v));
                     if (pushData.size() == (vlen >> 1)) {
                         // it can; warn about using 0x for hex
-                        btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
+                        if (VALUE_WARN) btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
                     }
                 }
                 if (i >= 1 && i <= 16) {
-                    btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use OP_%s to force into opcode\n", v, v);
+                    if (VALUE_WARN) btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use OP_%s to force into opcode\n", v, v);
                 }
                 type = T_INT;
                 return;

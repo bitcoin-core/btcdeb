@@ -119,7 +119,7 @@ int main(int argc, const char** argv)
     }
     CScript script;
     if (script_str) {
-        std::vector<unsigned char> scriptData = Value(script_str).data_value();
+        std::vector<unsigned char> scriptData = Value(script_str, 0, false, false, true).data_value();
         script = CScript(scriptData.begin(), scriptData.end());
         if (script.HasValidOps()) {
             btc_logf("valid script\n");
