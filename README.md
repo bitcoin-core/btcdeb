@@ -14,7 +14,7 @@ btcdeb depends on the following libraries:
 
 Ubuntu/debian users can do `apt-get install libssl-dev` (with `sudo` prepended if necessary).
 
-Mac users most likely have libssl already ([let me know if not](mailto:kalle.alm@gmail.com)).
+Mac users most likely have libssl already ([let me know if not](https://github.com/kallewoof/btcdeb/issues/new)).
 
 ## Installation
 
