@@ -51,14 +51,14 @@ bool Instance::parse_transaction(const char* txdata, bool parse_amounts) {
 }
 
 bool Instance::parse_script(const char* script_str) {
-    std::vector<unsigned char> scriptData = Value(script_str, 0, false, false, true).data_value();
+    std::vector<unsigned char> scriptData = Value(script_str).data_value();
     script = CScript(scriptData.begin(), scriptData.end());
     return script.HasValidOps();
 }
 
 void Instance::parse_stack_args(size_t argc, const char** argv, size_t starting_index) {
     for (int i = starting_index; i < argc; i++) {
-        stack.push_back(Value(argv[i], 0, false, true).data_value());
+        stack.push_back(Value(argv[i]).data_value());
     }
 }
 
@@ -68,10 +68,8 @@ bool Instance::setup_environment() {
     } else {
         checker = new BaseSignatureChecker();
     }
-    fprintf(stderr, "checker : %p\n", checker);
     
     env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, *checker, sigver, &error);
-    fprintf(stderr, "env : %p\n", env);
 
     return env->operational;
 }
@@ -80,9 +78,13 @@ bool Instance::at_end() { return env->done; }
 bool Instance::at_start() { return env->pc == env->script.begin(); }
 const char* Instance::error_string() { return ScriptErrorString(*env->serror); }
 
-bool Instance::step() {
-    if (env->done) return false;
-    return StepScript(*env);
+bool Instance::step(size_t steps) {
+    while (steps > 0) {
+        if (env->done) return false;
+        if (!StepScript(*env)) return false;
+        steps--;
+    }
+    return true;
 }
 
 bool Instance::rewind() {

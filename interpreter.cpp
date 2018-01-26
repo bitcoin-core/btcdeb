@@ -1556,6 +1556,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                 // ([sig ...] num_of_signatures [pubkey ...] num_of_pubkeys -- bool)
 
                 int i = 1;
+                btc_sign_logf("stack has %zu entries [require 1]\n", stack.size());
                 if ((int)stack.size() < i)
                     return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
 
@@ -1570,6 +1571,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                 // With SCRIPT_VERIFY_NULLFAIL, this is used for cleanup if operation fails.
                 int ikey2 = nKeysCount + 2;
                 i += nKeysCount;
+                btc_sign_logf("stack has %zu entries [require %d]\n", stack.size(), i);
                 if ((int)stack.size() < i)
                     return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
 
@@ -1578,6 +1580,7 @@ bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_ite
                     return set_error(serror, SCRIPT_ERR_SIG_COUNT);
                 int isig = ++i;
                 i += nSigsCount;
+                btc_sign_logf("stack has %zu entries [require %d]\n", stack.size(), i);
                 if ((int)stack.size() < i)
                     return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
 

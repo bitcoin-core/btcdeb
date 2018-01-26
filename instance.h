@@ -45,7 +45,7 @@ public:
     bool at_start();
     const char* error_string();
 
-    bool step();
+    bool step(size_t steps = 1);
 
     bool rewind();
 

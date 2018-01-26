@@ -304,7 +304,7 @@ int main(int argc, const char** argv)
     } else {
         Value script(argv[argi]);
         for (int i = argi + 1; i < argc; i++) {
-            args.push_back(Value(argv[i], 0, false, true));
+            args.emplace_back(argv[i]);
         }
         // printf("script: %s\n", script.hex_str().c_str());
         CScript spt = CScript(script.data.begin(), script.data.end());

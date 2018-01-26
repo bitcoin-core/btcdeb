@@ -24,20 +24,22 @@ struct Value {
         T_STRING,
         T_INT,
         T_DATA,
+        T_OPCODE,
     } type;
-    int64_t i;
+    int64_t int64;
+    opcodetype opcode;
     std::vector<uint8_t> data;
     std::string str;
-    static std::vector<Value> parse_args(const std::vector<const char*> args, bool embedding = false) {
+    static std::vector<Value> parse_args(const std::vector<const char*> args) {
         std::vector<Value> result;
         for (auto& v : args) {
             size_t vlen = strlen(v);
             if (vlen > 0) {
                 // brackets embed
                 if (v[0] == '[' && v[vlen-1] == ']') {
-                    result.emplace_back(parse_args(&v[1], vlen - 2, true));
+                    result.emplace_back(parse_args(&v[1], vlen - 2));
                 } else {
-                    result.emplace_back(v, vlen, embedding);
+                    result.emplace_back(v, vlen/*, embedding*/);
                 }
             }
         }
@@ -48,14 +50,27 @@ struct Value {
         for (size_t i = argidx; i < argc; i++) args.push_back(argv[i]);
         return parse_args(args);
     }
-    static std::vector<Value> parse_args(const char* args_string, const size_t args_len, bool embedding = false) {
+    static std::vector<Value> parse_args(const char* args_string, size_t args_len = 0) {
+        if (args_len == 0) args_len = strlen(args_string);
         std::vector<const char*> args;
         char* args_ptr[args_len];
         size_t arg_idx = 0;
         size_t start = 0;
         for (size_t i = 0; i <= args_len; i++) {
             char ch = args_string[i - (i == args_len)];
-            if (i == args_len || (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '#')) {
+            if (ch == '[') {
+                // start counting starting brackets, and stop when we hit depth 0
+                size_t depth = 1;
+                while ((++i) <= args_len && depth > 0) {
+                    ch = args_string[i];
+                    depth += (ch == '[') - (ch == ']');
+                }
+                if (depth > 0) {
+                    fprintf(stderr, "parse error, unclosed [bracket (expected: ']') in \"%s\"\n", args_string);
+                    exit(1);
+                }
+            }
+            if (i == args_len || (ch == ']' || ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '#')) {
                 if (start == i) {
                     start++;
                 } else {
@@ -73,29 +88,45 @@ struct Value {
                 }
             }
         }
-        std::vector<Value> result = parse_args(args, embedding);
+        std::vector<Value> result = parse_args(args);
         for (size_t i = 0; i < arg_idx; i++) free(args_ptr[i]);
         return result;
     }
+
+    static std::string serialize(const std::vector<Value>& varr) {
+        CScript s;
+        for (const Value& v : varr) {
+            v >> s;
+        }
+        return HexStr(s);
+    }
+
+    explicit Value(const int64_t i)                { int64 = i; type = T_INT; }
+    explicit Value(const opcodetype o)             { opcode = o; type = T_OPCODE; }
+    explicit Value(const std::vector<uint8_t>&& d) { data = d; type = T_DATA; }
+
     Value(const CScript& script) {
         data.clear();
         insert(data, script);
         type = T_DATA;
     }
-    Value(std::vector<Value> v, bool fallthrough_single = false) {
+    Value(std::vector<Value>&& v, bool fallthrough_single = false) {
         if (fallthrough_single && v.size() == 1) {
             type = v[0].type;
             data = v[0].data;
             str = v[0].str;
-            i = v[0].i;
+            int64 = v[0].int64;
             return;
         }
         type = T_DATA;
+        data.clear();
+        CScript s;
         for (auto& it : v) {
-            insert(data, it.data_value(true));
+            it >> s;
         }
+        insert(data, s);
     }
-    Value(const char* v, size_t vlen = 0, bool pushed = false, bool stack = false, bool non_numeric = false) {
+    Value(const char* v, size_t vlen = 0, bool non_numeric = false) {//, bool pushed = false, bool stack = false) {
         if (!vlen) vlen = strlen(v);
         if (vlen == 2 && v[0] == '0' && v[1] == 'x') {
             type = T_DATA;
@@ -105,17 +136,19 @@ struct Value {
         str = v;
         type = T_STRING;
         if (vlen > 1 && v[0] == '[' && v[vlen - 1] == ']') {
-            for (auto& it : parse_args(&v[1], vlen - 2, true)) {
-                insert(data, it.data_value(true));
+            CScript s;
+            for (auto& it : parse_args(&v[1], vlen - 2)) {
+                it >> s;
             }
+            insert(data, s);
             type = T_DATA;
             return;
         }
-        i = non_numeric ? 0 : atoll(v);
-        if (i != 0) {
+        int64 = non_numeric ? 0 : atoll(v);
+        if (int64 != 0) {
             // verify
             char buf[vlen + 1];
-            sprintf(buf, "%" PRId64, i);
+            sprintf(buf, "%" PRId64, int64);
             if (!strcmp(buf, v)) {
                 // verified; can it be a hexstring too?
                 if (!(vlen & 1)) {
@@ -125,7 +158,7 @@ struct Value {
                         if (VALUE_WARN) btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
                     }
                 }
-                if (i >= 1 && i <= 16) {
+                if (int64 >= 1 && int64 <= 16) {
                     if (VALUE_WARN) btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use OP_%s to force into opcode\n", v, v);
                 }
                 type = T_INT;
@@ -133,11 +166,9 @@ struct Value {
             }
         }
         // opcode check
-        opcodetype opc = GetOpCode(v);
-        if (opc != OP_INVALIDOPCODE) {
-            type = T_DATA;
-            CScript script = CScript() << opc;
-            insert(data, script);
+        opcode = GetOpCode(v);
+        if (opcode != OP_INVALIDOPCODE) {
+            type = T_OPCODE;
             return;
         }
         // hex string?
@@ -149,23 +180,33 @@ struct Value {
             data = ParseHex(v);
             if (data.size() == (vlen >> 1)) {
                 type = T_DATA;
-                if (data.size() < 2 && !stack) {
-                    // pull out int64 and push that
-                    int64_t i64 = int_value();
-                    CScript s = CScript() << i64;
-                    data.clear();
-                    insert(data, s);
-                    return;
-                }
-                if (pushed) {
-                    CScript s = CScript() << data;
-                    data.clear();
-                    insert(data, s);
-                }
                 return;
             }
         }
     }
+
+    const Value& operator>>(CScript& s) const {
+        switch (type) {
+        case T_OPCODE:
+            s << opcode;
+            break;
+        case T_INT:
+            s << int64;
+            break;
+        case T_DATA:
+            if (data.size() < 5) {
+                // we need to push this as a number
+                int64_t i = int_value();
+                s << i;
+                break;
+            }
+            // fall-through
+        default:
+            s << data_value();
+        }
+        return *this;
+    }
+
     Value& operator+=(const Value& other) {
         data_value();
         insert(data, other.data_value());
@@ -173,34 +214,26 @@ struct Value {
     }
     bool operator==(const Value& other) const {
         return type == other.type &&
-            (type == T_INT    ? i == other.i :
+            (type == T_INT    ? int64 == other.int64 :
              type == T_STRING ? str == other.str :
+             type == T_OPCODE ? opcode == other.opcode :
              data == other.data);
     }
-    std::vector<uint8_t> data_value(bool script = false) const {
-        return const_cast<Value*>(this)->data_value(script);
-    }
-    std::vector<uint8_t> data_value(bool script = false) {
-        if (type == T_DATA) return data;
-        if (script && type == T_INT) {
-            data.clear();
-            insert(data, CScript() << i);
-            return data;
-        }
+
+    std::vector<uint8_t> data_value() const { return const_cast<Value*>(this)->data_value(); }
+
+    std::vector<uint8_t> data_value(/*bool script = false*/) {
         switch (type) {
+        case T_DATA:
+            return data;
+        case T_OPCODE:
+            data.clear();
+            insert(data, CScript() << opcode);
+            return data;
         case T_INT:
-            if (i < 256) {
-                data.resize(1);
-                data[0] = (uint8_t)(i & 0xff);
-                return data;
-            }
-            if (i < 0x100000000) {
-                data.resize(4);
-                memcpy(data.data(), &i, 4);
-                return data;
-            }
-            data.resize(8);
-            memcpy(data.data(), &i, 8);
+            // use CScriptNum
+            data = CScriptNum(int64).getvch();
+            type = T_DATA;
             return data;
         default:
             // ascii representation
@@ -209,12 +242,12 @@ struct Value {
             return data;
         }
     }
-    std::string hex_str() {
+    std::string hex_str() const {
         switch (type) {
+        case T_OPCODE:
+            return strprintf("%02x", opcode);
         case T_INT:
-            if (i < 256) return strprintf("%02x", i);
-            if (i < 0x100000000) return strprintf("%08x", i);
-            return strprintf("%16x", i);
+            return HexStr(CScriptNum::serialize(int64));
         case T_DATA:
             return HexStr(data);
         default:
@@ -222,17 +255,14 @@ struct Value {
             return "";
         }
     }
-    int64_t int_value() {
+    int64_t int_value() const {
         switch (type) {
         case T_INT:
-            return i;
+            return int64;
+        case T_OPCODE:
+            return opcode;
         case T_DATA:
-            if (data.size() > 8) {
-                fprintf(stderr, "%zu bytes of data cannot fit in an integer (max 8 bytes)\n", data.size());
-                return -1;
-            }
-            memcpy(&i, data.data(), data.size());
-            return i;
+            return CScriptNum(data, false).getint64();
         default:
             fprintf(stderr, "cannot convert string into integer value: %s\n", str.c_str());
             return -1;
@@ -243,14 +273,14 @@ struct Value {
         int64_t j;
         switch (type) {
         case T_INT:
-            for (int64_t z = i; z; z = z / 10) {
+            for (int64_t z = int64; z; z = z / 10) {
                 vc.push_back(z % 10);
             }
             j = 0;
             for (auto it = vc.rbegin(); it != vc.rend(); ++it) {
                 j = (j * 10) + *it;
             }
-            i = j;
+            int64 = j;
             return;
         case T_DATA:
             std::reverse(std::begin(data), std::end(data));
@@ -258,6 +288,9 @@ struct Value {
         case T_STRING:
             std::reverse(str.begin(), str.end());
             return;
+        default:
+            fprintf(stderr, "irreversible value type\n");
+            exit(1);
         }
     }
     void do_sha256() {
@@ -409,18 +442,22 @@ struct Value {
         data = std::vector<uint8_t>(data.begin() + 1, data.end());
     }
 #endif // ENABLE_DANGEROUS
-    void println() {
+    void print() const {
         switch (type) {
         case T_INT:
-            printf("%" PRId64 "\n", i);
+            printf("%" PRId64, int64);
             return;
+        case T_OPCODE:
+            printf("%s (%02x)", GetOpName(opcode), opcode);
         case T_DATA:
             for (auto it : data) printf("%02x", it);
-            printf("\n");
             return;
         case T_STRING:
-            printf("%s\n", str.c_str());
+            printf("%s", str.c_str());
         }
+    }
+    void println() const {
+        print(); fputc('\n', stdout);
     }
 };
 

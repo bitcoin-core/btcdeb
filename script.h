@@ -311,6 +311,7 @@ public:
             return std::numeric_limits<int>::min();
         return m_value;
     }
+    int64_t getint64() const { return m_value; }
 
     std::vector<unsigned char> getvch() const
     {
@@ -378,6 +379,7 @@ private:
  *  and made an initial sync 13% faster.
  */
 typedef prevector<28, unsigned char> CScriptBase;
+
 
 /** Serialized script, used inside transaction inputs and outputs */
 class CScript : public CScriptBase

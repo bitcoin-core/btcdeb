@@ -12,8 +12,5 @@ int main(int argc, const char** argv)
         return 1;
     }
     std::vector<Value> result = Value::parse_args(argc, argv, 1);
-    for (auto& it : result) {
-        fputs(HexStr(it.data_value(true)).c_str(), stdout);
-    }
-    fputc('\n', stdout);
+    fprintf(stdout, "%s\n", Value::serialize(result).c_str());
 }
