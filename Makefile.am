@@ -145,14 +145,16 @@ mastify_LDADD = \
 # test-btcdeb binary #
 test_btcdeb_SOURCES = \
 	test/catch.hpp \
-	test/value.cpp \
+	test/signing.cpp \
 	test/test-btcdeb.cpp \
+	test/value.cpp \
 	value.h
 test_btcdeb_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 test_btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 test_btcdeb_LDADD = \
+	$(LIBBTCDEB) \
 	$(LIBBITCOIN) \
 	$(LIBKERL) \
 	$(LIBSECP256K1)
