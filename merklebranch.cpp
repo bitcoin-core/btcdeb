@@ -91,7 +91,7 @@ int main(int argc, const char** argv)
             printf("proposal (1 parameter): TOALTSTACK %s OP_%d OP_MERKLEBRANCHVERIFY 2DROP DROP\n", HexStr(root).c_str(), 2 + preprocessed);
         }
         if (!piping || btcdeb) {
-            printf(piping ? "6b20" : "proposal 1 hex:         6b20%s5%db36d75\n", HexStr(root).c_str(), 2 + preprocessed);
+            printf(piping ? "6b20%s5%db36d75" : "proposal 1 hex:         6b20%s5%db36d75\n", HexStr(root).c_str(), 2 + preprocessed);
         }
         return 0;
     }
