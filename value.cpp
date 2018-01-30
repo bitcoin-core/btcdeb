@@ -2,9 +2,7 @@
 
 #include "value.h"
 
-#ifdef ENABLE_DANGEROUS
 #include <support/allocators/secure.h>
-#endif // ENABLE_DANGEROUS
 
 static const unsigned int PRIVATE_KEY_SIZE            = 279;
 static const unsigned int COMPRESSED_PRIVATE_KEY_SIZE = 214;
@@ -301,6 +299,8 @@ void Value::do_sign() {
     data = sigdata;
 }
 
+#endif // ENABLE_DANGEROUS
+
 void GetRandBytes(unsigned char* buf, int num)
 {
     // TODO: Make this more cross platform
@@ -312,8 +312,6 @@ void GetRandBytes(unsigned char* buf, int num)
     fread(buf, 1, num, f);
     fclose(f);
 }
-
-#endif // ENABLE_DANGEROUS
 
 void ECC_Start() {
     assert(secp256k1_context_sign == nullptr);
