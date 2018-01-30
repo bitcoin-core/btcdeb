@@ -13,16 +13,6 @@
 #include <stdexcept>
 #include <vector>
 
-/**
- * secp256k1:
- * const unsigned int PRIVATE_KEY_SIZE = 279;
- * const unsigned int PUBLIC_KEY_SIZE  = 65;
- * const unsigned int SIGNATURE_SIZE   = 72;
- *
- * see www.keylength.com
- * script supports up to 75 for single byte push
- */
-
 const unsigned int BIP32_EXTKEY_SIZE = 74;
 
 /** A reference to a CKey: the Hash160 of its serialized public key */
@@ -38,8 +28,16 @@ typedef uint256 ChainCode;
 /** An encapsulated public key. */
 class CPubKey
 {
-private:
+public:
+    /**
+     * secp256k1:
+     */
+    static const unsigned int PUBLIC_KEY_SIZE             = 65;
+    static const unsigned int COMPRESSED_PUBLIC_KEY_SIZE  = 33;
+    static const unsigned int SIGNATURE_SIZE              = 72;
+    static const unsigned int COMPACT_SIGNATURE_SIZE      = 65;
 
+private:
     /**
      * Just store the serialized data.
      * Its length can very cheaply be computed from the first byte.

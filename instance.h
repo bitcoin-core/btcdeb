@@ -37,7 +37,8 @@ public:
 
     bool parse_script(const char* script_str);
 
-    void parse_stack_args(size_t argc, const char** argv, size_t starting_index);
+    void parse_stack_args(size_t argc, char* const* argv, size_t starting_index);
+    void parse_stack_args(const std::vector<const char*> args);
 
     bool setup_environment();
 
@@ -49,5 +50,5 @@ public:
 
     bool rewind();
 
-    bool eval(const size_t argc, const char** argv);
+    bool eval(const size_t argc, char* const* argv);
 };

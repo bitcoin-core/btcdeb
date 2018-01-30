@@ -56,7 +56,13 @@ bool Instance::parse_script(const char* script_str) {
     return script.HasValidOps();
 }
 
-void Instance::parse_stack_args(size_t argc, const char** argv, size_t starting_index) {
+void Instance::parse_stack_args(const std::vector<const char*> args) {
+    for (auto& v : args) {
+        stack.push_back(Value(v).data_value());
+    }
+}
+
+void Instance::parse_stack_args(size_t argc, char* const* argv, size_t starting_index) {
     for (int i = starting_index; i < argc; i++) {
         stack.push_back(Value(argv[i]).data_value());
     }
@@ -97,7 +103,7 @@ bool Instance::rewind() {
     return RewindScript(*env);
 }
 
-bool Instance::eval(const size_t argc, const char** argv) {
+bool Instance::eval(const size_t argc, char* const* argv) {
     if (argc < 1) return false;
     CScript script;
     for (int i = 0; i < argc; i++) {
