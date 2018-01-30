@@ -5,6 +5,8 @@
 
 #include <tinyformat.h>
 
+#include <cliargs.h>
+
 extern "C" {
 #include <kerl/kerl.h>
 }
@@ -20,6 +22,7 @@ char* compl_exec(const char*, int);
 char* compl_tf(const char*, int);
 int print_stack(std::vector<valtype>&, bool raw = false);
 
+bool quiet = false;
 bool piping = false;
 int count = 0;
 char** script_lines;
@@ -28,12 +31,19 @@ InterpreterEnv* env;
 
 void print_dualstack();
 
-int main(int argc, const char** argv)
+int main(int argc, char* const* argv)
 {
     piping = !isatty(fileno(stdin));
     if (piping) btc_logf = btc_logf_dummy;
 
-    if (argc == 2 && !strcmp(argv[1], "-h")) {
+    cliargs ca;
+    ca.add_option("help", 'h', no_arg);
+    ca.add_option("quiet", 'q', no_arg);
+    ca.add_option("tx", 'x', req_arg);
+    ca.parse(argc, argv);
+    quiet = ca.m.count('q');
+
+    if (ca.m.count('h')) {
         fprintf(stderr, "syntax: %s [tx=[amount1,amount2,..:]<hex> [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
         fprintf(stderr, "if executed with no arguments, an empty script and empty stack is provided\n");
         fprintf(stderr, "to debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
@@ -41,7 +51,7 @@ int main(int argc, const char** argv)
         fprintf(stderr, "e.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
         fprintf(stderr, "you do not need the amounts for non-SegWit transactions\n");
         return 1;
-    } else {
+    } else if (!quiet) {
         btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
     }
 
@@ -50,31 +60,34 @@ int main(int argc, const char** argv)
         if (std::getenv("DEBUG_SIGNING")) btc_sign_logf = btc_logf_stderr;
     }
 
-    int arg_idx = 1;
+    if (ca.l.size() > 0 && !strncmp(ca.l[0], "tx=", 3)) {
+        // backwards compatibility; move into tx
+        ca.m['x'] = &ca.l[0][3];
+        ca.l.erase(ca.l.begin(), ca.l.begin() + 1);
+    }
+
     // crude check for tx=
-    if (argc > 1 && !strncmp(argv[1], "tx=", 3)) {
-        const char* txdata = &argv[1][3];
-        if (!instance.parse_transaction(txdata, true)) {
+    if (ca.m.count('x')) {
+        if (!instance.parse_transaction(ca.m['x'].c_str(), true)) {
             return 1;
         }
-        arg_idx++;
-        fprintf(stderr, "got %stransaction:\n%s\n", instance.sigver == SIGVERSION_WITNESS_V0 ? "segwit " : "", instance.tx->ToString().c_str());
+        if (!quiet) fprintf(stderr, "got %stransaction:\n%s\n", instance.sigver == SIGVERSION_WITNESS_V0 ? "segwit " : "", instance.tx->ToString().c_str());
     }
-    char* script_str = NULL;
+    char* script_str = nullptr;
     if (piping) {
         char buf[1024];
         fgets(buf, 1024, stdin);
         int len = strlen(buf);
         while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r')) buf[--len] = 0;
         script_str = strdup(buf);
-    } else {
-        script_str = argc > arg_idx ? strdup(argv[arg_idx]) : NULL;
-        arg_idx++;
+    } else if (ca.l.size() > 0) {
+        script_str = strdup(ca.l[0]);
+        ca.l.erase(ca.l.begin(), ca.l.begin() + 1);
     }
     CScript script;
     if (script_str) {
         if (instance.parse_script(script_str)) {
-            btc_logf("valid script\n");
+            if (!quiet) btc_logf("valid script\n");
         } else {
             fprintf(stderr, "invalid script\n");
             return 1;
@@ -82,7 +95,7 @@ int main(int argc, const char** argv)
     }
     free(script_str);
 
-    instance.parse_stack_args(argc, argv, arg_idx);
+    instance.parse_stack_args(ca.l);
 
     if (!instance.setup_environment()) {
         fprintf(stderr, "failed to initialize script environment: %s\n", instance.error_string());
@@ -132,7 +145,7 @@ int main(int argc, const char** argv)
         kerl_set_completor("tf", compl_tf);
         kerl_register("print", fn_print, "Print script.");
         kerl_register_help("help");
-        btc_logf("%d op script loaded. type `help` for usage information\n", count);
+        if (!quiet) btc_logf("%d op script loaded. type `help` for usage information\n", count);
         print_dualstack();
         if (env->curr_op_seq < count) {
             printf("%s\n", script_lines[env->curr_op_seq]);
@@ -251,6 +264,7 @@ int fn_altstack(const char*) {
 }
 
 static const char* tfs[] = {
+    "echo",
     "hex",
     "int",
     "reverse",
@@ -262,31 +276,39 @@ static const char* tfs[] = {
     "base58chk-decode",
     "bech32-encode",
     "bech32-decode",
+    "verify-sig",
 #ifdef ENABLE_DANGEROUS
     "encode-wif",
     "decode-wif",
+    "sign",
+    "get-pubkey",
 #endif // ENABLE_DANGEROUS
     nullptr
 };
 
-int _e_hex(Value&& pv)     { printf("%s\n", pv.hex_str().c_str()); return 0; }
-int _e_int(Value&& pv)     { printf("%" PRId64 "\n", pv.int_value()); return 0; }
-int _e_reverse(Value&& pv) { pv.do_reverse(); pv.println(); return 0; }
-int _e_sha256(Value&& pv)  { pv.do_sha256(); pv.println(); return 0; }
-int _e_ripemd160(Value&& pv) { pv.do_ripemd160(); pv.println(); return 0; }
-int _e_hash256(Value&& pv)  { pv.do_hash256(); pv.println(); return 0; }
-int _e_hash160(Value&& pv)  { pv.do_hash160(); pv.println(); return 0; }
-int _e_b58ce(Value&& pv)   { pv.do_base58chkenc(); pv.println(); return 0; }
-int _e_b58cd(Value&& pv)   { pv.do_base58chkdec(); pv.println(); return 0; }
-int _e_b32e(Value&& pv)    { pv.do_bech32enc(); pv.println(); return 0; }
-int _e_b32d(Value&& pv)    { pv.do_bech32dec(); pv.println(); return 0; }
+int _e_echo(Value&& pv)       { pv.println(); return 0; }
+int _e_hex(Value&& pv)        { printf("%s\n", pv.hex_str().c_str()); return 0; }
+int _e_int(Value&& pv)        { printf("%" PRId64 "\n", pv.int_value()); return 0; }
+int _e_reverse(Value&& pv)    { pv.do_reverse(); pv.println(); return 0; }
+int _e_sha256(Value&& pv)     { pv.do_sha256(); pv.println(); return 0; }
+int _e_ripemd160(Value&& pv)  { pv.do_ripemd160(); pv.println(); return 0; }
+int _e_hash256(Value&& pv)    { pv.do_hash256(); pv.println(); return 0; }
+int _e_hash160(Value&& pv)    { pv.do_hash160(); pv.println(); return 0; }
+int _e_b58ce(Value&& pv)      { pv.do_base58chkenc(); pv.println(); return 0; }
+int _e_b58cd(Value&& pv)      { pv.do_base58chkdec(); pv.println(); return 0; }
+int _e_b32e(Value&& pv)       { pv.do_bech32enc(); pv.println(); return 0; }
+int _e_b32d(Value&& pv)       { pv.do_bech32dec(); pv.println(); return 0; }
+int _e_verify_sig(Value&& pv) { pv.do_verify_sig(); pv.println(); return 0; }
 #ifdef ENABLE_DANGEROUS
 int _e_encode_wif(Value&& pv)    { pv.do_encode_wif(); pv.println(); return 0; }
 int _e_decode_wif(Value&& pv)    { pv.do_decode_wif(); pv.println(); return 0; }
+int _e_sign(Value&& pv)          { pv.do_sign(); pv.println(); return 0; }
+int _e_get_pubkey(Value&& pv)    { pv.do_get_pubkey(); pv.println(); return 0; }
 #endif // ENABLE_DANGEROUS
 
 typedef int (*btcdeb_tfun) (Value&&);
 static const btcdeb_tfun tffp[] = {
+    _e_echo,
     _e_hex,
     _e_int,
     _e_reverse,
@@ -298,9 +320,12 @@ static const btcdeb_tfun tffp[] = {
     _e_b58cd,
     _e_b32e,
     _e_b32d,
+    _e_verify_sig,
 #ifdef ENABLE_DANGEROUS
     _e_encode_wif,
     _e_decode_wif,
+    _e_sign,
+    _e_get_pubkey,
 #endif // ENABLE_DANGEROUS
     nullptr
 };
@@ -367,7 +392,7 @@ int fn_exec(const char* arg) {
         printf("to push to stack, simply execute the numeric or hexadecimal value\n");
         return 0;
     }
-    instance.eval(argc, (const char **)argv);
+    instance.eval(argc, argv);
     print_dualstack();
     return 0;
 }
