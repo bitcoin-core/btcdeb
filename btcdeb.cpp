@@ -277,11 +277,13 @@ static const char* tfs[] = {
     "bech32-encode",
     "bech32-decode",
     "verify-sig",
+    "combine-pubkeys",
 #ifdef ENABLE_DANGEROUS
     "encode-wif",
     "decode-wif",
     "sign",
     "get-pubkey",
+    "combine-privkeys",
 #endif // ENABLE_DANGEROUS
     nullptr
 };
@@ -299,11 +301,13 @@ int _e_b58cd(Value&& pv)      { pv.do_base58chkdec(); pv.println(); return 0; }
 int _e_b32e(Value&& pv)       { pv.do_bech32enc(); pv.println(); return 0; }
 int _e_b32d(Value&& pv)       { pv.do_bech32dec(); pv.println(); return 0; }
 int _e_verify_sig(Value&& pv) { pv.do_verify_sig(); pv.println(); return 0; }
+int _e_combine_pubkeys(Value&& pv) { pv.do_combine_pubkeys(); pv.println(); return 0; }
 #ifdef ENABLE_DANGEROUS
 int _e_encode_wif(Value&& pv)    { pv.do_encode_wif(); pv.println(); return 0; }
 int _e_decode_wif(Value&& pv)    { pv.do_decode_wif(); pv.println(); return 0; }
 int _e_sign(Value&& pv)          { pv.do_sign(); pv.println(); return 0; }
 int _e_get_pubkey(Value&& pv)    { pv.do_get_pubkey(); pv.println(); return 0; }
+int _e_combine_privkeys(Value&& pv) { pv.do_combine_privkeys(); pv.println(); return 0; }
 #endif // ENABLE_DANGEROUS
 
 typedef int (*btcdeb_tfun) (Value&&);
@@ -321,11 +325,13 @@ static const btcdeb_tfun tffp[] = {
     _e_b32e,
     _e_b32d,
     _e_verify_sig,
+    _e_combine_pubkeys,
 #ifdef ENABLE_DANGEROUS
     _e_encode_wif,
     _e_decode_wif,
     _e_sign,
     _e_get_pubkey,
+    _e_combine_privkeys,
 #endif // ENABLE_DANGEROUS
     nullptr
 };

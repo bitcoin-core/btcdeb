@@ -426,7 +426,9 @@ struct Value {
         }
     }
     void do_verify_sig();
+    void do_combine_pubkeys();
 #ifdef ENABLE_DANGEROUS
+    void do_combine_privkeys();
     void do_encode_wif() {
         data_value();
         data.insert(data.begin(), 0x80);    // main net
