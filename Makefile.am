@@ -54,13 +54,16 @@ BITCOIN_CORE_H = \
 	script_error.h \
 	serialize.h \
 	streams.h \
+	support/allocators/secure.h \
 	support/allocators/zeroafterfree.h \
 	support/cleanse.h \
+	support/lockedpool.h \
 	tinyformat.h \
 	uint256.h \
-	utilstrencodings.h
+	utilstrencodings.h \
+	value.h
 
-# bitcoin: shared between btcdeb and btcc
+# bitcoin: shared between all the tools
 libbitcoin_a_LIBADD = $(LIBSECP256K1)
 libbitcoin_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_a_CXXFLAGS = $(AM_CXXFLAGS)
@@ -80,8 +83,10 @@ libbitcoin_a_SOURCES = \
 	script.cpp \
 	script_error.cpp \
 	support/cleanse.cpp \
+	support/lockedpool.cpp \
 	uint256.cpp \
 	utilstrencodings.cpp \
+	value.cpp \
     $(BITCOIN_CORE_H)
 
 # kerl library #
@@ -99,7 +104,7 @@ libbtcdeb_a_CPPFLAGS = $(AM_CPPFLAGS)
 # btcdeb binary #
 btcdeb_SOURCES = \
 	btcdeb.cpp \
-	value.h
+	cliargs.h
 btcdeb_CPPFLAGS = $(AM_CPPFLAGS)
 btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
@@ -112,8 +117,7 @@ btcdeb_LDADD = \
 
 # btcc binary #
 btcc_SOURCES = \
-	btcc.cpp \
-	value.h
+	btcc.cpp
 btcc_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 btcc_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
@@ -122,8 +126,7 @@ btcc_LDADD = \
 
 # merklebranch binary #
 merklebranch_SOURCES = \
-	merklebranch.cpp \
-	value.h
+	merklebranch.cpp
 merklebranch_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 merklebranch_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
@@ -132,8 +135,7 @@ merklebranch_LDADD = \
 
 # mastify binary #
 mastify_SOURCES = \
-	mastify.cpp \
-	value.h
+	mastify.cpp
 mastify_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 mastify_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 mastify_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
@@ -147,8 +149,7 @@ test_btcdeb_SOURCES = \
 	test/catch.hpp \
 	test/signing.cpp \
 	test/test-btcdeb.cpp \
-	test/value.cpp \
-	value.h
+	test/value.cpp
 test_btcdeb_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 test_btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)

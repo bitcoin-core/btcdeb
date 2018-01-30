@@ -11,6 +11,7 @@
 #include <crypto/ripemd160.h>
 #include <base58.h>
 #include <bech32.h>
+#include <secp256k1.h>
 
 static bool VALUE_WARN = true;
 
@@ -103,7 +104,7 @@ struct Value {
 
     explicit Value(const int64_t i)                { int64 = i; type = T_INT; }
     explicit Value(const opcodetype o)             { opcode = o; type = T_OPCODE; }
-    explicit Value(const std::vector<uint8_t>&& d) { data = d; type = T_DATA; }
+    explicit Value(const std::vector<uint8_t>& d) { data = d; type = T_DATA; }
 
     Value(const CScript& script) {
         data.clear();
@@ -241,6 +242,27 @@ struct Value {
             memcpy(data.data(), str.data(), str.length());
             return data;
         }
+    }
+    std::string& str_value() {
+        switch (type) {
+        case T_DATA: {
+            // we assume the data IS a string
+            char buf[data.size() + 1];
+            memcpy(buf, data.data(), data.size());
+            buf[data.size()] = 0;
+            str = buf;
+            break;
+        }
+        case T_OPCODE:
+            str = std::to_string(opcode);
+            break;
+        case T_INT:
+            str = std::to_string(int64);
+        case T_STRING:
+            break;
+        }
+        type = T_STRING;
+        return str;
     }
     std::string hex_str() const {
         switch (type) {
@@ -404,6 +426,7 @@ struct Value {
             return;
         }
     }
+    void do_verify_sig();
 #ifdef ENABLE_DANGEROUS
     void do_encode_wif() {
         data_value();
@@ -441,6 +464,8 @@ struct Value {
         }
         data = std::vector<uint8_t>(data.begin() + 1, data.end());
     }
+    void do_sign();
+    void do_get_pubkey();
 #endif // ENABLE_DANGEROUS
     void print() const {
         switch (type) {
@@ -459,6 +484,8 @@ struct Value {
     void println() const {
         print(); fputc('\n', stdout);
     }
+private:
+    bool extract_values(std::vector<std::vector<uint8_t>>& values);
 };
 
 #endif // included_value_h_
