@@ -1,3 +1,5 @@
+#include <secp256k1.h>
+
 #include "value.h"
 
 #ifdef ENABLE_DANGEROUS

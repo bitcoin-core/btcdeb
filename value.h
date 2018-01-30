@@ -11,7 +11,6 @@
 #include <crypto/ripemd160.h>
 #include <base58.h>
 #include <bech32.h>
-#include <secp256k1.h>
 
 static bool VALUE_WARN = true;
 
