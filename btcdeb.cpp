@@ -220,6 +220,7 @@ int main(int argc, char* const* argv)
     } else {
         kerl_set_history_file(".btcdeb_history");
         kerl_set_repeat_on_empty(true);
+        kerl_set_comment_char('#');
         kerl_register("step", fn_step, "Execute one instruction and iterate in the script.");
         kerl_register("rewind", fn_rewind, "Go back in time one instruction.");
         kerl_register("stack", fn_stack, "Print stack content.");

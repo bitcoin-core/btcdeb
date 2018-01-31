@@ -40,6 +40,7 @@ typedef struct {
 int command_count = 0;
 int command_cap = 0;
 int repeat_empty;      /* Blank lines are interpreted as "repeat previous command". */
+char comment_char = 0;
 COMMAND *commands = NULL;
 int execute_line(char *line);
 char *history_file = NULL;
@@ -72,6 +73,11 @@ void kerl_set_completor(const char *name, kerl_completor completor)
 void kerl_set_repeat_on_empty(int flag)
 {
   repeat_empty = flag;
+}
+
+void kerl_set_comment_char(char commentchar)
+{
+    comment_char = commentchar;
 }
 
 void kerl_register_help(const char *name)
@@ -113,6 +119,15 @@ void kerl_run(const char *prompt)
   /* Loop reading and executing lines until the user quits. */
   for ( ; done == 0; ) {
     line = readline(prompt);
+    if (line && comment_char) {
+        // consume until we run into comment_char then term
+        for (char* p = line; *p; ++p) {
+            if (*p == comment_char) {
+                *p = 0;
+                break;
+            }
+        }
+    }
 
     if (!line) break;
 
