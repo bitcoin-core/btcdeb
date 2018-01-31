@@ -40,16 +40,18 @@ int main(int argc, char* const* argv)
     ca.add_option("help", 'h', no_arg);
     ca.add_option("quiet", 'q', no_arg);
     ca.add_option("tx", 'x', req_arg);
+    ca.add_option("txin", 'i', req_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q');
 
     if (ca.m.count('h')) {
-        fprintf(stderr, "syntax: %s [tx=[amount1,amount2,..:]<hex> [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
+        fprintf(stderr, "syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
         fprintf(stderr, "if executed with no arguments, an empty script and empty stack is provided\n");
         fprintf(stderr, "to debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
             "as well as (SegWit only) every amount for the inputs\n");
         fprintf(stderr, "e.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
         fprintf(stderr, "you do not need the amounts for non-SegWit transactions\n");
+        fprintf(stderr, "by providing a txin as well as a tx and no script or stack, btcdeb will attempt to set up a debug session for the verification of the given input by pulling the appropriate values out of the respective transactions. you do not need amounts for --tx in this case\n");
         return 1;
     } else if (!quiet) {
         btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
@@ -72,6 +74,12 @@ int main(int argc, char* const* argv)
             return 1;
         }
         if (!quiet) fprintf(stderr, "got %stransaction:\n%s\n", instance.sigver == SIGVERSION_WITNESS_V0 ? "segwit " : "", instance.tx->ToString().c_str());
+    }
+    if (ca.m.count('i')) {
+        if (!instance.parse_input_transaction(ca.m['i'].c_str())) {
+            return 1;
+        }
+        if (!quiet) fprintf(stderr, "got input tx #%lld:\n%s\n", instance.txin_index, instance.txin->ToString().c_str());
     }
     char* script_str = nullptr;
     if (piping) {
@@ -96,6 +104,83 @@ int main(int argc, char* const* argv)
     free(script_str);
 
     instance.parse_stack_args(ca.l);
+
+    if (instance.txin && instance.tx && ca.l.size() == 0 && instance.script.size() == 0) {
+        opcodetype opcode;
+        std::vector<uint8_t> pushval;
+        // no script and no stack; autogenerate from tx/txin
+        // the script is the witness stack, last entry, or scriptpubkey
+        // the stack is the witness stack minus last entry, in order, or the results of executing the scriptSig
+        instance.amounts[instance.txin_index] = instance.txin->vout[instance.txin_vout_index].nValue;
+        if (!quiet) printf("input tx index = %lld; tx input vout = %lld; value = %lld\n", instance.txin_index, instance.txin_vout_index, instance.amounts[instance.txin_index]);
+        auto& wstack = instance.tx->vin[instance.txin_index].scriptWitness.stack;
+        CScript scriptPubKey = instance.txin->vout[instance.txin_vout_index].scriptPubKey;
+        std::vector<const char*> push_del;
+        if (wstack.size() > 0) {
+            // segwit
+            // for segwit, the scriptpubkey of the input must be <version> <32 byte push> and the 32 byte push
+            // must be equal to the hash of the script; we also only support version 0
+            auto it = scriptPubKey.begin();
+            if (!scriptPubKey.GetOp(it, opcode, pushval)) {
+                fprintf(stderr, "can't parse script pub key, or script pub key ended prematurely\n");
+                return 1;
+            }
+            if (opcode != OP_0) {
+                fprintf(stderr, "script pub key declared version not supported: scriptPubKey=%s\n", HexStr(scriptPubKey).c_str());
+                return 1;
+            }
+            if (!scriptPubKey.GetOp(it, opcode, pushval)) {
+                fprintf(stderr, "can't parse script pub key, or script pub key ended prematurely\n");
+                return 1;
+            }
+            if (pushval.size() != 32) {
+                fprintf(stderr, "expected 32 byte push value, got %zu bytes\n", pushval.size());
+                return 1;
+            }
+            Value wscript(wstack.back());
+            wscript.do_sha256();
+            if (uint256(wscript.data) != uint256(pushval)) {
+                fprintf(stderr, "witness script hash does not match the input script pub key hash:\n"
+                    "- witness script: %s\n"
+                    "- witness script hash: %s\n"
+                    "- script pub key given hash: %s\n",
+                    HexStr(wstack.back()).c_str(),
+                    uint256(wscript.data).ToString().c_str(),
+                    uint256(pushval).ToString().c_str()
+                );
+                return 1;
+            }
+
+            instance.sigver = SIGVERSION_WITNESS_V0;
+            if (instance.parse_script(wstack.back())) {
+                if (!quiet) btc_logf("valid script\n");
+            } else {
+                fprintf(stderr, "invalid script (witness stack last element)\n");
+                return 1;
+            }
+            // put remainder on to-be-parsed stack
+            for (size_t i = 0; i+1 < wstack.size(); i++) {
+                push_del.push_back(strdup(HexStr(wstack[i]).c_str())); // TODO: use as is rather than hexing and dehexing
+            }
+        } else {
+            // legacy
+            instance.sigver = SIGVERSION_BASE;
+            instance.script = scriptPubKey;
+            CScript scriptSig = instance.tx->vin[instance.txin_index].scriptSig;
+            auto it = scriptSig.begin();
+            while (scriptSig.GetOp(it, opcode, pushval)) {
+                if (pushval.size() > 0)
+                    push_del.push_back(strdup(HexStr(pushval).c_str()));
+                else
+                    push_del.push_back(strdup(strprintf("%02x", opcode).c_str()));
+            }
+        }
+        instance.parse_stack_args(push_del);
+        while (!push_del.empty()) {
+            delete push_del.back();
+            push_del.pop_back();
+        }
+    }
 
     if (!instance.setup_environment()) {
         fprintf(stderr, "failed to initialize script environment: %s\n", instance.error_string());

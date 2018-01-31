@@ -8,6 +8,19 @@
 
 #include <instance.h>
 
+CTransactionRef parse_tx(const char* p) {
+    std::vector<unsigned char> txData = ParseHex(p);
+    if (txData.size() != (strlen(p) >> 1)) {
+        fprintf(stderr, "failed to parse tx hex string\n");
+        return nullptr;
+    }
+    CDataStream ss(txData, SER_DISK, 0);
+    CMutableTransaction mtx;
+    UnserializeTransaction(mtx, ss);
+    CTransactionRef tx = MakeTransactionRef(CTransaction(mtx));
+    return tx;
+}
+
 bool Instance::parse_transaction(const char* txdata, bool parse_amounts) {
     // parse until we run out of amounts, if requested
     const char* p = txdata;
@@ -36,23 +49,44 @@ bool Instance::parse_transaction(const char* txdata, bool parse_amounts) {
             if (*c == ':') break;
         }
     }
-    std::vector<unsigned char> txData = ParseHex(p);
-    if (txData.size() != (strlen(p) >> 1)) {
-        fprintf(stderr, "failed to parse tx hex string\n");
-        return false;
-    }
-    CDataStream ss(txData, SER_DISK, 0);
-    CMutableTransaction mtx;
-    UnserializeTransaction(mtx, ss);
-    tx = MakeTransactionRef(CTransaction(mtx));
+    tx = parse_tx(p);
+    if (!tx) return false;
     while (amounts.size() < tx->vin.size()) amounts.push_back(0);
     if (tx->vin[0].scriptSig.size() == 0) sigver = SIGVERSION_WITNESS_V0;
+    return true;
+}
+
+bool Instance::parse_input_transaction(const char* txdata) {
+    txin = parse_tx(txdata);
+    if (!txin) return false;
+    if (tx) {
+        // figure out index from tx vin
+        const uint256& txin_hash = txin->GetHash();
+        int64_t i = 0;
+        for (const auto& input : tx->vin) {
+            if (input.prevout.hash == txin_hash) {
+                txin_index = i;
+                txin_vout_index = input.prevout.n;
+                break;
+            }
+            i++;
+        }
+        if (txin_index == -1) {
+            fprintf(stderr, "error: the input transaction %s is not found in any of the inputs for the provided transaction %s\n", txin_hash.ToString().c_str(), tx->GetHash().ToString().c_str());
+            return false;
+        }
+    }
     return true;
 }
 
 bool Instance::parse_script(const char* script_str) {
     std::vector<unsigned char> scriptData = Value(script_str).data_value();
     script = CScript(scriptData.begin(), scriptData.end());
+    return script.HasValidOps();
+}
+
+bool Instance::parse_script(const std::vector<uint8_t>& script_data) {
+    script = CScript(script_data.begin(), script_data.end());
     return script.HasValidOps();
 }
 

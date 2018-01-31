@@ -14,6 +14,9 @@ public:
     int count;
     ECCVerifyHandle evh;
     CTransactionRef tx;
+    CTransactionRef txin;
+    int64_t txin_index;             ///< index of the input txid in tx's inputs
+    int64_t txin_vout_index;        ///< index inside txin of the output to tx
     std::vector<CAmount> amounts;
     SigVersion sigver;
     CScript script;
@@ -24,6 +27,8 @@ public:
     Instance()
     : env(nullptr)
     , count(0)
+    , txin_index(-1)
+    , txin_vout_index(-1)
     , sigver(SIGVERSION_BASE)
     , checker(nullptr)
     {}
@@ -34,8 +39,10 @@ public:
     }
 
     bool parse_transaction(const char* txdata, bool parse_amounts = false);
+    bool parse_input_transaction(const char* txdata);
 
     bool parse_script(const char* script_str);
+    bool parse_script(const std::vector<uint8_t>& script_data);
 
     void parse_stack_args(size_t argc, char* const* argv, size_t starting_index);
     void parse_stack_args(const std::vector<const char*> args);
