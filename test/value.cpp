@@ -236,3 +236,18 @@ TEST_CASE("MAST article examples", "[mast-article]") {
         REQUIRE(x.hex_str() == "63029000b2755167526887");
     }
 }
+
+TEST_CASE("Addresses and scriptpubkeys (legacy)", "[addr-spk]") {
+    static const char* address = "1PqhyaTFgaHeYVmi5qBV9AjjeiyiTV1hpx";
+    static const std::vector<uint8_t> scriptPubKey = {0x76, 0xa9, 0x14, 0xfa, 0x88, 0xf0, 0x20, 0xe2, 0x22, 0x26, 0x4e, 0x2c, 0xd4, 0x00, 0x83, 0x90, 0x2b, 0xff, 0xb4, 0x02, 0x05, 0x83, 0x4a, 0x88, 0xac};
+    SECTION("Decoding address") {
+        Value x(address);
+        x.do_addr_to_spk();
+        REQUIRE(x.data == scriptPubKey);
+    }
+    SECTION("Encoding scriptPubKey") {
+        Value x(scriptPubKey);
+        x.do_spk_to_addr();
+        REQUIRE(x.str == address);
+    }
+}
