@@ -374,6 +374,31 @@ static const char* tfs[] = {
     nullptr
 };
 
+static const char* tfsh[] = {
+    "[*]       show as-is serialized value",
+    "[*]       convert into a hex string",
+    "[arg]     convert into an integer",
+    "[arg]     reverse the value according to the type",
+    "[message] perform SHA256",
+    "[message] perform RIPEMD160",
+    "[message] perform HASH256 (SHA256(SHA256(message))",
+    "[message] perform HASH160 (RIPEMD160(SHA256(message))",
+    "[pubkey]  encode [pubkey] using base58 encoding (with checksum)",
+    "[string]  decode [string] into a pubkey using base58 encoding (with checksum)",
+    "[pubkey]  encode [pubkey] using bech32 encoding",
+    "[string]  decode [string] into a pubkey using bech32 encoding",
+    "[sighash] [pubkey] [signature] verify the given signature for the given sighash and pubkey",
+    "[pubkey1] [pubkey2] combine the two pubkeys into one pubkey",
+#ifdef ENABLE_DANGEROUS
+    "[privkey] encode [privkey] using the Wallet Import Format",
+    "[string]  decode [string] into a private key using the Wallet Import Format",
+    "[sighash] [privkey] generate a signature for the given message (sighash) using the given private key",
+    "[privkey] get the public key corresponding to the given private key",
+    "[privkey1] [privkey2] combine the two private keys into one private key",
+#endif // ENABLE_DANGEROUS
+    nullptr
+};
+
 int _e_echo(Value&& pv)       { pv.println(); return 0; }
 int _e_hex(Value&& pv)        { printf("%s\n", pv.hex_str().c_str()); return 0; }
 int _e_int(Value&& pv)        { printf("%" PRId64 "\n", pv.int_value()); return 0; }
@@ -429,14 +454,20 @@ int fn_tf(const char* arg) {
         printf("user abort\n");
         return -1;
     }
-    if (argc < 2) {
-        printf("syntax: tf <command> <param1> [...]\n");
+    if (argc == 0) {
+        printf("syntax: tf <command> [<param1> [...]]\n");
         printf("transform a value using some function\n");
-        printf("available functions are:");
+        printf("available functions are (tf -h for details):");
         for (int i = 0; tfs[i]; i++) {
             printf(" %s", tfs[i]);
         }
         printf("\nexample: tf hex 35        (output: 0x23)\n");
+        return 0;
+    }
+    if (argc == 1 && !strcmp("-h", argv[0])) {
+        for (int i = 0; tfs[i]; i++) {
+            printf("%-16s %s\n", tfs[i], tfsh[i]);
+        }
         return 0;
     }
     int i;
@@ -444,6 +475,10 @@ int fn_tf(const char* arg) {
     if (!tfs[i]) {
         printf("unknown function: %s\n", argv[0]);
         return -1;
+    }
+    if (argc == 1) {
+        puts(tfsh[i]);
+        return 0;
     }
     return tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1), true));
 }
