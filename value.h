@@ -368,6 +368,36 @@ struct Value {
         }
         type = T_DATA;
     }
+    void do_addr_to_spk() {
+        // addresses are base58-check encoded, so we decode them first
+        do_base58chkdec();
+        // they are now prefixed with a 0x00; rip that out
+        data.erase(data.begin());
+        // wrap in appropriate script fluff
+        CScript s;
+        s << OP_DUP << OP_HASH160 << data << OP_EQUALVERIFY << OP_CHECKSIG;
+        data.clear();
+        insert(data, s);
+    }
+    void do_spk_to_addr() {
+        // data should be OP_DUP OP_HASH160 0x14 <20 b hash> OP_EQUALVERIFY OP_CHECKSIG
+        if (data.size() != 25) {
+            fprintf(stderr, "wrong length (expected 25 bytes)\n");
+            return;
+        }
+        if (data[0] != OP_DUP ||
+            data[1] != OP_HASH160 ||
+            data[2] != 0x14 ||
+            data[23] != OP_EQUALVERIFY ||
+            data[24] != OP_CHECKSIG) {
+            fprintf(stderr, "unknown script (expected DUP H160 0x14 <20b> EQUALVERIFY CHECKSIG\n");
+            return;
+        }
+        data[0] = 0x00; // prefix
+        data.erase(data.begin() + 1, data.begin() + 3);
+        data.resize(21);
+        do_base58chkenc();
+    }
     void do_bech32enc() {
         data_value();
         std::vector<unsigned char> tmp = {0};

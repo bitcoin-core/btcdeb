@@ -364,6 +364,8 @@ static const char* tfs[] = {
     "bech32-decode",
     "verify-sig",
     "combine-pubkeys",
+    "addr-to-scriptpubkey",
+    "scriptpubkey-to-addr",
 #ifdef ENABLE_DANGEROUS
     "encode-wif",
     "decode-wif",
@@ -389,6 +391,8 @@ static const char* tfsh[] = {
     "[string]  decode [string] into a pubkey using bech32 encoding",
     "[sighash] [pubkey] [signature] verify the given signature for the given sighash and pubkey",
     "[pubkey1] [pubkey2] combine the two pubkeys into one pubkey",
+    "[address] convert a base58 encoded address into its corresponding scriptPubKey",
+    "[script]  convert a scriptPubKey into its corresponding base58 encoded address",
 #ifdef ENABLE_DANGEROUS
     "[privkey] encode [privkey] using the Wallet Import Format",
     "[string]  decode [string] into a private key using the Wallet Import Format",
@@ -413,6 +417,8 @@ int _e_b32e(Value&& pv)       { pv.do_bech32enc(); pv.println(); return 0; }
 int _e_b32d(Value&& pv)       { pv.do_bech32dec(); pv.println(); return 0; }
 int _e_verify_sig(Value&& pv) { pv.do_verify_sig(); pv.println(); return 0; }
 int _e_combine_pubkeys(Value&& pv) { pv.do_combine_pubkeys(); pv.println(); return 0; }
+int _e_addr_to_spk(Value&& pv) { pv.do_addr_to_spk(); pv.println(); return 0; }
+int _e_spk_to_addr(Value&& pv) { pv.do_spk_to_addr(); pv.println(); return 0; }
 #ifdef ENABLE_DANGEROUS
 int _e_encode_wif(Value&& pv)    { pv.do_encode_wif(); pv.println(); return 0; }
 int _e_decode_wif(Value&& pv)    { pv.do_decode_wif(); pv.println(); return 0; }
@@ -437,6 +443,8 @@ static const btcdeb_tfun tffp[] = {
     _e_b32d,
     _e_verify_sig,
     _e_combine_pubkeys,
+    _e_addr_to_spk,
+    _e_spk_to_addr,
 #ifdef ENABLE_DANGEROUS
     _e_encode_wif,
     _e_decode_wif,
