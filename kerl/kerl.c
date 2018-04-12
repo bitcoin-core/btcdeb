@@ -410,7 +410,6 @@ char **kerl_completion(char *text, int start, int end)
     if (spaces > 1) printf("spaces = %d in '%s', no completion for yoooou\n", spaces, rl_line_buffer);
     if (spaces < 2) {
       char *strcom = strdup_command(rl_line_buffer);
-      int clen = strlen(strcom);
       COMMAND *com = find_command(strcom);
       if (com && com->compl) {
         matches = rl_completion_matches(text, com->compl);
