@@ -295,7 +295,13 @@ opcodetype GetOpCode(const char* name)
     c(NOP8);
     c(NOP9);
     c(NOP10);
-    
+
+    // template matching params
+    c(SMALLINTEGER);
+    c(PUBKEYS);
+    c(PUBKEYHASH);
+    c(PUBKEY);
+
     return OP_INVALIDOPCODE;
 }
 
