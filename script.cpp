@@ -170,6 +170,7 @@ opcodetype GetOpCode(const char* name)
     // push value
     #define c(v) if (!strcmp(#v, name)) return OP_##v
     c(0);
+    c(FALSE);
     c(PUSHDATA1);
     c(PUSHDATA2);
     c(PUSHDATA4);
