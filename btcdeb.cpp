@@ -60,6 +60,7 @@ int main(int argc, char* const* argv)
     if (!piping) {
         if (std::getenv("DEBUG_SIGHASH")) btc_sighash_logf = btc_logf_stderr;
         if (std::getenv("DEBUG_SIGNING")) btc_sign_logf = btc_logf_stderr;
+        if (std::getenv("DEBUG_SEGWIT"))  btc_segwit_logf = btc_logf_stderr;
     }
 
     if (ca.l.size() > 0 && !strncmp(ca.l[0], "tx=", 3)) {
@@ -114,52 +115,177 @@ int main(int argc, char* const* argv)
         instance.amounts[instance.txin_index] = instance.txin->vout[instance.txin_vout_index].nValue;
         if (!quiet) printf("input tx index = %lld; tx input vout = %lld; value = %lld\n", instance.txin_index, instance.txin_vout_index, instance.amounts[instance.txin_index]);
         auto& wstack = instance.tx->vin[instance.txin_index].scriptWitness.stack;
+        auto& scriptSig = instance.tx->vin[instance.txin_index].scriptSig;
         CScript scriptPubKey = instance.txin->vout[instance.txin_vout_index].scriptPubKey;
         std::vector<const char*> push_del;
+        btc_segwit_logf("got witness stack of size %zu\n", wstack.size());
         if (wstack.size() > 0) {
             // segwit
-            // for segwit, the scriptpubkey of the input must be <version> <32 byte push> and the 32 byte push
-            // must be equal to the hash of the script; we also only support version 0
-            auto it = scriptPubKey.begin();
-            if (!scriptPubKey.GetOp(it, opcode, pushval)) {
-                fprintf(stderr, "can't parse script pub key, or script pub key ended prematurely\n");
+            // P2WPKH:
+            //   witness: <sig> <pubkey>
+            //   scriptSig: (empty)
+            //   scriptPubKey: <version> <20 byte key hash> (0x0014{20-b hash})
+            //   the 20 byte hash in the script pub key must match the HASH160 of the pubkey
+            //   in the witness
+            //   execution: DUP HASH160 <20 byte key hash> EQUALVERIFY CHECKSIG
+            // P2WPKH-in-P2SH:
+            //   witness: <sig> <pubkey>
+            //   scriptSig: [<version> <20 byte key hash>] as single push (0x160014{20-b hash})
+            //   scriptPubKey: HASH160 <20-b script hash> EQUAL (0xA914{20-b}87)
+            //   scriptPubKey must execute successfully against the single element in scriptSig
+            //   the 20 byte hash in the script sig must match the HASH160 of he pubkey in the
+            //   witness
+            //   execution: OP_DUP OP_HASH160 <20 byte key hash> OP_EQUALVERIFY OP_CHECKSIG
+            // P2WSH (1-of-2):
+            //   witness: <version> <sig1> <1 <pubkey1> <pubkey2> 2 CHECKMULTISIG>
+            //   scriptSig: (empty)
+            //   scriptPubKey: <version> <32-b hash> (0x0020{32-b})
+            //   the 32 byte hash must be equal to the hash of the last entry on the witness stack
+            //   execution: witness last element content
+            // P2WSH-in-P2SH:
+            //   witness: 0 <sig1> <1 <pubkey1> <pubkey2> 2 CHECKMULTISIG>
+            //   scriptSig: <0 <32-b hash>> (0x220020{32-b hash})
+            //   scriptPubKey: HASH160 <20-b hash> EQUAL (0xA914{20-b}87)
+            //   scriptPubKey must execute successfully against the single element in scriptSig
+            //   the 32 byte hash in the script sig must be equal to the hash of the last entry on the witness stack
+            //   execution: witness last element content
+
+            // determining which type:
+            // 1. if scriptSig is empty, it is native segwit, otherwise it is P2SH-embedded
+            //    if embedded, the validator script is set to the content of the scriptSig (the data inside the push op),
+            //    otherwise it is set to the script pub key (as is)
+            // 2. if the validator script is of length 22 bytes, it is a P2WPKH, if it is of length
+            //    34 bytes, it is a P2WSH
+
+            // process:
+            // 1a. if embedded, run the scriptPubKey against the scriptSig and extract the
+            //     validator script as the content of the scriptSig.
+            // 1b. if native, set the validator to the scriptPubKey
+            // 2a. if P2WPKH, set the hash source to the HASH160 of the second (last) element of the
+            //     witness
+            // 2b. if P2WSH, set the hash source to the SHA256 of the last element of the witness
+            // 3.  verify that version=0 (first opcode in validator script)
+            // 4.  verify that hash source = the next value in the validator script
+            // 5a. for P2WSH, set script = wstack.back()
+            // 5b. for P2WPKH, set script = DUP HASH160 ... as defined above
+
+            CScript validation = scriptPubKey;
+            Value hashsrc(scriptPubKey);
+            std::string source = "script pub key";
+            bool wsh;
+            if (scriptSig.size() > 0) {
+                btc_segwit_logf("script sig non-empty; embedded P2SH (extracting payload)\n");
+                // Embedded in P2SH -- payload extraction required
+                auto it2 = scriptSig.begin();
+                if (!scriptSig.GetOp(it2, opcode, pushval)) {
+                    fprintf(stderr, "can't parse sig script, or sig script ended prematurely\n");
+                    return 1;
+                }
+                if (pushval.size() == 0) {
+                    fprintf(stderr, "sig script did not contain a push op as expected\n");
+                    return 1;
+                }
+                validation = CScript(pushval.begin(), pushval.end());
+                hashsrc = Value(pushval);
+                auto it = scriptPubKey.begin();
+                btc_segwit_logf("hash source = %s\n", hashsrc.hex_str().c_str());
+                // TODO: run this using interpreter instead
+                if (!scriptPubKey.GetOp(it, opcode, pushval)) {
+                    fprintf(stderr, "can't parse script pub key, or script pub key ended prematurely\n");
+                    return 1;
+                }
+                if (opcode != OP_HASH160) {
+                    fprintf(stderr, "unknown/non-standard script pub key (expected OP_HASH160, got %s)\n", GetOpName(opcode));
+                    return 1;
+                }
+                if (!scriptPubKey.GetOp(it, opcode, pushval)) {
+                    fprintf(stderr, "can't parse script pub key, or script pub key ended prematurely\n");
+                    return 1;
+                }
+                // pushval = HASH160(scriptSig)
+                hashsrc.do_hash160();
+                if (uint160(hashsrc.data_value()) != uint160(pushval)) {
+                    fprintf(stderr, "scriptSig hash does not match the script pub key hash:\n"
+                        "- scriptSig: %s\n"
+                        "- scriptSig hash: %s\n"
+                        "- script pub key: %s\n"
+                        "- script pub key given hash: %s\n",
+                        HexStr(scriptSig).c_str(),
+                        uint160(hashsrc.data).ToString().c_str(),
+                        HexStr(scriptPubKey).c_str(),
+                        uint160(pushval).ToString().c_str()
+                    );
+                    return 1;
+                }
+                source = "script sig";
+            }
+            switch (validation.size()) {
+                case 22: wsh = false; btc_segwit_logf("22 bytes (P2WPKH)\n"); break;
+                case 34: wsh = true;  btc_segwit_logf("34 bytes (P2WSH)\n"); break;
+                default:
+                    fprintf(stderr, "expected 22 or 34 byte script inside %s, but got %zu bytes\n", source.c_str(), pushval.size());
+                    return 1;
+            }
+            auto it = validation.begin();
+            if (!validation.GetOp(it, opcode, pushval)) {
+                fprintf(stderr, "can't parse %s, or %s ended prematurely\n", source.c_str(), source.c_str());
                 return 1;
             }
             if (opcode != OP_0) {
-                fprintf(stderr, "script pub key declared version not supported: scriptPubKey=%s\n", HexStr(scriptPubKey).c_str());
+                fprintf(stderr, "%s declared version=%s not supported: %s=%s\n", source.c_str(), GetOpName(opcode), source.c_str(), HexStr(validation).c_str());
                 return 1;
             }
-            if (!scriptPubKey.GetOp(it, opcode, pushval)) {
-                fprintf(stderr, "can't parse script pub key, or script pub key ended prematurely\n");
+            if (!validation.GetOp(it, opcode, pushval)) {
+                fprintf(stderr, "can't parse %s, or %s ended prematurely\n", source.c_str(), source.c_str());
                 return 1;
             }
-            if (pushval.size() != 32) {
-                fprintf(stderr, "expected 32 byte push value, got %zu bytes\n", pushval.size());
+            if (pushval.size() != (wsh ? 32 : 20)) {
+                fprintf(stderr, "expected %d byte push value, got %zu bytes\n", wsh ? 32 : 20, pushval.size());
                 return 1;
             }
+            auto program = pushval;
             Value wscript(wstack.back());
-            wscript.do_sha256();
-            if (uint256(wscript.data) != uint256(pushval)) {
+            std::string pushval_str;
+            std::string wscript_str;
+            if (wsh) {
+                wscript.do_sha256();
+                pushval_str = uint256(pushval).ToString();
+                wscript_str = uint256(wscript.data).ToString();
+            } else {
+                wscript.do_hash160();
+                pushval_str = uint160(pushval).ToString();
+                wscript_str = uint160(wscript.data).ToString();
+            }
+            if (wscript.data != pushval) {
                 fprintf(stderr, "witness script hash does not match the input script pub key hash:\n"
                     "- witness script: %s\n"
                     "- witness script hash: %s\n"
                     "- script pub key given hash: %s\n",
                     HexStr(wstack.back()).c_str(),
-                    uint256(wscript.data).ToString().c_str(),
-                    uint256(pushval).ToString().c_str()
+                    wscript_str.c_str(),
+                    pushval_str.c_str()
                 );
                 return 1;
             }
 
             instance.sigver = SIGVERSION_WITNESS_V0;
-            if (instance.parse_script(wstack.back())) {
+
+            size_t wstack_to_stack = wstack.size();
+            if (!wsh) {
+                validation = CScript() << OP_DUP << OP_HASH160 << program << OP_EQUALVERIFY << OP_CHECKSIG;
+            } else {
+                wstack_to_stack--; // do not include the script on the stack
+                validation = CScript(wstack.back());
+            }
+
+            if (instance.parse_script(std::vector<uint8_t>(validation.begin(), validation.end()))) {
                 if (!quiet) btc_logf("valid script\n");
             } else {
                 fprintf(stderr, "invalid script (witness stack last element)\n");
                 return 1;
             }
             // put remainder on to-be-parsed stack
-            for (size_t i = 0; i+1 < wstack.size(); i++) {
+            for (size_t i = 0; i < wstack_to_stack; i++) {
                 push_del.push_back(strdup(HexStr(wstack[i]).c_str())); // TODO: use as is rather than hexing and dehexing
             }
         } else {
@@ -266,7 +392,6 @@ void print_dualstack() {
     // generate lines for left and right hand side (stack vs script)
     std::vector<std::string> l, r;
     auto it = env->pc;
-    int i = 0;
     char buf[1024];
     opcodetype opcode;
     valtype vchPushValue;
