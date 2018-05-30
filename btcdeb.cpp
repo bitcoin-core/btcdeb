@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <unistd.h>
+#include <inttypes.h>
 
 #include <instance.h>
 
@@ -80,7 +81,7 @@ int main(int argc, char* const* argv)
         if (!instance.parse_input_transaction(ca.m['i'].c_str())) {
             return 1;
         }
-        if (!quiet) fprintf(stderr, "got input tx #%lld:\n%s\n", instance.txin_index, instance.txin->ToString().c_str());
+        if (!quiet) fprintf(stderr, "got input tx #%" PRId64 ":\n%s\n", instance.txin_index, instance.txin->ToString().c_str());
     }
     char* script_str = nullptr;
     if (piping) {
@@ -113,7 +114,7 @@ int main(int argc, char* const* argv)
         // the script is the witness stack, last entry, or scriptpubkey
         // the stack is the witness stack minus last entry, in order, or the results of executing the scriptSig
         instance.amounts[instance.txin_index] = instance.txin->vout[instance.txin_vout_index].nValue;
-        if (!quiet) printf("input tx index = %lld; tx input vout = %lld; value = %lld\n", instance.txin_index, instance.txin_vout_index, instance.amounts[instance.txin_index]);
+        if (!quiet) printf("input tx index = %" PRId64 "; tx input vout = %" PRId64 "; value = %" PRId64 "\n", instance.txin_index, instance.txin_vout_index, instance.amounts[instance.txin_index]);
         auto& wstack = instance.tx->vin[instance.txin_index].scriptWitness.stack;
         auto& scriptSig = instance.tx->vin[instance.txin_index].scriptSig;
         CScript scriptPubKey = instance.txin->vout[instance.txin_vout_index].scriptPubKey;
