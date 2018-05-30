@@ -153,7 +153,10 @@ void GetRandBytes(unsigned char* buf, int num)
         fprintf(stderr, "unable to open /dev/urandom for GetRandBytes(): sorry! btcdeb does not currently work on your operating system for signature signing\n");
         exit(1);
     }
-    fread(buf, 1, num, f);
+    if (fread(buf, 1, num, f) != num) {
+        fprintf(stderr, "unable to read from /dev/urandom\n");
+        exit(1);
+    }
     fclose(f);
 }
 
