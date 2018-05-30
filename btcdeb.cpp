@@ -86,7 +86,9 @@ int main(int argc, char* const* argv)
     char* script_str = nullptr;
     if (piping) {
         char buf[1024];
-        fgets(buf, 1024, stdin);
+        if (!fgets(buf, 1024, stdin)) {
+            fprintf(stderr, "warning: no input\n");
+        }
         int len = strlen(buf);
         while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r')) buf[--len] = 0;
         script_str = strdup(buf);
