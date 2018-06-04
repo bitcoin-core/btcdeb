@@ -80,6 +80,8 @@ void split_codepaths(std::vector<CodePath>& paths, CScript& left, CScript& right
     for (size_t i = 0; i < len; i++) {
         if (paths[i].is_active()) {
             paths.push_back(paths[i].split(left, right, paths.size()));
+        } else {
+            paths[i].active.push_back(false);
         }
     }
 }
