@@ -880,6 +880,18 @@ InterpreterEnv::InterpreterEnv(std::vector<valtype>& stack_in, const CScript& sc
     nOpCount = 0;
     fRequireMinimal = (flags & SCRIPT_VERIFY_MINIMALDATA) != 0;
     allow_tail_call = (flags & SCRIPT_VERIFY_TAIL_CALL) != 0;
+    // figure out if p2sh
+    is_p2sh = (
+        script.size() == 23 &&
+        script[0] == OP_HASH160 &&
+        script[1] == 20 &&
+        script[22] == OP_EQUAL
+    );
+    if (is_p2sh) {
+        // we have "executed" the sigscript already (in the form of pushes onto the stack),
+        // so we need to copy the stack here
+        p2shstack = stack_in;
+    }
 }
 
 bool ExecIterator(InterpreterEnv& env, const CScript& script, CScript::const_iterator& it_in, bool update_env)
@@ -1894,6 +1906,57 @@ bool StepScript(InterpreterEnv& env)
     auto& stack = env.stack;
     auto& altstack = env.altstack;
     auto& nOpCount = env.nOpCount;
+    auto& is_p2sh = env.is_p2sh;
+
+    if (is_p2sh) {
+        if (stack.empty())
+            return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
+        if (CastToBool(stack.back()) == false)
+            return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
+        // Additional validation for spend-to-script-hash transactions:
+        if (env.scriptIn.IsPayToScriptHash()) {
+            printf("Drop-in P2SH redeem script\n");
+            // // scriptSig must be literals-only or validation fails
+            // if (!scriptSig.IsPushOnly())
+            //     return set_error(serror, SCRIPT_ERR_SIG_PUSHONLY);
+
+            // Restore stack.
+            is_p2sh = false;
+            stack = env.p2shstack;
+            // swap(stack, stackCopy);
+
+            // stack cannot be empty here, because if it was the
+            // P2SH  HASH <> EQUAL  scriptPubKey would be evaluated with
+            // an empty stack and the EvalScript above would return false.
+            assert(!stack.empty());
+
+            const valtype& pubKeySerialized = stack.back();
+            CScript pubKey2(pubKeySerialized.begin(), pubKeySerialized.end());
+            script = pubKey2;
+            popstack(stack);
+
+            printf("Restoring stack:\n");
+            for (auto& it : stack) {
+                printf("- %s\n", HexStr(it).c_str());
+            }
+            printf("Script:\n");
+            auto it = script.begin();
+            std::vector<uint8_t> vchPushValue;
+            opcodetype opcode;
+            while (script.GetOp(it, opcode, vchPushValue)) {
+                if (vchPushValue.size() > 0) {
+                    printf("- %s\n", HexStr(vchPushValue).c_str());
+                } else {
+                    printf("- %s\n", GetOpName(opcode));
+                }
+            }
+
+            pc = env.pbegincodehash = script.begin();
+            pend = script.end();
+            return true; // ExecIterator(env, script, pc, true);
+        }
+        return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+    }
 
     if (allow_tail_call && !stack.empty() && ((stack.size() + altstack.size()) >= 2) && CastToBool(stack.back())) {
         // Note that we are referencing all variables, so this will update env.*

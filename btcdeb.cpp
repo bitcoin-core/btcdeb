@@ -298,13 +298,14 @@ int main(int argc, char* const* argv)
             CScript scriptSig = instance.tx->vin[instance.txin_index].scriptSig;
             auto it = scriptSig.begin();
             while (scriptSig.GetOp(it, opcode, pushval)) {
-                if (pushval.size() > 0)
-                    push_del.push_back(strdup(HexStr(pushval).c_str()));
-                else
-                    push_del.push_back(strdup(strprintf("%02x", opcode).c_str()));
+                if (pushval.size() > 0) {
+                    push_del.push_back(strdup(strprintf("0x%s", HexStr(pushval).c_str()).c_str()));
+                } else {
+                    push_del.push_back(strdup(GetOpName(opcode)));
+                }
             }
         }
-        instance.parse_stack_args(push_del, true /* non-numeric */);
+        instance.parse_stack_args(push_del);
         while (!push_del.empty()) {
             delete push_del.back();
             push_del.pop_back();

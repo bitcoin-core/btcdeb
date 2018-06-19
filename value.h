@@ -116,6 +116,7 @@ struct Value {
             data = v[0].data;
             str = v[0].str;
             int64 = v[0].int64;
+            opcode = v[0].opcode;
             return;
         }
         type = T_DATA;

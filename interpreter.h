@@ -224,6 +224,10 @@ struct InterpreterEnv {
     bool operational;
     bool done;
     InterpreterEnv(stack_type& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in, SigVersion sigversion_in, ScriptError* error_in = nullptr);
+
+    // P2SH support
+    bool is_p2sh;
+    stack_type p2shstack;
 };
 
 bool StepScript(InterpreterEnv& env);
