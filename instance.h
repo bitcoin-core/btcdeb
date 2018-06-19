@@ -44,8 +44,8 @@ public:
     bool parse_script(const char* script_str);
     bool parse_script(const std::vector<uint8_t>& script_data);
 
-    void parse_stack_args(size_t argc, char* const* argv, size_t starting_index);
-    void parse_stack_args(const std::vector<const char*> args);
+    void parse_stack_args(size_t argc, char* const* argv, size_t starting_index, bool non_numeric = false);
+    void parse_stack_args(const std::vector<const char*> args, bool non_numeric = false);
 
     bool setup_environment();
 

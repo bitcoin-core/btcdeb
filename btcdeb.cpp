@@ -104,8 +104,8 @@ int main(int argc, char* const* argv)
             fprintf(stderr, "invalid script\n");
             return 1;
         }
+        free(script_str);
     }
-    free(script_str);
 
     instance.parse_stack_args(ca.l);
 
@@ -304,7 +304,7 @@ int main(int argc, char* const* argv)
                     push_del.push_back(strdup(strprintf("%02x", opcode).c_str()));
             }
         }
-        instance.parse_stack_args(push_del);
+        instance.parse_stack_args(push_del, true /* non-numeric */);
         while (!push_del.empty()) {
             delete push_del.back();
             push_del.pop_back();

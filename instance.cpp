@@ -90,15 +90,15 @@ bool Instance::parse_script(const std::vector<uint8_t>& script_data) {
     return script.HasValidOps();
 }
 
-void Instance::parse_stack_args(const std::vector<const char*> args) {
+void Instance::parse_stack_args(const std::vector<const char*> args, bool non_numeric) {
     for (auto& v : args) {
-        stack.push_back(Value(v).data_value());
+        stack.push_back(Value(v, 0, non_numeric).data_value());
     }
 }
 
-void Instance::parse_stack_args(size_t argc, char* const* argv, size_t starting_index) {
+void Instance::parse_stack_args(size_t argc, char* const* argv, size_t starting_index, bool non_numeric) {
     for (int i = starting_index; i < argc; i++) {
-        stack.push_back(Value(argv[i]).data_value());
+        stack.push_back(Value(argv[i], 0, non_numeric).data_value());
     }
 }
 
