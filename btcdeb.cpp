@@ -75,7 +75,7 @@ int main(int argc, char* const* argv)
         if (!instance.parse_transaction(ca.m['x'].c_str(), true)) {
             return 1;
         }
-        if (!quiet) fprintf(stderr, "got %stransaction:\n%s\n", instance.sigver == SIGVERSION_WITNESS_V0 ? "segwit " : "", instance.tx->ToString().c_str());
+        if (!quiet) fprintf(stderr, "got %stransaction:\n%s\n", instance.sigver == SigVersion::WITNESS_V0 ? "segwit " : "", instance.tx->ToString().c_str());
     }
     if (ca.m.count('i')) {
         if (!instance.parse_input_transaction(ca.m['i'].c_str())) {
@@ -190,7 +190,7 @@ int main(int argc, char* const* argv)
                 }
                 validation = CScript(pushval.begin(), pushval.end());
                 hashsrc = Value(pushval);
-                auto it = scriptPubKey.begin();
+                CScriptIter it = scriptPubKey.begin();
                 btc_segwit_logf("hash source = %s\n", hashsrc.hex_str().c_str());
                 // TODO: run this using interpreter instead
                 if (!scriptPubKey.GetOp(it, opcode, pushval)) {
@@ -229,7 +229,7 @@ int main(int argc, char* const* argv)
                     fprintf(stderr, "expected 22 or 34 byte script inside %s, but got %zu bytes\n", source.c_str(), pushval.size());
                     return 1;
             }
-            auto it = validation.begin();
+            CScriptIter it = validation.begin();
             if (!validation.GetOp(it, opcode, pushval)) {
                 fprintf(stderr, "can't parse %s, or %s ended prematurely\n", source.c_str(), source.c_str());
                 return 1;
@@ -271,7 +271,7 @@ int main(int argc, char* const* argv)
                 return 1;
             }
 
-            instance.sigver = SIGVERSION_WITNESS_V0;
+            instance.sigver = SigVersion::WITNESS_V0;
 
             size_t wstack_to_stack = wstack.size();
             if (!wsh) {
@@ -293,10 +293,10 @@ int main(int argc, char* const* argv)
             }
         } else {
             // legacy
-            instance.sigver = SIGVERSION_BASE;
+            instance.sigver = SigVersion::BASE;
             instance.script = scriptPubKey;
             CScript scriptSig = instance.tx->vin[instance.txin_index].scriptSig;
-            auto it = scriptSig.begin();
+            CScriptIter it = scriptSig.begin();
             while (scriptSig.GetOp(it, opcode, pushval)) {
                 if (pushval.size() > 0) {
                     push_del.push_back(strdup(strprintf("0x%s", HexStr(pushval).c_str()).c_str()));
@@ -319,7 +319,7 @@ int main(int argc, char* const* argv)
 
     env = instance.env;
 
-    auto it = env->script.begin();
+    CScriptIter it = env->script.begin();
     opcodetype opcode;
     valtype vchPushValue;
     while (env->script.GetOp(it, opcode, vchPushValue)) ++count;

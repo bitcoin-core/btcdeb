@@ -339,7 +339,7 @@ int main(int argc, const char** argv)
             for (auto p : args) {
                 stack.push_back(p.data_value());
             }
-            auto env = new InterpreterEnv(stack, spt, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, checker, SIGVERSION_WITNESS_V0, &error);
+            auto env = new InterpreterEnv(stack, spt, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, checker, SigVersion::WITNESS_V0, &error);
             while (!env->done) {
                 // iterate
                 if (!StepScript(*env)) {

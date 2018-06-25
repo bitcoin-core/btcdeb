@@ -5,7 +5,7 @@
 #include <vector>
 #include <string>
 #include <utilstrencodings.h>
-#include <script/script.h>
+#include <debugger/script.h>
 #include <tinyformat.h>
 #include <crypto/sha256.h>
 #include <crypto/ripemd160.h>

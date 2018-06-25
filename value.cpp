@@ -13,7 +13,7 @@ void ECC_Start();
 bool Value::extract_values(std::vector<std::vector<uint8_t>>& values) {
     values.clear();
     CScript s(data.begin(), data.end());
-    auto pc = s.begin();
+    CScriptIter pc = s.begin();
     opcodetype opcode;
     std::vector<uint8_t> vch;
     while (pc != s.end()) {

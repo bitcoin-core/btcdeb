@@ -1,4 +1,4 @@
-#include <script/interpreter.h>
+#include <debugger/interpreter.h>
 #include <utilstrencodings.h>
 #include <policy/policy.h>
 #include <streams.h>
@@ -29,7 +29,7 @@ public:
     , count(0)
     , txin_index(-1)
     , txin_vout_index(-1)
-    , sigver(SIGVERSION_BASE)
+    , sigver(SigVersion::BASE)
     , checker(nullptr)
     {}
 

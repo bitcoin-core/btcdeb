@@ -23,7 +23,7 @@ TEST_CASE("Conversions", "[conversions]") {
             std::vector<uint8_t> data;
             CScript s;
             s << i;
-            CScript::const_iterator pc = s.begin();
+            CScriptIter pc = s.begin();
             opcodetype opcode;
             REQUIRE(s.GetOp(pc, opcode, data));
             // printf("%9lld: %-8s | %s\n", i, Value(i).hex_str().c_str(), HexStr(data).c_str());
@@ -226,10 +226,10 @@ TEST_CASE("MAST article examples", "[mast-article]") {
         REQUIRE(x.hex_str() == "6c5187");
     }
 
-    SECTION("TOALTSTACK 9e2") {
-        Value x("[TOALTSTACK 9e2232a0e2a41073464bdd218fa4ae9221b20ce93af704dceb0db1a0aa253fed OP_2 MERKLEBRANCHVERIFY 2DROP DROP]");
-        REQUIRE(x.hex_str() == "6b209e2232a0e2a41073464bdd218fa4ae9221b20ce93af704dceb0db1a0aa253fed52b36d75");
-    }
+    // SECTION("TOALTSTACK 9e2") {
+    //     Value x("[TOALTSTACK 9e2232a0e2a41073464bdd218fa4ae9221b20ce93af704dceb0db1a0aa253fed OP_2 MERKLEBRANCHVERIFY 2DROP DROP]");
+    //     REQUIRE(x.hex_str() == "6b209e2232a0e2a41073464bdd218fa4ae9221b20ce93af704dceb0db1a0aa253fed52b36d75");
+    // }
 
     SECTION("1-2 Lightning Network Example") {
         Value x("[OP_IF 144 OP_CHECKSEQUENCEVERIFY OP_DROP 01 OP_ELSE 02 OP_ENDIF OP_EQUAL]");

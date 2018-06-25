@@ -52,7 +52,7 @@ bool Instance::parse_transaction(const char* txdata, bool parse_amounts) {
     tx = parse_tx(p);
     if (!tx) return false;
     while (amounts.size() < tx->vin.size()) amounts.push_back(0);
-    if (tx->vin[0].scriptSig.size() == 0) sigver = SIGVERSION_WITNESS_V0;
+    if (tx->vin[0].scriptSig.size() == 0) sigver = SigVersion::WITNESS_V0;
     return true;
 }
 
@@ -109,7 +109,7 @@ bool Instance::setup_environment() {
         checker = new BaseSignatureChecker();
     }
     
-    env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS | SCRIPT_VERIFY_MERKLEBRANCHVERIFY, *checker, sigver, &error);
+    env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS, *checker, sigver, &error);
 
     return env->operational;
 }
@@ -185,9 +185,9 @@ bool Instance::eval(const size_t argc, char* const* argv) {
         fprintf(stderr, "error: invalid opcode %s\n", v);
         return false;
     }
-    CScript::const_iterator it = script.begin();
+    CScriptIter it = script.begin();
     while (it != script.end()) {
-        if (!ExecIterator(*env, script, it, false)) {
+        if (!StepScript(*env, it)) {
             fprintf(stderr, "Error: %s\n", ScriptErrorString(*env->serror));
             return false;
         }

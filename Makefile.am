@@ -14,35 +14,44 @@ BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
 LIBBITCOIN=libbitcoin.a
 LIBKERL=libkerl.a
 LIBSECP256K1=secp256k1/libsecp256k1.la
-LIBBTCDEB=libbtcdeb.a
+LIBBTCDEB=libbtcdeb.a           # CLI tool (btcdeb)
+LIBBITCOIN_DEB=libbitcoin_deb.a # bitcoin core functionality (debugger/*)
 
 $(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
 
 EXTRA_LIBRARIES += \
+  $(LIBBITCOIN_DEB) \
   $(LIBBITCOIN) \
   $(LIBKERL) \
   $(LIBBTCDEB)
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc merklebranch mastify test-btcdeb
+bin_PROGRAMS = btcdeb btcc test-btcdeb
 noinst_PROGRAMS =
+
+# debugger #
+LIBBITCOIN_DEB_H = \
+	debugger/interpreter.h \
+	debugger/script.h
 
 .PHONY: FORCE check-symbols check-security
 # bitcoin core #
 BITCOIN_CORE_H = \
+	$(LIBBITCOIN_DEB_H) \
 	amount.h \
 	base58.h \
 	bech32.h \
+	compat.h \
+	compat/byteswap.h \
+	compat/endian.h \
 	crypto/common.h \
 	crypto/hmac_sha512.h \
 	crypto/ripemd160.h \
 	crypto/sha1.h \
 	crypto/sha256.h \
 	crypto/sha512.h \
-	compat/byteswap.h \
-	compat/endian.h \
 	hash.h \
 	script/interpreter.h \
 	merkle.h \
@@ -53,6 +62,7 @@ BITCOIN_CORE_H = \
 	script/script.h \
 	script/script_error.h \
 	serialize.h \
+	span.h \
 	streams.h \
 	support/allocators/secure.h \
 	support/allocators/zeroafterfree.h \
@@ -62,6 +72,16 @@ BITCOIN_CORE_H = \
 	uint256.h \
 	utilstrencodings.h \
 	value.h
+
+# debugger #
+
+libbitcoin_deb_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS) $(EVENT_PTHREADS_CFLAGS)
+libbitcoin_deb_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+libbitcoin_deb_a_SOURCES = \
+	debugger/hash.cpp \
+	debugger/interpreter.cpp \
+	debugger/script.cpp \
+	$(BITCOIN_CORE_H)
 
 # bitcoin: shared between all the tools
 libbitcoin_a_LIBADD = $(LIBSECP256K1)
@@ -110,6 +130,7 @@ btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
+	$(LIBBITCOIN_DEB) \
 	$(LIBBTCDEB) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
@@ -122,27 +143,8 @@ btcc_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 btcc_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 btcc_LDADD = \
+	$(LIBBITCOIN_DEB) \
 	$(LIBBITCOIN)
-
-# merklebranch binary #
-merklebranch_SOURCES = \
-	merklebranch.cpp
-merklebranch_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-merklebranch_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-
-merklebranch_LDADD = \
-	$(LIBBITCOIN)
-
-# mastify binary #
-mastify_SOURCES = \
-	mastify.cpp
-mastify_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-mastify_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-mastify_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
-
-mastify_LDADD = \
-	$(LIBBITCOIN) \
-	$(LIBSECP256K1)
 
 # test-btcdeb binary #
 test_btcdeb_SOURCES = \
@@ -155,6 +157,7 @@ test_btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 test_btcdeb_LDADD = \
+	$(LIBBITCOIN_DEB) \
 	$(LIBBTCDEB) \
 	$(LIBBITCOIN) \
 	$(LIBKERL) \

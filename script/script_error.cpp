@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2016 The Bitcoin Core developers
+// Copyright (c) 2009-2017 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -23,8 +23,6 @@ const char* ScriptErrorString(const ScriptError serror)
             return "Script failed an OP_CHECKSIGVERIFY operation";
         case SCRIPT_ERR_NUMEQUALVERIFY:
             return "Script failed an OP_NUMEQUALVERIFY operation";
-        case SCRIPT_ERR_MERKLEBRANCHVERIFY:
-            return "Script failed an OP_MERKLEBRANCHVERIFY operation";
         case SCRIPT_ERR_SCRIPT_SIZE:
             return "Script is too big";
         case SCRIPT_ERR_PUSH_SIZE:
@@ -43,14 +41,6 @@ const char* ScriptErrorString(const ScriptError serror)
             return "Attempted to use a disabled opcode";
         case SCRIPT_ERR_INVALID_STACK_OPERATION:
             return "Operation not valid with the current stack size";
-        case SCRIPT_ERR_BAD_DECODE_ARG:
-            return "Failed to decode stack item for current opcode";
-        case SCRIPT_ERR_BAD_DECODE_ARG1:
-            return "Failed to decode top stack item for current opcode";
-        case SCRIPT_ERR_BAD_DECODE_ARG2:
-            return "Failed to decode 2nd stack item for current opcode";
-        case SCRIPT_ERR_BAD_DECODE_ARG3:
-            return "Failed to decode 3rd stack item for current opcode";
         case SCRIPT_ERR_INVALID_ALTSTACK_OPERATION:
             return "Operation not valid with the current altstack size";
         case SCRIPT_ERR_OP_RETURN:
@@ -99,6 +89,10 @@ const char* ScriptErrorString(const ScriptError serror)
             return "Witness provided for non-witness script";
         case SCRIPT_ERR_WITNESS_PUBKEYTYPE:
             return "Using non-compressed keys in segwit";
+        case SCRIPT_ERR_OP_CODESEPARATOR:
+            return "Using OP_CODESEPARATOR in non-witness script";
+        case SCRIPT_ERR_SIG_FINDANDDELETE:
+            return "Signature is found in scriptCode";
         case SCRIPT_ERR_UNKNOWN_ERROR:
         case SCRIPT_ERR_ERROR_COUNT:
         default: break;
