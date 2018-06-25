@@ -14,7 +14,6 @@ BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
 LIBBITCOIN=libbitcoin.a
 LIBKERL=libkerl.a
 LIBSECP256K1=secp256k1/libsecp256k1.la
-LIBBTCDEB=libbtcdeb.a           # CLI tool (btcdeb)
 LIBBITCOIN_DEB=libbitcoin_deb.a # bitcoin core functionality (debugger/*)
 
 $(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
@@ -23,8 +22,7 @@ $(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
 EXTRA_LIBRARIES += \
   $(LIBBITCOIN_DEB) \
   $(LIBBITCOIN) \
-  $(LIBKERL) \
-  $(LIBBTCDEB)
+  $(LIBKERL)
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
@@ -96,10 +94,10 @@ libbitcoin_a_SOURCES = \
 	crypto/sha256.cpp \
 	crypto/sha512.cpp \
 	hash.cpp \
-	script/interpreter.cpp \
 	merkle.cpp \
 	primitives/transaction.cpp \
 	pubkey.cpp \
+	script/interpreter.cpp \
 	script/script.cpp \
 	script/script_error.cpp \
 	support/cleanse.cpp \
@@ -114,15 +112,10 @@ libkerl_a_CPPFLAGS = $(AM_CPPFLAGS) -Ikerl
 libkerl_a_CFLAGS = -std=gnu99
 libkerl_a_SOURCES = kerl/kerl.c kerl/kerl.h
 
-# btcdeb library #
-libbtcdeb_a_LIBADD = $(LIBBITCOIN)
-libbtcdeb_a_SOURCES = \
-	instance.h \
-	instance.cpp
-libbtcdeb_a_CPPFLAGS = $(AM_CPPFLAGS)
-
 # btcdeb binary #
 btcdeb_SOURCES = \
+	instance.h \
+	instance.cpp \
 	btcdeb.cpp \
 	cliargs.h
 btcdeb_CPPFLAGS = $(AM_CPPFLAGS)
@@ -131,7 +124,6 @@ btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
 	$(LIBBITCOIN_DEB) \
-	$(LIBBTCDEB) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
 	$(LIBKERL)
@@ -148,6 +140,8 @@ btcc_LDADD = \
 
 # test-btcdeb binary #
 test_btcdeb_SOURCES = \
+	instance.h \
+	instance.cpp \
 	test/catch.hpp \
 	test/signing.cpp \
 	test/test-btcdeb.cpp \
@@ -158,7 +152,6 @@ test_btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 test_btcdeb_LDADD = \
 	$(LIBBITCOIN_DEB) \
-	$(LIBBTCDEB) \
 	$(LIBBITCOIN) \
 	$(LIBKERL) \
 	$(LIBSECP256K1)
