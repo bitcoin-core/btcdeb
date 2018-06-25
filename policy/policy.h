@@ -6,7 +6,7 @@
 #ifndef BITCOIN_POLICY_POLICY_H
 #define BITCOIN_POLICY_POLICY_H
 
-#include <interpreter.h>
+#include <script/interpreter.h>
 
 /**
  * Mandatory script verification flags that all new blocks must comply with for

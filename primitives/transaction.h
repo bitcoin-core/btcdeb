@@ -8,7 +8,7 @@
 
 #include <stdint.h>
 #include <amount.h>
-#include <script.h>
+#include <script/script.h>
 #include <serialize.h>
 #include <uint256.h>
 

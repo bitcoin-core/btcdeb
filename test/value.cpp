@@ -1,7 +1,7 @@
-#include "catch.hpp"
+#include <test/catch.hpp>
 
-#include "../value.h"
-#include "../script.h"
+#include <value.h>
+#include <script/script.h>
 
 TEST_CASE("Conversions", "[conversions]") {
     SECTION("Int to hex") {

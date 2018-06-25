@@ -4,7 +4,7 @@
 #include <value.h>
 #include <merkle.h>
 #include <streams.h>
-#include <interpreter.h>
+#include <script/interpreter.h>
 #include <policy/policy.h>
 
 typedef std::vector<unsigned char> valtype;

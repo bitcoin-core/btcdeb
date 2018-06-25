@@ -1,4 +1,4 @@
-#include <interpreter.h>
+#include <script/interpreter.h>
 #include <utilstrencodings.h>
 #include <policy/policy.h>
 #include <streams.h>

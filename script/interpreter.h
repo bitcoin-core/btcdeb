@@ -6,10 +6,10 @@
 #ifndef BITCOIN_SCRIPT_INTERPRETER_H
 #define BITCOIN_SCRIPT_INTERPRETER_H
 
-#include <script_error.h>
+#include <script/script_error.h>
 #include <primitives/transaction.h>
 #include <uint256.h>
-#include <script.h>
+#include <script/script.h>
 
 #include <vector>
 #include <stdint.h>
