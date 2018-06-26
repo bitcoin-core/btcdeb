@@ -4,4 +4,3 @@
 
 #include <hash.h>
 
-bool CHashWriter::debug = false;
