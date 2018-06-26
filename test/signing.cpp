@@ -24,7 +24,20 @@ TEST_CASE("Segwit Multisig Signing", "[signing-segwit-multisig]") {
     SECTION("Valid inputs") {
         Instance instance;
         instance.parse_transaction(TXAMT ":" TXHEX, true);
+
         instance.parse_script(SCRIPT);
+        // script should have 6 entries
+        {
+            size_t count = 0;
+            CScriptIter it = instance.script.begin();
+            opcodetype opcode;
+            std::vector<uint8_t> pushval;
+            while (instance.script.GetOp(it, opcode, pushval)) {
+                count++;
+            }
+            REQUIRE(count == 6);
+        }
+
         const char* argv[] = {STACK1, STACK2, STACK3};
         instance.parse_stack_args(3, (char* const*)argv, 0);
         instance.setup_environment();
