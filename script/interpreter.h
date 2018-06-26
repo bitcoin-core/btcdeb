@@ -200,7 +200,7 @@ struct ScriptExecutionEnvironment {
     const BaseSignatureChecker& checker;
     SigVersion sigversion;
     ScriptError* serror;
-    ScriptExecutionEnvironment(const CScript& script_in, std::vector<std::vector<unsigned char> >& stack_in, unsigned int flags_in, const BaseSignatureChecker& checker_in);
+    ScriptExecutionEnvironment(std::vector<std::vector<unsigned char> >& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in);
 };
 
 bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc);

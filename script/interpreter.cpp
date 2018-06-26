@@ -1060,7 +1060,7 @@ bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc)
     return true;
 }
 
-ScriptExecutionEnvironment::ScriptExecutionEnvironment(const CScript& script_in, std::vector<std::vector<unsigned char> >& stack_in, unsigned int flags_in, const BaseSignatureChecker& checker_in)
+ScriptExecutionEnvironment::ScriptExecutionEnvironment(std::vector<std::vector<unsigned char> >& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in)
 : script(script_in)
 , pend(script.end())
 , pbegincodehash(script.begin())
@@ -1073,10 +1073,10 @@ ScriptExecutionEnvironment::ScriptExecutionEnvironment(const CScript& script_in,
 
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror)
 {
-    ScriptExecutionEnvironment env(script, stack, flags, checker);
-    CScriptIter pc = script.begin();
+    ScriptExecutionEnvironment env(stack, script, flags, checker);
+    CScriptIter pc = env.script.begin();
     set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
-    if (script.size() > MAX_SCRIPT_SIZE)
+    if (env.script.size() > MAX_SCRIPT_SIZE)
         return set_error(serror, SCRIPT_ERR_SCRIPT_SIZE);
 
     try {

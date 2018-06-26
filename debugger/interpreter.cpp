@@ -6,8 +6,8 @@
 #include <debugger/script.h>
 
 InterpreterEnv::InterpreterEnv(std::vector<valtype>& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in, SigVersion sigversion_in, ScriptError* error_in)
-: ScriptExecutionEnvironment(script_in, stack_in, flags_in, checker_in)
-, pc(script_in.begin())
+: ScriptExecutionEnvironment(stack_in, script_in, flags_in, checker_in)
+, pc(script.begin())
 , scriptIn(script_in)
 , curr_op_seq(0)
 , done(pc == pend)
