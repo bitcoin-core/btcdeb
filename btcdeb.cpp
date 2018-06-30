@@ -374,11 +374,17 @@ int main(int argc, char* const* argv)
 
 int fn_step(const char* arg) {
     if (env->done) fail("at end of script\n");
-    if (!instance.step()) fail("error: %s\n", instance.error_string());
-    print_dualstack();
-    if (env->curr_op_seq < count) {
-        printf("%s\n", script_lines[env->curr_op_seq]);
+    bool fExec = !std::count(env->vfExec.begin(), env->vfExec.end(), false);
+    if (fExec) {
+        if (!instance.step()) fail("error: %s\n", instance.error_string());
+        print_dualstack();
+        if (env->curr_op_seq < count) {
+            printf("%s\n", script_lines[env->curr_op_seq]);
+        }
+    } else {
+        printf("[execution not active]\n");
     }
+
     return 0;
 }
 
