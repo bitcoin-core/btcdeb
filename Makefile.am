@@ -26,7 +26,7 @@ EXTRA_LIBRARIES += \
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc test-btcdeb
+bin_PROGRAMS = btcdeb btcc vanitygen test-btcdeb
 noinst_PROGRAMS =
 
 # debugger #
@@ -137,6 +137,19 @@ btcc_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcc_LDADD = \
 	$(LIBBITCOIN_DEB) \
 	$(LIBBITCOIN)
+
+# vanitygen binary #
+vanitygen_SOURCES = \
+	vanitygen.cpp \
+	cliargs.h
+vanitygen_CPPFLAGS = $(AM_CPPFLAGS)
+vanitygen_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+vanitygen_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
+
+vanitygen_LDADD = \
+	$(LIBBITCOIN_DEB) \
+	$(LIBBITCOIN) \
+	$(LIBSECP256K1)
 
 # test-btcdeb binary #
 test_btcdeb_SOURCES = \
