@@ -174,7 +174,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
         if (local_ctr == 100000) {
             local_ctr = 0;
             size_t c = 100000 * (++store->counter);
-            if (c % 100000000 == 0) {
+            if (c % 1000000000 == 0) {
                 auto now = time_ms();
                 double elapsed_secs = std::chrono::duration<double>(now - store->start_time).count();
                 double addresses_per_sec = double(c) / elapsed_secs;
