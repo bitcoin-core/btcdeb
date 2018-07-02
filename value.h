@@ -400,6 +400,7 @@ struct Value {
     void do_bech32enc() {
         data_value();
         std::vector<unsigned char> tmp = {0};
+        tmp.reserve(1 + data.size() * 8 / 5);
         ConvertBits<8, 5, true>(tmp, data.begin(), data.end());
         str = bech32::Encode("bc", tmp);
         type = T_STRING;
