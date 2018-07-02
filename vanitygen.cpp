@@ -191,6 +191,7 @@ void finder(size_t id, int step, const std::vector<uint8_t>& base, const char* p
             }
         }
         Value v(u);
+        v.do_get_pubkey();
         v.do_hash160();
         v.do_bech32enc();
         const char* str = v.str_value().c_str();
