@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <bech32.h>
+#include <cstring>
 
 namespace
 {
