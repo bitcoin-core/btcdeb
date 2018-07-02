@@ -13,6 +13,8 @@
 
 #include <cliargs.h>
 
+#include <secp256k1.h>
+
 typedef std::chrono::milliseconds milliseconds;
 
 inline milliseconds time_ms() {
@@ -29,6 +31,8 @@ inline bool in(char c, const char* v, size_t l) {
     for (size_t i = 0; i < l; ++i) if (v[i] == c) return true;
     return false;
 }
+
+#define KP_CHUNK_SIZE 1024
 
 struct privkey_store {
     milliseconds start_time;
@@ -48,18 +52,18 @@ struct privkey_store {
         start_time = time_ms();
     }
 
-    inline void new_match(const char* str, const std::vector<uint8_t>& u, size_t longest, bool complete) {
+    inline void new_match(const char* str, const uint8_t* u, size_t longest, bool complete) {
         std::lock_guard<std::mutex> guard(mtx);
         if (!(longest > longest_match || (longest > 6 && longest == longest_match))) return;
         if (longest_match == longest) {
             printf("* alternative match: %s\n", str);
-            printf("* privkey:           %s\n", HexStr(u).c_str());
+            printf("* privkey:           %s\n", HexStr(u, u + 32).c_str());
             return;
         }
         longest_match = longest;
         complete_match = complete;
         printf("* new %s match: %s\n", complete ? "full" : "longest", str);
-        printf("* privkey:%s        %s\n", complete ? "" :     "   ", HexStr(u).c_str());
+        printf("* privkey:%s        %s\n", complete ? "" :     "   ", HexStr(u, u + 32).c_str());
     }
 
     // inline void add(const std::vector<uint8_t>& privkey) {
@@ -93,21 +97,6 @@ struct privkey_store {
         }
     }
 };
-
-// void privkey_spawner(privkey_store* store) {
-//     FILE* fp = store->fp = fopen("/dev/urandom", "rb");
-//     assert(fp && "/dev/urandom required");
-//     std::vector<uint8_t> x;
-//     x.resize(32);
-//     for (;;) {
-//         if (store->complete_match) {
-//             fclose(fp);
-//             return;
-//         }
-//         fread(x.data(), 1, 32, fp);
-//         store->add(x);
-//     }
-// }
 
 bool prefixcmp(const char* prefix, const char* str, size_t plen) {
     for (size_t i = 0; i < plen; ++i) if (prefix[i] != '?' && prefix[i] != str[i]) return false;
@@ -148,21 +137,38 @@ std::string timestr(std::chrono::duration<int> milliseconds) {
 
 static const char* spaces = "                                                                    ";
 
-void finder(size_t id, int step, const std::vector<uint8_t>& base, const char* prefix, privkey_store* store) {
+void finder(size_t id, int step, const char* prefix, privkey_store* store) {
+    secp256k1_context* ctx = secp256k1_context_create(0);
     size_t plen = strlen(prefix);
-    std::vector<uint8_t> u = base;
-    // shift
-    inc(u, id);
+    secp256k1_pubkey pubs[KP_CHUNK_SIZE];
+    unsigned char privs[32 * KP_CHUNK_SIZE];
+    size_t iter = KP_CHUNK_SIZE;
     size_t local_ctr = 0;
     for (;;) {
         if (store->complete_match || store->end) {
+            secp256k1_context_destroy(ctx);
             return;
         }
+        if (iter == KP_CHUNK_SIZE) {
+            // generate new chunk of keys
+            unsigned char seed[32];
+            if (!fread(seed, 1, 32, store->fp)) {
+                fprintf(stderr, "unable to read from /dev/urandom; aborting\n");
+                exit(1);
+            }
+            if (1 != secp256k1_ec_grind(ctx, pubs, privs, KP_CHUNK_SIZE, seed, nullptr)) {
+                fprintf(stderr, "seed invalid; should probably try with more than one\n");
+                exit(1);
+            }
+            iter = 0;
+            // loop back since this takes awhile; we may have found a complete match at this point
+            continue;
+        }
         local_ctr++;
-        if (local_ctr == 100000) {
+        if (local_ctr == 10000) {
             local_ctr = 0;
-            size_t c = 100000 * (++store->counter);
-            if (c % 1000000000 == 0) {
+            size_t c = 10000 * (++store->counter);
+            if (c % 1000000 == 0) {
                 auto now = time_ms();
                 double elapsed_secs = std::chrono::duration<double>(now - store->start_time).count();
                 double addresses_per_sec = double(c) / elapsed_secs;
@@ -183,15 +189,18 @@ void finder(size_t id, int step, const std::vector<uint8_t>& base, const char* p
             case 10000000000000UL: printf("*** 10 trillion. I don't think I need to say anything else here. You sure love yourself. ***                                                             \n"); break;
             }
             if (id == 0) {
-                printf("%zu: %s\r", c, HexStr(u).c_str()); fflush(stdout);
+                printf("%zu: %s\r", c, HexStr(&privs[iter<<5], &privs[(iter+1)<<5]).c_str()); fflush(stdout);
             }
             if (c == store->cap) {
                 store->end = true;
+                secp256k1_context_destroy(ctx);
                 return;
             }
         }
-        Value v(u);
-        v.do_get_pubkey();
+        // get pubkey
+        Value v = Value::from_secp256k1_pubkey(&pubs[iter]);
+        // Value v(u);
+        // v.do_get_pubkey();
         v.do_hash160();
         v.do_bech32enc();
         const char* str = v.str_value().c_str();
@@ -200,7 +209,8 @@ void finder(size_t id, int step, const std::vector<uint8_t>& base, const char* p
         str = &str[3];
         if (prefixcmp(prefix, str, plen)) {
             // found a match
-            store->new_match(&str[-3], u, plen, true);
+            store->new_match(&str[-3], &privs[iter<<5], plen, true);
+            secp256k1_context_destroy(ctx);
             return;
         }
         size_t mlen = strlen(prefix);
@@ -209,12 +219,13 @@ void finder(size_t id, int step, const std::vector<uint8_t>& base, const char* p
         for (size_t i = 0; i < mlen; ++i) {
             if (prefix[i] != '?' && str[i] != prefix[i]) {
                 if (i > store->longest_match || (i > 6 && i == store->longest_match)) {
-                    store->new_match(&str[-3], u, i, false);
+                    store->new_match(&str[-3], &privs[iter<<5], i, false);
                 }
                 break;
             }
         }
-        inc(u, step);
+        // inc(u, step);
+        iter++;
     }
 }
 
@@ -282,12 +293,10 @@ int main(int argc, char* const* argv)
     // and use semaphores to pull them out
     privkey_store* store = new privkey_store(iprob);
     if (ca.m.count('x')) store->cap = (size_t)atoll(ca.m['x'].c_str());
-    // std::thread pks(privkey_spawner, store);
     std::vector<std::thread> finders;
-    std::vector<uint8_t> base = store->pop();
+    // std::vector<uint8_t> base = store->pop();
     for (size_t i = 0; i < processes; i++) {
-        finders.emplace_back(finder, i, processes, base, prefix, store);
+        finders.emplace_back(finder, i, processes, prefix, store);
     }
-    // pks.join();
     for (std::thread& t : finders) t.join();
 }

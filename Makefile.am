@@ -127,7 +127,7 @@ btcc_LDADD = \
 vanitygen_SOURCES = \
 	vanitygen.cpp \
 	cliargs.h
-vanitygen_CPPFLAGS = $(AM_CPPFLAGS)
+vanitygen_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 vanitygen_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 vanitygen_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
