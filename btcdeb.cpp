@@ -17,11 +17,13 @@ int fn_rewind(const char*);
 int fn_exec(const char*);
 int fn_stack(const char*);
 int fn_altstack(const char*);
+int fn_vfexec(const char*);
 int fn_print(const char*);
 int fn_tf(const char*);
 char* compl_exec(const char*, int);
 char* compl_tf(const char*, int);
 int print_stack(std::vector<valtype>&, bool raw = false);
+int print_bool_stack(std::vector<valtype>&);
 
 bool quiet = false;
 bool piping = false;
@@ -355,6 +357,7 @@ int main(int argc, char* const* argv)
         kerl_register("rewind", fn_rewind, "Go back in time one instruction.");
         kerl_register("stack", fn_stack, "Print stack content.");
         kerl_register("altstack", fn_altstack, "Print altstack content.");
+        kerl_register("vfexec", fn_vfexec, "Print vfexec content.");
         kerl_register("exec", fn_exec, "Execute command.");
         kerl_register("tf", fn_tf, "Transform a value using a given function.");
         kerl_set_completor("exec", compl_exec);
@@ -470,12 +473,28 @@ int print_stack(std::vector<valtype>& stack, bool raw) {
     return 0;
 }
 
+int print_bool_stack(std::vector<bool> stack) {
+    if (stack.size() == 0) printf("- empty stack -\n");
+
+    int i = 0;
+    for (int j = stack.size() - 1; j >= 0; j--) {
+        i++;
+        printf("<%02d>\t%02x\n", i, (unsigned int) stack[j]);
+    }
+
+    return 0;
+}
+
 int fn_stack(const char* arg) {
     return print_stack(env->stack);
 }
 
 int fn_altstack(const char*) {
     return print_stack(env->altstack);
+}
+
+int fn_vfexec(const char*) {
+    return print_bool_stack(env->vfExec);
 }
 
 static const char* tfs[] = {
