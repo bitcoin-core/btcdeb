@@ -50,7 +50,12 @@ struct privkey_store {
 
     inline void new_match(const char* str, const std::vector<uint8_t>& u, size_t longest, bool complete) {
         std::lock_guard<std::mutex> guard(mtx);
-        if (longest_match >= longest) return;
+        if (!(longest > longest_match || (longest > 5 && longest == longest_match))) return;
+        if (longest_match == longest) {
+            printf("* alternative match: %s\n", str);
+            printf("* privkey:           %s\n", HexStr(u).c_str());
+            return;
+        }
         longest_match = longest;
         complete_match = complete;
         printf("* new %s match: %s\n", complete ? "full" : "longest", str);
@@ -199,7 +204,7 @@ void finder(size_t id, int step, const std::vector<uint8_t>& base, const char* p
         if (mlen > mlen2) mlen = mlen2;
         for (size_t i = 0; i < mlen; ++i) {
             if (prefix[i] != '?' && str[i] != prefix[i]) {
-                if (i > store->longest_match) {
+                if (i > store->longest_match || (i > 5 && i == store->longest_match)) {
                     store->new_match(&str[-3], u, i, false);
                 }
                 break;
