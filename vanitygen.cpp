@@ -150,6 +150,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
     unsigned char privs[32 * KP_CHUNK_SIZE];
     size_t iter = KP_CHUNK_SIZE;
     size_t local_ctr = 0;
+    size_t next_eta = 1000000000;
     for (;;) {
         if (store->complete_match || store->end) {
             secp256k1_context_destroy(ctx);
@@ -174,7 +175,8 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
         if (local_ctr == 100000) {
             local_ctr = 0;
             size_t c = 100000 * (++store->counter);
-            if (c % 1000000000 == 0) {
+            if (c % next_eta == 0) {
+                next_eta <<= 1;
                 auto now = time_ms();
                 double elapsed_secs = std::chrono::duration<double>(now - store->start_time).count();
                 double addresses_per_sec = double(c) / elapsed_secs;
