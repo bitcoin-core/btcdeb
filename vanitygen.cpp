@@ -122,14 +122,11 @@ std::string timestr(unsigned long seconds) {
     minutes %= 60;
     unsigned long days = hours / 24;
     hours %= 24;
-    unsigned long weeks = days/7;
-    days %= 7;
     std::string s = "";
-    if (weeks > 0) s += strprintf("%lu week%s", weeks, weeks == 1 ? "" : "s");
-    if (days > 0) s += strprintf("%s%lu day%s", weeks ? ", " : "", days, days == 1 ? "" : "s");
-    if (hours > 0 && weeks == 0) s += strprintf("%s%lu hour%s", weeks+days ? ", " : "", hours, hours == 1 ? "" : "s");
-    if (minutes > 0 && weeks + days == 0) s += strprintf("%s%lu min%s", hours ? ", " : "", minutes, minutes == 1 ? "" : "s");
-    if (seconds > 0 && weeks + days + hours == 0) s += strprintf("%s%lu second%s", minutes ? ", " : "", seconds, seconds == 1 ? "" : "s");
+    if (days > 0) s += strprintf("%lu day%s", days, days == 1 ? "" : "s");
+    if (hours > 0) s += strprintf("%s%lu hour%s", days ? ", " : "", hours, hours == 1 ? "" : "s");
+    if (minutes > 0 && days == 0) s += strprintf("%s%lu min%s", hours ? ", " : "", minutes, minutes == 1 ? "" : "s");
+    if (seconds > 0 && days + hours == 0) s += strprintf("%s%lu second%s", minutes ? ", " : "", seconds, seconds == 1 ? "" : "s");
     return s;
 }
 
