@@ -42,6 +42,19 @@ extern "C" {
  */
 typedef struct secp256k1_context_struct secp256k1_context;
 
+/** Opaque data structure that holds rewriteable "scratch space"
+ *
+ *  The purpose of this structure is to replace dynamic memory allocations,
+ *  because we target architectures where this may not be available. It is
+ *  essentially a resizable (within specified parameters) block of bytes,
+ *  which is initially created either by memory allocation or TODO as a pointer
+ *  into some fixed rewritable space.
+ *
+ *  Unlike the context object, this cannot safely be shared between threads
+ *  without additional synchronization logic.
+ */
+typedef struct secp256k1_scratch_space_struct secp256k1_scratch_space;
+
 /** Opaque data structure that holds a parsed and valid public key.
  *
  *  The exact representation of data inside is implementation defined and not
@@ -242,6 +255,28 @@ SECP256K1_API void secp256k1_context_set_error_callback(
     void (*fun)(const char* message, void* data),
     const void* data
 ) SECP256K1_ARG_NONNULL(1);
+
+/** Create a secp256k1 scratch space object.
+ *
+ *  Returns: a newly created scratch space.
+ *  Args: ctx:  an existing context object (cannot be NULL)
+ *  In:  init_size: initial amount of memory to allocate
+ *        max_size: maximum amount of memory to allocate
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT secp256k1_scratch_space* secp256k1_scratch_space_create(
+    const secp256k1_context* ctx,
+    size_t init_size,
+    size_t max_size
+) SECP256K1_ARG_NONNULL(1);
+
+/** Destroy a secp256k1 scratch space.
+ *
+ *  The pointer may not be used afterwards.
+ *  Args:   scratch: space to destroy
+ */
+SECP256K1_API void secp256k1_scratch_space_destroy(
+    secp256k1_scratch_space* scratch
+);
 
 /** Parse a variable-length public key into the pubkey object.
  *
@@ -613,6 +648,36 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_combine(
     const secp256k1_pubkey * const * ins,
     size_t n
 ) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+
+/** Quickly produce a large number of related public/private keypairs.
+ *  Returns: 1 unless the seed is invalid.
+ *  Args:    ctx:       pointer to a context object (initialized for verification)
+ *  Out:     pubs:      pointer to an array that will receive a list of public keys
+ *           privs:     pointer to an array of 32*n bytes which will receive a list of private keys/tweaks
+ *  In:      n          the number of keypairs to generate.
+ *           seed32     a seed to start the generation with (must be a valid secret key)
+ *           master     optional, a public key to use as base instead of the generator.
+ *
+ *  This function can be used when you want to search through a large space of potential
+ *  keypairs to find one with particular properties. Never use more than one of the resulting
+ *  keys.
+ *
+ *  To directly generate private/public keypairs, set master to NULL, and repeatedly call this
+ *  function for thousands of keys at once, passing in random values as seed.
+ *
+ *  To privately generate private/public keypairs, set master to a public key you know the private key
+ *  for instead. In this case, the 'privs' output array will receive multipliers instead of actual
+ *  private keys. They need to be applied to your private key using secp256k1_ec_privkey_tweak_mul
+ *  to obtain the actual private key corresponding to the produced public keys.
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_grind(
+    const secp256k1_context* ctx,
+    secp256k1_pubkey* pubs,
+    unsigned char* privs,
+    size_t n,
+    const unsigned char* seed32,
+    const secp256k1_pubkey* master
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(5);
 
 #ifdef __cplusplus
 }

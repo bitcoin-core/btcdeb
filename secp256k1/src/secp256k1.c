@@ -17,6 +17,7 @@
 #include "ecdsa_impl.h"
 #include "eckey_impl.h"
 #include "hash_impl.h"
+#include "scratch_impl.h"
 
 #define ARG_CHECK(cond) do { \
     if (EXPECT(!(cond), 0)) { \
@@ -114,13 +115,24 @@ void secp256k1_context_set_error_callback(secp256k1_context* ctx, void (*fun)(co
     ctx->error_callback.data = data;
 }
 
+secp256k1_scratch_space* secp256k1_scratch_space_create(const secp256k1_context* ctx, size_t init_size, size_t max_size) {
+    VERIFY_CHECK(ctx != NULL);
+    ARG_CHECK(max_size >= init_size);
+
+    return secp256k1_scratch_create(&ctx->error_callback, init_size, max_size);
+}
+
+void secp256k1_scratch_space_destroy(secp256k1_scratch_space* scratch) {
+    secp256k1_scratch_destroy(scratch);
+}
+
 static int secp256k1_pubkey_load(const secp256k1_context* ctx, secp256k1_ge* ge, const secp256k1_pubkey* pubkey) {
     if (sizeof(secp256k1_ge_storage) == 64) {
         /* When the secp256k1_ge_storage type is exactly 64 byte, use its
          * representation inside secp256k1_pubkey, as conversion is very fast.
          * Note that secp256k1_pubkey_save must use the same representation. */
         secp256k1_ge_storage s;
-        memcpy(&s, &pubkey->data[0], 64);
+        memcpy(&s, &pubkey->data[0], sizeof(s));
         secp256k1_ge_from_storage(ge, &s);
     } else {
         /* Otherwise, fall back to 32-byte big endian for X and Y. */
@@ -137,7 +149,7 @@ static void secp256k1_pubkey_save(secp256k1_pubkey* pubkey, secp256k1_ge* ge) {
     if (sizeof(secp256k1_ge_storage) == 64) {
         secp256k1_ge_storage s;
         secp256k1_ge_to_storage(&s, ge);
-        memcpy(&pubkey->data[0], &s, 64);
+        memcpy(&pubkey->data[0], &s, sizeof(s));
     } else {
         VERIFY_CHECK(!secp256k1_ge_is_infinity(ge));
         secp256k1_fe_normalize_var(&ge->x);
@@ -307,10 +319,15 @@ int secp256k1_ecdsa_verify(const secp256k1_context* ctx, const secp256k1_ecdsa_s
             secp256k1_ecdsa_sig_verify(&ctx->ecmult_ctx, &r, &s, &q, &m));
 }
 
+static SECP256K1_INLINE void buffer_append(unsigned char *buf, unsigned int *offset, const void *data, unsigned int len) {
+    memcpy(buf + *offset, data, len);
+    *offset += len;
+}
+
 static int nonce_function_rfc6979(unsigned char *nonce32, const unsigned char *msg32, const unsigned char *key32, const unsigned char *algo16, void *data, unsigned int counter) {
    unsigned char keydata[112];
-   int keylen = 64;
-   secp256k1_rfc6979_hmac_sha256_t rng;
+   unsigned int offset = 0;
+   secp256k1_rfc6979_hmac_sha256 rng;
    unsigned int i;
    /* We feed a byte array to the PRNG as input, consisting of:
     * - the private key (32 bytes) and message (32 bytes), see RFC 6979 3.2d.
@@ -320,17 +337,15 @@ static int nonce_function_rfc6979(unsigned char *nonce32, const unsigned char *m
     *  different argument mixtures to emulate each other and result in the same
     *  nonces.
     */
-   memcpy(keydata, key32, 32);
-   memcpy(keydata + 32, msg32, 32);
+   buffer_append(keydata, &offset, key32, 32);
+   buffer_append(keydata, &offset, msg32, 32);
    if (data != NULL) {
-       memcpy(keydata + 64, data, 32);
-       keylen = 96;
+       buffer_append(keydata, &offset, data, 32);
    }
    if (algo16 != NULL) {
-       memcpy(keydata + keylen, algo16, 16);
-       keylen += 16;
+       buffer_append(keydata, &offset, algo16, 16);
    }
-   secp256k1_rfc6979_hmac_sha256_initialize(&rng, keydata, keylen);
+   secp256k1_rfc6979_hmac_sha256_initialize(&rng, keydata, offset);
    memset(keydata, 0, sizeof(keydata));
    for (i = 0; i <= counter; i++) {
        secp256k1_rfc6979_hmac_sha256_generate(&rng, nonce32, 32);
@@ -572,6 +587,79 @@ int secp256k1_ec_pubkey_combine(const secp256k1_context* ctx, secp256k1_pubkey *
     }
     secp256k1_ge_set_gej(&Q, &Qj);
     secp256k1_pubkey_save(pubnonce, &Q);
+    return 1;
+}
+
+int secp256k1_ec_grind(const secp256k1_context* ctx, secp256k1_pubkey* pubs, unsigned char* privs, size_t n, const unsigned char* seed32, const secp256k1_pubkey* master) {
+#if defined(USE_ENDOMORPHISM) && !defined(EXHAUSTIVE_TEST_ORDER)
+    const unsigned int batch_size = 6;
+    secp256k1_scalar lambda;
+    secp256k1_scalar vals[3];
+#else
+    const unsigned int batch_size = 2;
+    secp256k1_scalar vals[1];
+#endif
+    const size_t batches = (n + batch_size - 1) / batch_size;
+    secp256k1_ge* pointg;
+    secp256k1_gej* points;
+    int overflow = 0;
+    size_t i = 1, p = 0;
+
+    VERIFY_CHECK(ctx != NULL);
+    ARG_CHECK(pubs != NULL);
+    ARG_CHECK(privs != NULL);
+    ARG_CHECK(seed32 != NULL);
+    ARG_CHECK(secp256k1_ecmult_context_is_built(&ctx->ecmult_ctx));
+
+    secp256k1_scalar_set_b32(&vals[0], seed32, &overflow);
+    if (overflow || secp256k1_scalar_is_zero(&vals[0])) return 0;
+
+#if defined(USE_ENDOMORPHISM) && !defined(EXHAUSTIVE_TEST_ORDER)
+    secp256k1_scalar_negate(&lambda, &minus_lambda);
+    secp256k1_scalar_mul(&vals[1], &vals[0], &lambda);
+    secp256k1_scalar_mul(&vals[2], &vals[1], &lambda);
+#endif
+
+    pointg = (secp256k1_ge*)checked_malloc(&ctx->error_callback, batches * sizeof(secp256k1_ge));
+    points = (secp256k1_gej*)checked_malloc(&ctx->error_callback, batches * sizeof(secp256k1_gej));
+    if (master) {
+        secp256k1_pubkey_load(ctx, pointg, master);
+        secp256k1_gej_set_ge(points, pointg);
+        secp256k1_ecmult(&ctx->ecmult_ctx, points, points, &vals[0], NULL);
+    } else {
+        secp256k1_ecmult(&ctx->ecmult_ctx, points, NULL, NULL, &vals[0]);
+    }
+    while (i < batches) {
+        secp256k1_gej_double_var(&points[i], &points[i - 1], NULL);
+        ++i;
+    }
+    secp256k1_ge_set_all_gej_var(pointg, points, batches, &ctx->error_callback);
+    free(points);
+
+    while (p < batches) {
+        secp256k1_ge tmpg = pointg[p];
+        for (i = 0; i < batch_size; ++i) {
+            size_t j = p * batch_size + i;
+            if (j == n) break;
+            if (i & 1) {
+                secp256k1_scalar neg;
+                secp256k1_ge negg;
+                secp256k1_scalar_negate(&neg, &vals[i / 2]);
+                secp256k1_scalar_get_b32(privs + 32 * j, &neg);
+                secp256k1_ge_neg(&negg, &tmpg);
+                secp256k1_pubkey_save(&pubs[j], &negg);
+            } else {
+                if (p) secp256k1_scalar_add(&vals[i / 2], &vals[i / 2], &vals[i / 2]);
+#if defined(USE_ENDOMORPHISM) && !defined(EXHAUSTIVE_TEST_ORDER)
+                if (i) secp256k1_ge_mul_lambda(&tmpg, &tmpg);
+#endif
+                secp256k1_scalar_get_b32(privs + 32 * j, &vals[i / 2]);
+                secp256k1_pubkey_save(&pubs[j], &tmpg);
+            }
+        }
+        ++p;
+    }
+    free(pointg);
     return 1;
 }
 
