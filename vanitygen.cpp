@@ -15,6 +15,8 @@
 
 #include <secp256k1.h>
 
+#include <support/allocators/secure.h>
+
 typedef std::chrono::milliseconds milliseconds;
 
 inline milliseconds time_ms() {
@@ -56,13 +58,13 @@ struct privkey_store {
         std::lock_guard<std::mutex> guard(mtx);
         if (!(longest > longest_match || (longest > 6 && longest == longest_match))) return;
         if (longest_match == longest) {
-            printf("* alternative match: %s\n", str);
+            printf("\n* alternative match: %s\n", str);
             printf("* privkey:           %s\n", HexStr(u, u + 32).c_str());
             return;
         }
         longest_match = longest;
         complete_match = complete;
-        printf("* new %s match: %s\n", complete ? "full" : "longest", str);
+        printf("\n* new %s match: %s\n", complete ? "full" : "longest", str);
         printf("* privkey:%s        %s\n", complete ? "" :     "   ", HexStr(u, u + 32).c_str());
     }
 
@@ -113,32 +115,39 @@ inline void inc(std::vector<uint8_t>& u, int amt) {
     if (i < 32) u[i] += amt;
 }
 
-std::string timestr(int seconds) {
-    int minutes = seconds / 60;
+std::string timestr(unsigned long seconds) {
+    unsigned long minutes = seconds / 60;
     seconds %= 60;
-    int hours = minutes / 60;
+    unsigned long hours = minutes / 60;
     minutes %= 60;
-    int days = hours / 24;
+    unsigned long days = hours / 24;
     hours %= 24;
-    int weeks = days/7;
+    unsigned long weeks = days/7;
     days %= 7;
     std::string s = "";
-    if (weeks > 0) s += strprintf("%d week%s", weeks, weeks == 1 ? "" : "s");
-    if (days > 0) s += strprintf("%s%d day%s", weeks ? ", " : "", days, days == 1 ? "" : "s");
-    if (hours > 0 && weeks == 0) s += strprintf("%s%d hour%s", weeks+days ? ", " : "", hours, hours == 1 ? "" : "s");
-    if (minutes > 0 && weeks + days == 0) s += strprintf("%s%d min%s", hours ? ", " : "", minutes, minutes == 1 ? "" : "s");
-    if (seconds > 0 && weeks + days + hours == 0) s += strprintf("%s%d second%s", minutes ? ", " : "", seconds, seconds == 1 ? "" : "s");
+    if (weeks > 0) s += strprintf("%lu week%s", weeks, weeks == 1 ? "" : "s");
+    if (days > 0) s += strprintf("%s%lu day%s", weeks ? ", " : "", days, days == 1 ? "" : "s");
+    if (hours > 0 && weeks == 0) s += strprintf("%s%lu hour%s", weeks+days ? ", " : "", hours, hours == 1 ? "" : "s");
+    if (minutes > 0 && weeks + days == 0) s += strprintf("%s%lu min%s", hours ? ", " : "", minutes, minutes == 1 ? "" : "s");
+    if (seconds > 0 && weeks + days + hours == 0) s += strprintf("%s%lu second%s", minutes ? ", " : "", seconds, seconds == 1 ? "" : "s");
     return s;
-}
-
-std::string timestr(std::chrono::duration<int> milliseconds) {
-    return timestr(milliseconds.count() / 1000);
 }
 
 static const char* spaces = "                                                                    ";
 
 void finder(size_t id, int step, const char* prefix, privkey_store* store) {
-    secp256k1_context* ctx = secp256k1_context_create(0);
+    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY|SECP256K1_CONTEXT_SIGN);
+    assert(ctx != nullptr);
+
+    {
+        // Pass in a random blinding seed to the secp256k1 context.
+        std::vector<unsigned char, secure_allocator<unsigned char>> vseed(32);
+        void GetRandBytes(unsigned char* buf, int num);
+        GetRandBytes(vseed.data(), 32);
+        bool ret = secp256k1_context_randomize(ctx, vseed.data());
+        assert(ret);
+    }
+
     size_t plen = strlen(prefix);
     secp256k1_pubkey pubs[KP_CHUNK_SIZE];
     unsigned char privs[32 * KP_CHUNK_SIZE];
@@ -165,15 +174,15 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
             continue;
         }
         local_ctr++;
-        if (local_ctr == 10000) {
+        if (local_ctr == 100000) {
             local_ctr = 0;
-            size_t c = 10000 * (++store->counter);
-            if (c % 1000000 == 0) {
+            size_t c = 100000 * (++store->counter);
+            if (c % 100000000 == 0) {
                 auto now = time_ms();
                 double elapsed_secs = std::chrono::duration<double>(now - store->start_time).count();
                 double addresses_per_sec = double(c) / elapsed_secs;
                 double exp_time = store->iprob / addresses_per_sec; // h / (h/s) = h * (s/h) = s
-                int seconds = exp_time;
+                uint64_t seconds = exp_time;
                 std::string tstr = timestr(seconds);
                 printf("(%zu addresses in %s; %.3f addresses/second; statistical expected time: %s)                                    \n", c, timestr(elapsed_secs).c_str(), addresses_per_sec, tstr.c_str());
             }
