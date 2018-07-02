@@ -153,31 +153,35 @@ void finder(size_t id, int step, const std::vector<uint8_t>& base, const char* p
         local_ctr++;
         if (local_ctr == 100000) {
             local_ctr = 0;
-            size_t c = 100000 * (++store->counter);
-            if (c % 1000000000 == 0) {
-                auto now = time_ms();
-                double elapsed_secs = std::chrono::duration<double>(now - store->start_time).count();
-                double addresses_per_sec = double(c) / elapsed_secs;
-                double exp_time = store->iprob / addresses_per_sec; // h / (h/s) = h * (s/h) = s
-                int seconds = exp_time;
-                std::string tstr = timestr(seconds);
-                printf("(%zu addresses in %s; %.3f addresses/second; statistical expected time: %s)                                    \n", c, timestr(elapsed_secs).c_str(), addresses_per_sec, tstr.c_str());
-            }
-            switch (c) {
-            // case 1000000UL:        printf("*** First million down, many more to go ... ... ... ***                                                                                                  \n"); break;
-            case 100000000UL:      printf("*** One hundred million. Woot. Should be done in no time...! ***                                                                                         \n"); break;
-            case 250000000UL:      printf("*** Quarter to a billion. You don't give up do you? ***                                                                                                  \n"); break;
-            case 500000000UL:      printf("*** Half a billion! Now we just have to wait ANOTHER %s to get to a billion.                                                                             \n", timestr(std::chrono::duration<double>(time_ms() - store->start_time).count()).c_str()); break;
-            case 1000000000UL:     printf("*** One billion! I deserve a raise. Are you gonna give up soon btw? ***                                                                                  \n"); break;
-            case 10000000000UL:    printf("*** This is getting a little bit ridiculous. 10 billion. How much is your vanity worth anyway? ***                                                       \n"); break;
-            case 100000000000UL:   printf("*** 100 billion. If this was one per second, you would have spent 3168 years at this point. ***                                                          \n"); break;
-            case 1000000000000UL:  printf("*** 1 trillion. T R I L L I O N. You've spent a trillion attempts to find a vanity address. You are like the god of self-loving vanity freaks. ***       \n"); break;
-            case 10000000000000UL: printf("*** 10 trillion. I don't think I need to say anything else here. You sure love yourself. ***                                                             \n"); break;
-            }
-            printf("%zu: %s\r", c, HexStr(u).c_str()); fflush(stdout);
-            if (c == store->cap) {
-                store->end = true;
-                return;
+            if (id > 0) {
+                ++store->counter;
+            } else {
+                size_t c = 100000 * (++store->counter);
+                if (c % 1000000000 == 0) {
+                    auto now = time_ms();
+                    double elapsed_secs = std::chrono::duration<double>(now - store->start_time).count();
+                    double addresses_per_sec = double(c) / elapsed_secs;
+                    double exp_time = store->iprob / addresses_per_sec; // h / (h/s) = h * (s/h) = s
+                    int seconds = exp_time;
+                    std::string tstr = timestr(seconds);
+                    printf("(%zu addresses in %s; %.3f addresses/second; statistical expected time: %s)                                    \n", c, timestr(elapsed_secs).c_str(), addresses_per_sec, tstr.c_str());
+                }
+                switch (c) {
+                // case 1000000UL:        printf("*** First million down, many more to go ... ... ... ***                                                                                                  \n"); break;
+                case 100000000UL:      printf("*** One hundred million. Woot. Should be done in no time...! ***                                                                                         \n"); break;
+                case 250000000UL:      printf("*** Quarter to a billion. You don't give up do you? ***                                                                                                  \n"); break;
+                case 500000000UL:      printf("*** Half a billion! Now we just have to wait ANOTHER %s to get to a billion.                                                                             \n", timestr(std::chrono::duration<double>(time_ms() - store->start_time).count()).c_str()); break;
+                case 1000000000UL:     printf("*** One billion! I deserve a raise. Are you gonna give up soon btw? ***                                                                                  \n"); break;
+                case 10000000000UL:    printf("*** This is getting a little bit ridiculous. 10 billion. How much is your vanity worth anyway? ***                                                       \n"); break;
+                case 100000000000UL:   printf("*** 100 billion. If this was one per second, you would have spent 3168 years at this point. ***                                                          \n"); break;
+                case 1000000000000UL:  printf("*** 1 trillion. T R I L L I O N. You've spent a trillion attempts to find a vanity address. You are like the god of self-loving vanity freaks. ***       \n"); break;
+                case 10000000000000UL: printf("*** 10 trillion. I don't think I need to say anything else here. You sure love yourself. ***                                                             \n"); break;
+                }
+                printf("%zu: %s\r", c, HexStr(u).c_str()); fflush(stdout);
+                if (c == store->cap) {
+                    store->end = true;
+                    return;
+                }
             }
         }
         Value v(u);
