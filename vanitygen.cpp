@@ -122,11 +122,16 @@ std::string timestr(unsigned long seconds) {
     minutes %= 60;
     unsigned long days = hours / 24;
     hours %= 24;
+    unsigned long qdays = days << 2;
+    unsigned long years = qdays / 1461;
+    qdays %= 1461;
+    days = qdays >> 2;
     std::string s = "";
-    if (days > 0) s += strprintf("%lu day%s", days, days == 1 ? "" : "s");
-    if (hours > 0) s += strprintf("%s%lu hour%s", days ? ", " : "", hours, hours == 1 ? "" : "s");
-    if (minutes > 0 && days == 0) s += strprintf("%s%lu min%s", hours ? ", " : "", minutes, minutes == 1 ? "" : "s");
-    if (seconds > 0 && days + hours == 0) s += strprintf("%s%lu second%s", minutes ? ", " : "", seconds, seconds == 1 ? "" : "s");
+    if (years > 0) s += strprintf("%lu year%s", years, years == 1 ? "" : "s");
+    if (days > 0) s += strprintf("%s%lu day%s", years ? ", " : "", days, days == 1 ? "" : "s");
+    if (years == 0 && hours > 0) s += strprintf("%s%lu hour%s", days ? ", " : "", hours, hours == 1 ? "" : "s");
+    if (minutes > 0 && years + days == 0) s += strprintf("%s%lu min%s", hours ? ", " : "", minutes, minutes == 1 ? "" : "s");
+    if (seconds > 0 && years + days + hours == 0) s += strprintf("%s%lu second%s", minutes ? ", " : "", seconds, seconds == 1 ? "" : "s");
     return s;
 }
 
