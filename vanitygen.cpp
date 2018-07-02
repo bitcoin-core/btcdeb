@@ -76,7 +76,10 @@ struct privkey_store {
                 x.resize(32);
                 if (fp) {
                     // we don't wait for random keys, we just make one ourselves
-                    fread(x.data(), 1, 32, fp);
+                    if (!fread(x.data(), 1, 32, fp)) {
+                        fprintf(stderr, "Failed to read random data; aborting\n");
+                        exit(1);
+                    }
                     return x;
                 }
             }
