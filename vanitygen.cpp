@@ -17,6 +17,51 @@
 
 #include <support/allocators/secure.h>
 
+struct probability {
+    size_t letters, bits;
+    probability(size_t letters_in, size_t bits_in) : letters(letters_in), bits(bits_in) {}
+    std::string one_in_string() const {
+        static const char* v = "kMGTPE";
+        size_t unit = (letters * bits) / 10;
+        if (unit < 1) return std::to_string(1ULL << (letters * bits));
+        if (unit > 6) unit = 6;
+        size_t remainder = (letters * bits) - unit * 10;
+        return std::to_string(1ULL << remainder) + v[unit-1];
+    }
+    std::string percentage() const {
+        std::string s = "0.";
+        double d = 100.0;
+        size_t div = 1 << bits;
+        for (size_t i = 0; i < letters; i++) d /= div;
+        assert(d < 1.0);
+        while (d < 1.0) {
+            s += "0";
+            d *= 10;
+        }
+        d *= 10;
+        s += std::to_string(int(d));
+        return s;
+    }
+    double expected_time(double combinations_per_sec) const {
+        // we want (1 << (letters * bits)) / combinations_per_sec
+        size_t shifts = letters * bits;
+        while (shifts > 60 && combinations_per_sec > 1024) {
+            shifts -= 10;
+            combinations_per_sec /= 1024;
+        }
+        while (shifts > 60 && combinations_per_sec > 2) {
+            shifts--;
+            combinations_per_sec /= 2;
+        }
+        if (shifts > 60) {
+            double v = 1.0;
+            for (size_t i = 0; i < shifts; i++) v *= 2;
+            return v / combinations_per_sec;
+        }
+        return double(1ULL << shifts) / combinations_per_sec;
+    }
+};
+
 typedef std::chrono::milliseconds milliseconds;
 
 inline milliseconds time_ms() {
@@ -41,14 +86,14 @@ struct privkey_store {
     std::vector<std::vector<uint8_t>> v;
     std::mutex mtx;
     size_t longest_match = 5;
-    uint64_t iprob;
+    probability& prob;
     size_t cap = 0;
     bool complete_match = false;
     bool end = false;
     FILE* fp = nullptr;
     std::atomic<size_t> counter;
 
-    privkey_store(uint64_t iprob_in) : iprob(iprob_in) {
+    privkey_store(probability& prob_in) : prob(prob_in) {
         fp = fopen("/dev/urandom", "rb");
         assert(fp && "/dev/urandom required");
         start_time = time_ms();
@@ -187,7 +232,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
                 auto now = time_ms();
                 double elapsed_secs = std::chrono::duration<double>(now - store->start_time).count();
                 double addresses_per_sec = double(c) / elapsed_secs;
-                double exp_time = store->iprob / addresses_per_sec; // h / (h/s) = h * (s/h) = s
+                double exp_time = store->prob.expected_time(addresses_per_sec);
                 uint64_t seconds = exp_time;
                 std::string tstr = timestr(seconds);
                 printf("(%zu addresses in %s; %.3f addresses/second; statistical expected time: %s)                                    \n", c, timestr(elapsed_secs).c_str(), addresses_per_sec, tstr.c_str());
@@ -244,20 +289,6 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
     }
 }
 
-std::string iprob_perc(uint64_t iprob) {
-    std::string s = "0.";
-    double d = 1.0 / iprob;
-    d *= 100;
-    assert(d < 1.0);
-    while (d < 1.0) {
-        s += "0";
-        d *= 10;
-    }
-    d *= 10;
-    s += std::to_string(int(d));
-    return s;
-}
-
 int main(int argc, char* const* argv)
 {
     cliargs ca;
@@ -290,12 +321,11 @@ int main(int argc, char* const* argv)
             return 1;
         }
     }
-    // assume 14 combinations for letter 2 and 32 for all others,
-    uint64_t iprob = 1;
-    for (size_t i = 1; i < len; i++) {
-        if (prefix[i] != '?') iprob *= 32;
-    }
-    printf("%zu letter prefix; 1/%llu probability (%s%%) of encountering\n", len, iprob, iprob_perc(iprob).c_str());
+    // assume 32 letter combinations for all except first one, but remove wildcards
+    size_t letters = len - 1;
+    for (size_t i = 1; i < len; i++) letters -= prefix[i] == '?';
+    probability prob(letters, 5);
+    printf("%zu letter prefix; 1/%s probability (%s%%) of encountering\n", len, prob.one_in_string().c_str(), prob.percentage().c_str());
 
     size_t processes = ca.m.count('j') ? atoi(ca.m['j'].c_str()) : 1;
     // bc1... is he bech32 encoding of the hash160 of the pubkey
@@ -307,7 +337,7 @@ int main(int argc, char* const* argv)
     // 5. check the prefix
     // since randomness is slow, we dedicate a thread to simply spewing out random 32 byte values
     // and use semaphores to pull them out
-    privkey_store* store = new privkey_store(iprob);
+    privkey_store* store = new privkey_store(prob);
     if (ca.m.count('x')) store->cap = (size_t)atoll(ca.m['x'].c_str());
     std::vector<std::thread> finders;
     // std::vector<uint8_t> base = store->pop();
