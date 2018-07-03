@@ -431,6 +431,7 @@ int main(int argc, char* const* argv)
     } else {
         kerl_set_history_file(".btcdeb_history");
         kerl_set_repeat_on_empty(true);
+        kerl_set_enable_sensitivity();
         kerl_set_comment_char('#');
         kerl_register("step", fn_step, "Execute one instruction and iterate in the script.");
         kerl_register("rewind", fn_rewind, "Go back in time one instruction.");
@@ -647,11 +648,11 @@ int _e_combine_pubkeys(Value&& pv) { pv.do_combine_pubkeys(); pv.println(); retu
 int _e_addr_to_spk(Value&& pv) { pv.do_addr_to_spk(); pv.println(); return 0; }
 int _e_spk_to_addr(Value&& pv) { pv.do_spk_to_addr(); pv.println(); return 0; }
 #ifdef ENABLE_DANGEROUS
-int _e_encode_wif(Value&& pv)    { pv.do_encode_wif(); pv.println(); return 0; }
-int _e_decode_wif(Value&& pv)    { pv.do_decode_wif(); pv.println(); return 0; }
-int _e_sign(Value&& pv)          { pv.do_sign(); pv.println(); return 0; }
-int _e_get_pubkey(Value&& pv)    { pv.do_get_pubkey(); pv.println(); return 0; }
-int _e_combine_privkeys(Value&& pv) { pv.do_combine_privkeys(); pv.println(); return 0; }
+int _e_encode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_encode_wif(); pv.println(); return 0; }
+int _e_decode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_decode_wif(); pv.println(); return 0; }
+int _e_sign(Value&& pv)          { kerl_set_sensitive(true); pv.do_sign(); pv.println(); return 0; }
+int _e_get_pubkey(Value&& pv)    { kerl_set_sensitive(true); pv.do_get_pubkey(); pv.println(); return 0; }
+int _e_combine_privkeys(Value&& pv) { kerl_set_sensitive(true); pv.do_combine_privkeys(); pv.println(); return 0; }
 #endif // ENABLE_DANGEROUS
 
 typedef int (*btcdeb_tfun) (Value&&);
