@@ -148,15 +148,8 @@ namespace bech32
 std::string Encode(const std::string& hrp, const data& values) {
     data checksum = CreateChecksum(hrp, values);
     data combined = Cat(values, checksum);
-#ifdef USE_ORIGINAL
-    std::string ret = hrp + '1';
-    ret.reserve(ret.size() + combined.size());
-    for (auto c : combined) {
-        ret += CHARSET[c];
-    }
-#else
     size_t hrp_size = hrp.size();
-    char ret[hrp_size + combined.size() + 2];
+    char ret[91];
     memcpy(ret, hrp.c_str(), hrp_size);
     char* ptr = ret + hrp_size;
     *(ptr++) = '1';
@@ -164,7 +157,6 @@ std::string Encode(const std::string& hrp, const data& values) {
         *(ptr++) = CHARSET[c];
     }
     *ptr = 0;
-#endif
     return ret;
 }
 
