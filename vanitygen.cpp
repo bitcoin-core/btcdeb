@@ -196,8 +196,8 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
     }
 
     size_t plen = strlen(prefix);
-    secp256k1_pubkey pubs[KP_CHUNK_SIZE];
-    unsigned char privs[32 * KP_CHUNK_SIZE];
+    secp256k1_pubkey* pubs = new secp256k1_pubkey[KP_CHUNK_SIZE];
+    unsigned char* privs = new unsigned char[32 * KP_CHUNK_SIZE];
     size_t iter = KP_CHUNK_SIZE;
     size_t local_ctr = 0;
     size_t next_eta = 1000000000;
@@ -206,6 +206,8 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
     for (;;) {
         if (store->complete_match || store->end) {
             secp256k1_context_destroy(ctx);
+            delete [] pubs;
+            delete [] privs;
             return;
         }
         if (iter == KP_CHUNK_SIZE) {
@@ -254,6 +256,8 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
             if (c == store->cap) {
                 store->end = true;
                 secp256k1_context_destroy(ctx);
+                delete [] pubs;
+                delete [] privs;
                 return;
             }
         }
@@ -271,20 +275,23 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
             // found a match
             store->new_match(&str[-3], &privs[iter<<5], plen, true);
             secp256k1_context_destroy(ctx);
+            delete [] pubs;
+            delete [] privs;
             return;
         }
         size_t mlen = strlen(prefix);
         size_t mlen2 = strlen(str);
         if (mlen > mlen2) mlen = mlen2;
-        for (size_t i = start; i < mlen; ++i) {
-            if (prefix[i] != '?' && str[i] != prefix[i]) {
-                if (i > store->longest_match || (i > 6 && i == store->longest_match)) {
-                    store->new_match(&str[-3], &privs[iter<<5], i, false);
-                }
-                break;
-            }
+        size_t matches = 0;
+        size_t potential = mlen;
+
+        for (size_t i = start; i < mlen && potential + matches >= store->longest_match; ++i) {
+            matches += prefix[i] == '?' || str[i] == prefix[i];
+            potential--;
         }
-        // inc(u, step);
+        if (matches > store->longest_match || (matches > 6 && matches == store->longest_match)) {
+            store->new_match(&str[-3], &privs[iter<<5], matches, false);
+        }
         iter++;
     }
 }
