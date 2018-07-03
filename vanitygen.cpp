@@ -19,7 +19,7 @@
 
 bool quiet = false;
 
-const char* bech32_chars = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+const char* bech32_chars = "acdefghjklmnpqrstuvwxyz023456789";
 size_t bech32_char_count = 32;
 
 #define KP_CHUNK_SIZE 1024
