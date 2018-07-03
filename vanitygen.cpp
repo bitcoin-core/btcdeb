@@ -100,8 +100,8 @@ struct privkey_store {
     }
 };
 
-bool prefixcmp(const char* prefix, const char* str, size_t plen) {
-    for (size_t i = 0; i < plen; ++i) if (prefix[i] != '?' && prefix[i] != str[i]) return false;
+inline bool prefixcmp(size_t start, const char* prefix, const char* str, size_t plen) {
+    for (size_t i = start; i < plen; ++i) if (prefix[i] != '?' && prefix[i] != str[i]) return false;
     return true;
 }
 
@@ -156,6 +156,8 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
     size_t iter = KP_CHUNK_SIZE;
     size_t local_ctr = 0;
     size_t next_eta = 1000000000;
+    size_t start = 0;
+    while (prefix[start] == '?') start++;
     for (;;) {
         if (store->complete_match || store->end) {
             secp256k1_context_destroy(ctx);
@@ -220,7 +222,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
         // first 3 letters are bc1; we do not test for this as it slows this down
         // assert(str[0] == 'b' && str[1] == 'c' && str[2] == '1');
         str = &str[3];
-        if (prefixcmp(prefix, str, plen)) {
+        if (prefixcmp(start, prefix, str, plen)) {
             // found a match
             store->new_match(&str[-3], &privs[iter<<5], plen, true);
             secp256k1_context_destroy(ctx);
@@ -229,7 +231,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
         size_t mlen = strlen(prefix);
         size_t mlen2 = strlen(str);
         if (mlen > mlen2) mlen = mlen2;
-        for (size_t i = 0; i < mlen; ++i) {
+        for (size_t i = start; i < mlen; ++i) {
             if (prefix[i] != '?' && str[i] != prefix[i]) {
                 if (i > store->longest_match || (i > 6 && i == store->longest_match)) {
                     store->new_match(&str[-3], &privs[iter<<5], i, false);
@@ -277,10 +279,11 @@ int main(int argc, char* const* argv)
         printf("all bech32 adresses must begin with a 'q'\n");
         return 1;
     }
-    if (prefix[1] != '?' && !in(prefix[1], "qmpzrx26skavyhf", 15)) {
-        printf("warning: unsure if '%c' ever occurs as second letter (I've seen qmpzrx26skavyhf)\n", prefix[1]);
-    }
     size_t len = strlen(prefix);
+    if (len > 33) {
+        printf("restricted to 33 characters, you are using %zu\n", len);
+        return 1;
+    }
     for (size_t i = 0; i < len; ++i) {
         if (prefix[i] != '?' && !in(prefix[i], bech32_chars, bech32_char_count)) {
             printf("the character '%c' is unavailable. bech32 allows these -> %s\n", prefix[i], bech32_chars);
@@ -288,8 +291,8 @@ int main(int argc, char* const* argv)
         }
     }
     // assume 14 combinations for letter 2 and 32 for all others,
-    uint64_t iprob = prefix[1] == '?' ? 1 : 14;
-    for (size_t i = 2; i < len; i++) {
+    uint64_t iprob = 1;
+    for (size_t i = 1; i < len; i++) {
         if (prefix[i] != '?') iprob *= 32;
     }
     printf("%zu letter prefix; 1/%llu probability (%s%%) of encountering\n", len, iprob, iprob_perc(iprob).c_str());
