@@ -64,4 +64,10 @@ int kerl_make_argcv(const char *argstring, size_t *argcOut, char ***argvOut);
 int kerl_make_argcv_escape(const char *argstring, size_t *argcOut, char ***argvOut, char escape);
 void kerl_free_argcv(size_t argc, char **argv);
 
+/* sensitivity is used to skip certain inputs as sensitive, such as
+   password data or similar. enabling sensitivity incurs a slight
+   performance loss due to extra copying of strings */
+void kerl_set_sensitive(int do_not_store_history);
+void kerl_set_enable_sensitivity();
+
 #endif // included_kerl_h_

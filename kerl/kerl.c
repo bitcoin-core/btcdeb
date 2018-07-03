@@ -45,6 +45,18 @@ COMMAND *commands = NULL;
 int execute_line(char *line);
 char *history_file = NULL;
 
+/* sensitivity */
+int skip_history = 0;
+int may_skip_history = 0;
+
+void kerl_set_sensitive(int do_not_store_history) {
+    skip_history = do_not_store_history;
+}
+
+void kerl_set_enable_sensitivity() {
+    may_skip_history = 1;
+}
+
 /* Forward declarations. */
 char *stripwhite ();
 COMMAND *find_command ();
@@ -112,7 +124,7 @@ char* readline(const char* prompt) {
 
 void kerl_run(const char *prompt)
 {
-  char *line, *pline = NULL, *s, *p = NULL;
+  char *line, *pline = NULL, *s, *p = NULL, *sensitive_s;
 
   initialize_readline (); /* Bind our completer. */
 
@@ -142,8 +154,18 @@ void kerl_run(const char *prompt)
         pline = strdup(line);
         p = stripwhite(pline);
       }
-      kerl_add_history(s);
-      execute_line(s);
+      if (may_skip_history) {
+          sensitive_s = strdup(s);
+          execute_line(s);
+          if (!skip_history) {
+              kerl_add_history(sensitive_s);
+          }
+          skip_history = 0;
+          free(sensitive_s);
+      } else {
+          kerl_add_history(s);
+          execute_line(s);
+      }
     } else if (repeat_empty) {
       if (p) {
           s = strdup(p);
