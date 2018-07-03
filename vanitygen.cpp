@@ -17,6 +17,14 @@
 
 #include <support/allocators/secure.h>
 
+bool quiet = false;
+
+const char* bech32_chars = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+size_t bech32_char_count = 32;
+
+#define KP_CHUNK_SIZE 1024
+#define SHOW_ALTS_AT  7     // start showing alternatives at this many matching letters
+
 struct probability {
     size_t letters, bits;
     probability(size_t letters_in, size_t bits_in) : letters(letters_in), bits(bits_in) {}
@@ -69,17 +77,10 @@ inline milliseconds time_ms() {
     return duration_cast<milliseconds>(system_clock::now().time_since_epoch());
 }
 
-bool quiet = false;
-
-const char* bech32_chars = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-size_t bech32_char_count = 32;
-
 inline bool in(char c, const char* v, size_t l) {
     for (size_t i = 0; i < l; ++i) if (v[i] == c) return true;
     return false;
 }
-
-#define KP_CHUNK_SIZE 1024
 
 struct privkey_store {
     milliseconds start_time;
@@ -101,7 +102,7 @@ struct privkey_store {
 
     inline void new_match(const char* str, const uint8_t* u, size_t longest, bool complete) {
         std::lock_guard<std::mutex> guard(mtx);
-        if (!(longest > longest_match || (longest > 6 && longest == longest_match))) return;
+        if (!(longest > longest_match || (longest > SHOW_ALTS_AT && longest == longest_match))) return;
         if (longest_match == longest) {
             printf("\n* alternative match: %s\n", str);
             printf("* privkey:           %s\n", HexStr(u, u + 32).c_str());
@@ -289,7 +290,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
             matches += prefix[i] == '?' || str[i] == prefix[i];
             potential--;
         }
-        if (matches > store->longest_match || (matches > 6 && matches == store->longest_match)) {
+        if (matches > store->longest_match || (matches > SHOW_ALTS_AT && matches == store->longest_match)) {
             store->new_match(&str[-3], &privs[iter<<5], matches, false);
         }
         iter++;
