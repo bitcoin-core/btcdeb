@@ -32,6 +32,76 @@ char** script_lines;
 Instance instance;
 InterpreterEnv* env;
 
+struct script_verify_flag {
+    std::string str;
+    uint32_t id;
+    script_verify_flag(std::string str_in, uint32_t id_in) : str(str_in), id(id_in) {}
+};
+
+static const std::vector<script_verify_flag> svf {
+    #define _(v) script_verify_flag(#v, SCRIPT_VERIFY_##v)
+    _(P2SH),
+    _(STRICTENC),
+    _(DERSIG),
+    _(LOW_S),
+    _(NULLDUMMY),
+    _(SIGPUSHONLY),
+    _(MINIMALDATA),
+    _(DISCOURAGE_UPGRADABLE_NOPS),
+    _(CLEANSTACK),
+    _(CHECKLOCKTIMEVERIFY),
+    _(CHECKSEQUENCEVERIFY),
+    _(WITNESS),
+    _(DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM),
+    _(MINIMALIF),
+    _(NULLFAIL),
+    _(WITNESS_PUBKEYTYPE),
+    _(CONST_SCRIPTCODE),
+    #undef _
+};
+
+static const std::string svf_string(uint32_t flags, std::string separator = " ") {
+    std::string s = "";
+    while (flags) {
+        for (const auto& i : svf) {
+            if (flags & i.id) {
+                flags ^= i.id;
+                s += separator + i.str;
+            }
+        }
+    }
+    return s.size() ? s.substr(separator.size()) : "(none)";
+}
+
+static const unsigned int svf_get_flag(std::string s) {
+    for (const auto& i : svf) if (i.str == s) return i.id;
+    return 0;
+}
+
+static unsigned int svf_parse_flags(unsigned int in_flags, const char* mod) {
+    char buf[128];
+    bool adding;
+    size_t j = 0;
+    for (size_t i = 0; mod[i-(i>0)]; i++) {
+        if (!mod[i] || mod[i] == ',') {
+            buf[j] = 0;
+            if (buf[0] != '+' && buf[0] != '-') {
+                fprintf(stderr, "svf_parse_flags(): expected + or - near %s\n", buf);
+                exit(1);
+            }
+            adding = buf[0] == '+';
+            unsigned int f = svf_get_flag(&buf[1]);
+            if (!f) {
+                fprintf(stderr, "svf_parse_flags(): unknown verification flag: %s\n", &buf[1]);
+                exit(1);
+            }
+            if (adding) in_flags |= f; else in_flags &= ~f;
+            j = 0;
+        } else buf[j++] = mod[i];
+    }
+    return in_flags;
+}
+
 void print_dualstack();
 
 int main(int argc, char* const* argv)
@@ -44,17 +114,20 @@ int main(int argc, char* const* argv)
     ca.add_option("quiet", 'q', no_arg);
     ca.add_option("tx", 'x', req_arg);
     ca.add_option("txin", 'i', req_arg);
+    ca.add_option("modify-flags", 'f', req_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q');
 
     if (ca.m.count('h')) {
-        fprintf(stderr, "syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
+        fprintf(stderr, "syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
         fprintf(stderr, "if executed with no arguments, an empty script and empty stack is provided\n");
         fprintf(stderr, "to debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
             "as well as (SegWit only) every amount for the inputs\n");
         fprintf(stderr, "e.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
         fprintf(stderr, "you do not need the amounts for non-SegWit transactions\n");
         fprintf(stderr, "by providing a txin as well as a tx and no script or stack, btcdeb will attempt to set up a debug session for the verification of the given input by pulling the appropriate values out of the respective transactions. you do not need amounts for --tx in this case\n");
+        fprintf(stderr, "you can modify verification flags using the --modify-flags command. separate flags using comma (,). prefix with + to enable, - to disable. e.g. --modify-flags=\"-NULLDUMMY,-MINIMALIF\"\n");
+        fprintf(stderr, "the standard (enabled by default) flags are:\n・ %s\n", svf_string(STANDARD_SCRIPT_VERIFY_FLAGS, "\n・ ").c_str());
         return 1;
     } else if (!quiet) {
         btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
@@ -64,6 +137,12 @@ int main(int argc, char* const* argv)
         if (std::getenv("DEBUG_SIGHASH")) btc_sighash_logf = btc_logf_stderr;
         if (std::getenv("DEBUG_SIGNING")) btc_sign_logf = btc_logf_stderr;
         if (std::getenv("DEBUG_SEGWIT"))  btc_segwit_logf = btc_logf_stderr;
+    }
+
+    unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
+    if (ca.m.count('f')) {
+        flags = svf_parse_flags(flags, ca.m['f'].c_str());
+        if (!quiet) fprintf(stderr, "resulting flags:\n・ %s\n", svf_string(flags, "\n・ ").c_str());
     }
 
     if (ca.l.size() > 0 && !strncmp(ca.l[0], "tx=", 3)) {
@@ -314,7 +393,7 @@ int main(int argc, char* const* argv)
         }
     }
 
-    if (!instance.setup_environment()) {
+    if (!instance.setup_environment(flags)) {
         fprintf(stderr, "failed to initialize script environment: %s\n", instance.error_string());
         return 1;
     }

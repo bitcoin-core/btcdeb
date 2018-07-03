@@ -102,14 +102,14 @@ void Instance::parse_stack_args(size_t argc, char* const* argv, size_t starting_
     }
 }
 
-bool Instance::setup_environment() {
+bool Instance::setup_environment(unsigned int flags) {
     if (tx) {
         checker = new TransactionSignatureChecker(tx.get(), 0, amounts[0]);
     } else {
         checker = new BaseSignatureChecker();
     }
     
-    env = new InterpreterEnv(stack, script, STANDARD_SCRIPT_VERIFY_FLAGS, *checker, sigver, &error);
+    env = new InterpreterEnv(stack, script, flags, *checker, sigver, &error);
 
     return env->operational;
 }

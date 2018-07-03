@@ -1033,8 +1033,10 @@ bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc)
             // to removing it from the stack.
             if (stack.size() < 1)
                 return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-            if ((flags & SCRIPT_VERIFY_NULLDUMMY) && stacktop(-1).size())
+            if ((flags & SCRIPT_VERIFY_NULLDUMMY) && stacktop(-1).size()) {
+                printf("\n* * * * * * *\n\nHint: with Segwit activation, the OP_CHECKMULTISIG extra argument must be set to the empty push value (0x). If you are experimenting with older scripts, you may run into a 'Dummy CHECKMULTISIG argument must be zero' error. To move past this, you need to modify the verification flags, disabling the NULLDUMMY flag specifically. I.e. call btcdeb again with -f\"-NULLDUMMY\"\n\n* * * * * * *\n\n");
                 return set_error(serror, SCRIPT_ERR_SIG_NULLDUMMY);
+            }
             popstack(stack);
 
             pushstack(stack, fSuccess ? vchTrue : vchFalse);
