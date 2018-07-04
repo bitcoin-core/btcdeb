@@ -12,13 +12,25 @@ BITCOIN_INCLUDES=-I$(builddir)
 BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
 
 LIBBITCOIN=libbitcoin.a
+LIBBITCOIN_CRYPTO_BASE=crypto/libbitcoin_crypto_base.a
 LIBKERL=libkerl.a
 LIBSECP256K1=secp256k1/libsecp256k1.la
+
+LIBBITCOIN_CRYPTO=$(LIBBITCOIN_CRYPTO_BASE)
+if ENABLE_SSE41
+LIBBITCOIN_CRYPTO_SSE41 = crypto/libbitcoin_crypto_sse41.a
+LIBBITCOIN_CRYPTO += $(LIBBITCOIN_CRYPTO_SSE41)
+endif
+if ENABLE_AVX2
+LIBBITCOIN_CRYPTO_AVX2 = crypto/libbitcoin_crypto_avx2.a
+LIBBITCOIN_CRYPTO += $(LIBBITCOIN_CRYPTO_AVX2)
+endif
 
 $(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
 
 EXTRA_LIBRARIES += \
+  $(LIBBITCOIN_CRYPTO) \
   $(LIBBITCOIN) \
   $(LIBKERL)
 
@@ -36,12 +48,6 @@ BITCOIN_CORE_H = \
 	compat.h \
 	compat/byteswap.h \
 	compat/endian.h \
-	crypto/common.h \
-	crypto/hmac_sha512.h \
-	crypto/ripemd160.h \
-	crypto/sha1.h \
-	crypto/sha256.h \
-	crypto/sha512.h \
 	debugger/interpreter.h \
 	debugger/script.h
 	hash.h \
@@ -65,6 +71,39 @@ BITCOIN_CORE_H = \
 	utilstrencodings.h \
 	value.h
 
+# crypto primitives library
+crypto_libbitcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libbitcoin_crypto_base_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+crypto_libbitcoin_crypto_base_a_SOURCES = \
+  crypto/common.h \
+  crypto/hmac_sha512.cpp \
+  crypto/hmac_sha512.h \
+  crypto/ripemd160.cpp \
+  crypto/ripemd160.h \
+  crypto/sha1.cpp \
+  crypto/sha1.h \
+  crypto/sha256.cpp \
+  crypto/sha256.h \
+  crypto/sha512.cpp \
+  crypto/sha512.h
+
+if USE_ASM
+crypto_libbitcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp
+endif
+
+crypto_libbitcoin_crypto_sse41_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+crypto_libbitcoin_crypto_sse41_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libbitcoin_crypto_sse41_a_CXXFLAGS += $(SSE41_CXXFLAGS)
+crypto_libbitcoin_crypto_sse41_a_CPPFLAGS += -DENABLE_SSE41
+crypto_libbitcoin_crypto_sse41_a_SOURCES = crypto/sha256_sse41.cpp
+
+crypto_libbitcoin_crypto_avx2_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+crypto_libbitcoin_crypto_avx2_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libbitcoin_crypto_avx2_a_CXXFLAGS += $(AVX2_CXXFLAGS)
+crypto_libbitcoin_crypto_avx2_a_CPPFLAGS += -DENABLE_AVX2
+crypto_libbitcoin_crypto_avx2_a_SOURCES = crypto/sha256_avx2.cpp
+
+
 # bitcoin: shared between all the tools
 libbitcoin_a_LIBADD = $(LIBSECP256K1)
 libbitcoin_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
@@ -75,11 +114,6 @@ libbitcoin_a_SOURCES = \
 	debugger/hash.cpp \
 	debugger/interpreter.cpp \
 	debugger/script.cpp \
-	crypto/hmac_sha512.cpp \
-	crypto/ripemd160.cpp \
-	crypto/sha1.cpp \
-	crypto/sha256.cpp \
-	crypto/sha512.cpp \
 	hash.cpp \
 	merkle.cpp \
 	primitives/transaction.cpp \
@@ -110,6 +144,7 @@ btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
+	$(LIBBITCOIN_CRYPTO) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
 	$(LIBKERL)
@@ -121,6 +156,7 @@ btcc_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 btcc_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 btcc_LDADD = \
+	$(LIBBITCOIN_CRYPTO) \
 	$(LIBBITCOIN)
 
 # vanitygen binary #
@@ -132,6 +168,7 @@ vanitygen_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 vanitygen_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 vanitygen_LDADD = \
+	$(LIBBITCOIN_CRYPTO) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1)
 
@@ -148,6 +185,7 @@ test_btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 test_btcdeb_LDADD = \
+	$(LIBBITCOIN_CRYPTO) \
 	$(LIBBITCOIN) \
 	$(LIBKERL) \
 	$(LIBSECP256K1)

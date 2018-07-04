@@ -369,6 +369,8 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
 
 int main(int argc, char* const* argv)
 {
+    printf("SHA256 = %s\n", SHA256AutoDetect().c_str());
+
     cliargs ca;
     ca.add_option("help", 'h', no_arg);
     ca.add_option("quiet", 'q', no_arg);
