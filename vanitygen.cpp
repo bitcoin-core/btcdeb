@@ -231,6 +231,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
     size_t start = 0;
     while (prefix[start] == '?') start++;
     uint8_t P[256];
+    size_t longest_known_match = store->longest_match;
     for (;;) {
         if (store->complete_match || store->end) {
             secp256k1_context_destroy(ctx);
@@ -317,12 +318,15 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
         size_t matches = 0;
         size_t potential = mlen;
 
-        for (size_t i = start; i < mlen && potential + matches >= store->longest_match; ++i) {
+        for (size_t i = start; i < mlen && potential + matches >= longest_known_match; ++i) {
             matches += prefix[i] == '?' || str[i] == prefix[i];
             potential--;
         }
-        if (matches > store->longest_match || (matches > SHOW_ALTS_AT && matches == store->longest_match)) {
-            store->new_match(&str[-3], &privs[iter<<5], matches, false);
+        if (matches > longest_known_match || (matches > SHOW_ALTS_AT && matches == longest_known_match)) {
+            longest_known_match = store->longest_match;
+            if (matches > longest_known_match || (matches > SHOW_ALTS_AT && matches == longest_known_match)) {
+                store->new_match(&str[-3], &privs[iter<<5], matches, false);
+            }
         }
         iter++;
     }
