@@ -5,13 +5,10 @@
 #include <bech32.h>
 #include <cstring>
 
-namespace
+namespace bech32
 {
 
-struct data {
-    uint8_t* d;
-    size_t len;
-};
+HRPX bc("bc");
 
 inline void data_alloc(uint8_t** P, size_t len, data& d) {
     d.d = *P;
@@ -33,6 +30,28 @@ inline void data_copy_cat_pad(uint8_t** P, const data& a, const data& b, size_t 
 
 inline data data_from_vector(std::vector<uint8_t>& vec) {
     return data{vec.data(), vec.size()};
+}
+
+/** Expand a HRP for use in checksum computation. */
+data ExpandHRP(uint8_t** P, const std::string& hrp)
+{
+    data ret;
+    data_alloc(P, hrp.size() * 2 + 1, ret);
+    // ret.reserve(hrp.size() + 90);
+    // ret.resize(hrp.size() * 2 + 1);
+    for (size_t i = 0; i < hrp.size(); ++i) {
+        unsigned char c = hrp[i];
+        ret.d[i] = c >> 5;
+        ret.d[i + hrp.size() + 1] = c & 0x1f;
+    }
+    ret.d[hrp.size()] = 0;
+    return ret;
+}
+
+HRPX::HRPX(const std::string& hrp_in) {
+    hrp = hrp_in;
+    uint8_t* dd = (uint8_t*) malloc(hrp.size() * 2 + 1);
+    hrpx = ExpandHRP(&dd, hrp);
 }
 
 /** The Bech32 character set for encoding. */
@@ -128,22 +147,6 @@ inline unsigned char LowerCase(unsigned char c)
     return (c >= 'A' && c <= 'Z') ? (c - 'A') + 'a' : c;
 }
 
-/** Expand a HRP for use in checksum computation. */
-data ExpandHRP(uint8_t** P, const std::string& hrp)
-{
-    data ret;
-    data_alloc(P, hrp.size() * 2 + 1, ret);
-    // ret.reserve(hrp.size() + 90);
-    // ret.resize(hrp.size() * 2 + 1);
-    for (size_t i = 0; i < hrp.size(); ++i) {
-        unsigned char c = hrp[i];
-        ret.d[i] = c >> 5;
-        ret.d[i + hrp.size() + 1] = c & 0x1f;
-    }
-    ret.d[hrp.size()] = 0;
-    return ret;
-}
-
 /** Verify a checksum. */
 bool VerifyChecksum(uint8_t** P, const std::string& hrp, const data& values)
 {
@@ -155,10 +158,10 @@ bool VerifyChecksum(uint8_t** P, const std::string& hrp, const data& values)
 }
 
 /** Create a checksum. */
-data CreateChecksum(uint8_t** P, const std::string& hrp, const data& values)
+data CreateChecksum(uint8_t** P, const HRPX& hx, const data& values)
 {
     data enc; // = Cat(P, ExpandHRP(P, hrp), values);
-    data_copy_cat_pad(P, ExpandHRP(P, hrp), values, 6, enc);
+    data_copy_cat_pad(P, hx.hrpx, values, 6, enc);
     // enc.resize(enc.size() + 6); // Append 6 zeroes
     uint32_t mod = PolyMod(enc) ^ 1; // Determine what to XOR into those 6 zeroes.
     data ret;
@@ -170,19 +173,14 @@ data CreateChecksum(uint8_t** P, const std::string& hrp, const data& values)
     return ret;
 }
 
-} // namespace
-
-namespace bech32
-{
-
 /** Encode a Bech32 string. */
-std::string Encode(uint8_t** P, const std::string& hrp, const std::vector<uint8_t>& values) {
+std::string Encode(uint8_t** P, const HRPX& hx, const std::vector<uint8_t>& values) {
     data dvalues = data_from_vector(*const_cast<std::vector<uint8_t>*>(&values));
-    data checksum = CreateChecksum(P, hrp, dvalues);
+    data checksum = CreateChecksum(P, hx, dvalues);
     data combined = Cat(P, dvalues, checksum);
-    size_t hrp_size = hrp.size();
+    size_t hrp_size = hx.hrp.size();
     char ret[91];
-    memcpy(ret, hrp.c_str(), hrp_size);
+    memcpy(ret, hx.hrp.c_str(), hrp_size);
     char* ptr = ret + hrp_size;
     *(ptr++) = '1';
     for (size_t i = 0; i < combined.len; ++i) {
