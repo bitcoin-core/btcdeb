@@ -252,7 +252,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
             case 10000000000000UL: printf("*** 10 trillion. I don't think I need to say anything else here. You sure love yourself. ***                                                             \n"); break;
             }
             if (id == 0) {
-                printf("%zu: %s\r", c, HexStr(&privs[iter<<5], &privs[(iter+1)<<5]).c_str()); fflush(stdout);
+                printf(" %zu: %s\r", c, HexStr(&privs[iter<<5], &privs[(iter+1)<<5]).c_str()); fflush(stdout);
             }
             if (c == store->cap) {
                 store->end = true;
