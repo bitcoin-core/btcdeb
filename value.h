@@ -405,6 +405,13 @@ struct Value {
         str = bech32::Encode("bc", tmp);
         type = T_STRING;
     }
+    void do_bech32enc(uint8_t** P) {
+        std::vector<unsigned char> tmp = {0};
+        tmp.reserve(1 + data.size() * 8 / 5);
+        ConvertBits<8, 5, true>(tmp, data.begin(), data.end());
+        str = bech32::Encode(P, "bc", tmp);
+        type = T_STRING;
+    }
     void do_bech32dec() {
         if (type != T_STRING) {
             fprintf(stderr, "cannot bech32-decode non-string value\n");

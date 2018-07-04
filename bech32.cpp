@@ -8,7 +8,32 @@
 namespace
 {
 
-typedef std::vector<uint8_t> data;
+struct data {
+    uint8_t* d;
+    size_t len;
+};
+
+inline void data_alloc(uint8_t** P, size_t len, data& d) {
+    d.d = *P;
+    d.len = len;
+    *P += len;
+}
+
+inline void data_copy_cat(uint8_t** P, const data& a, const data& b, data& d) {
+    data_alloc(P, a.len + b.len, d);
+    memcpy(d.d, a.d, a.len);
+    memcpy(&d.d[a.len], b.d, b.len);
+}
+
+inline void data_copy_cat_pad(uint8_t** P, const data& a, const data& b, size_t pad, data& d) {
+    data_alloc(P, a.len + b.len + pad, d);
+    memcpy(d.d, a.d, a.len);
+    memcpy(&d.d[a.len], b.d, b.len);
+}
+
+inline data data_from_vector(std::vector<uint8_t>& vec) {
+    return data{vec.data(), vec.size()};
+}
 
 /** The Bech32 character set for encoding. */
 const char* CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
@@ -26,16 +51,18 @@ const int8_t CHARSET_REV[128] = {
 };
 
 /** Concatenate two byte arrays. */
-data Cat(data x, const data& y)
+inline data Cat(uint8_t** P, const data& x, const data& y)
 {
-    x.insert(x.end(), y.begin(), y.end());
-    return x;
+    data z;
+    data_copy_cat(P, x, y, z);
+    // x.insert(x.end(), y.begin(), y.end());
+    return z;
 }
 
 /** This function will compute what 6 5-bit values to XOR into the last 6 input values, in order to
  *  make the checksum 0. These 6 values are packed together in a single 30-bit integer. The higher
  *  bits correspond to earlier values. */
-uint32_t PolyMod(const data& v)
+inline uint32_t PolyMod(const data& v)
 {
     // The input is interpreted as a list of coefficients of a polynomial over F = GF(32), with an
     // implicit 1 in front. If the input is [v0,v1,v2,v3,v4], that polynomial is v(x) =
@@ -63,7 +90,8 @@ uint32_t PolyMod(const data& v)
     // v, it corresponds to x^2 + v0*x + v1 mod g(x). As 1 mod g(x) = 1, that is the starting value
     // for `c`.
     uint32_t c = 1;
-    for (auto v_i : v) {
+    for (size_t i = 0; i < v.len; ++i) {
+        auto v_i = v.d[i];
         // We want to update `c` to correspond to a polynomial with one extra term. If the initial
         // value of `c` consists of the coefficients of c(x) = f(x) mod g(x), we modify it to
         // correspond to c'(x) = (f(x) * x + v_i) mod g(x), where v_i is the next input to
@@ -101,40 +129,43 @@ inline unsigned char LowerCase(unsigned char c)
 }
 
 /** Expand a HRP for use in checksum computation. */
-data ExpandHRP(const std::string& hrp)
+data ExpandHRP(uint8_t** P, const std::string& hrp)
 {
     data ret;
-    ret.reserve(hrp.size() + 90);
-    ret.resize(hrp.size() * 2 + 1);
+    data_alloc(P, hrp.size() * 2 + 1, ret);
+    // ret.reserve(hrp.size() + 90);
+    // ret.resize(hrp.size() * 2 + 1);
     for (size_t i = 0; i < hrp.size(); ++i) {
         unsigned char c = hrp[i];
-        ret[i] = c >> 5;
-        ret[i + hrp.size() + 1] = c & 0x1f;
+        ret.d[i] = c >> 5;
+        ret.d[i + hrp.size() + 1] = c & 0x1f;
     }
-    ret[hrp.size()] = 0;
+    ret.d[hrp.size()] = 0;
     return ret;
 }
 
 /** Verify a checksum. */
-bool VerifyChecksum(const std::string& hrp, const data& values)
+bool VerifyChecksum(uint8_t** P, const std::string& hrp, const data& values)
 {
     // PolyMod computes what value to xor into the final values to make the checksum 0. However,
     // if we required that the checksum was 0, it would be the case that appending a 0 to a valid
     // list of values would result in a new valid list. For that reason, Bech32 requires the
     // resulting checksum to be 1 instead.
-    return PolyMod(Cat(ExpandHRP(hrp), values)) == 1;
+    return PolyMod(Cat(P, ExpandHRP(P, hrp), values)) == 1;
 }
 
 /** Create a checksum. */
-data CreateChecksum(const std::string& hrp, const data& values)
+data CreateChecksum(uint8_t** P, const std::string& hrp, const data& values)
 {
-    data enc = Cat(ExpandHRP(hrp), values);
-    enc.resize(enc.size() + 6); // Append 6 zeroes
+    data enc; // = Cat(P, ExpandHRP(P, hrp), values);
+    data_copy_cat_pad(P, ExpandHRP(P, hrp), values, 6, enc);
+    // enc.resize(enc.size() + 6); // Append 6 zeroes
     uint32_t mod = PolyMod(enc) ^ 1; // Determine what to XOR into those 6 zeroes.
-    data ret(6);
+    data ret;
+    data_alloc(P, 6, ret);
     for (size_t i = 0; i < 6; ++i) {
         // Convert the 5-bit groups in mod to checksum values.
-        ret[i] = (mod >> (5 * (5 - i))) & 31;
+        ret.d[i] = (mod >> (5 * (5 - i))) & 31;
     }
     return ret;
 }
@@ -145,22 +176,23 @@ namespace bech32
 {
 
 /** Encode a Bech32 string. */
-std::string Encode(const std::string& hrp, const data& values) {
-    data checksum = CreateChecksum(hrp, values);
-    data combined = Cat(values, checksum);
+std::string Encode(uint8_t** P, const std::string& hrp, const std::vector<uint8_t>& values) {
+    data dvalues = data_from_vector(*const_cast<std::vector<uint8_t>*>(&values));
+    data checksum = CreateChecksum(P, hrp, dvalues);
+    data combined = Cat(P, dvalues, checksum);
     size_t hrp_size = hrp.size();
     char ret[91];
     memcpy(ret, hrp.c_str(), hrp_size);
     char* ptr = ret + hrp_size;
     *(ptr++) = '1';
-    for (auto c : combined) {
-        *(ptr++) = CHARSET[c];
+    for (size_t i = 0; i < combined.len; ++i) {
+        *(ptr++) = CHARSET[combined.d[i]];
     }
     return std::string(ret, ptr);
 }
 
 /** Decode a Bech32 string. */
-std::pair<std::string, data> Decode(const std::string& str) {
+std::pair<std::string, std::vector<uint8_t>> Decode(uint8_t** P, const std::string& str) {
     bool lower = false, upper = false;
     for (size_t i = 0; i < str.size(); ++i) {
         unsigned char c = str[i];
@@ -173,23 +205,25 @@ std::pair<std::string, data> Decode(const std::string& str) {
     if (str.size() > 90 || pos == str.npos || pos == 0 || pos + 7 > str.size()) {
         return {};
     }
-    data values(str.size() - 1 - pos);
+    data values;
+    data_alloc(P, str.size() - 1 - pos, values);
     for (size_t i = 0; i < str.size() - 1 - pos; ++i) {
         unsigned char c = str[i + pos + 1];
         int8_t rev = (c < 33 || c > 126) ? -1 : CHARSET_REV[c];
         if (rev == -1) {
             return {};
         }
-        values[i] = rev;
+        values.d[i] = rev;
     }
     std::string hrp;
     for (size_t i = 0; i < pos; ++i) {
         hrp += LowerCase(str[i]);
     }
-    if (!VerifyChecksum(hrp, values)) {
+    if (!VerifyChecksum(P, hrp, values)) {
         return {};
     }
-    return {hrp, data(values.begin(), values.end() - 6)};
+    std::vector<uint8_t> rv(values.d, &values.d[values.len - 6]);
+    return {hrp, rv};
 }
 
 } // namespace bech32

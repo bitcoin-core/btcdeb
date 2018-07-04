@@ -230,6 +230,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
     size_t next_eta = 1000000000;
     size_t start = 0;
     while (prefix[start] == '?') start++;
+    uint8_t P[256];
     for (;;) {
         if (store->complete_match || store->end) {
             secp256k1_context_destroy(ctx);
@@ -296,7 +297,8 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
         // Value v(u);
         // v.do_get_pubkey();
         v.do_hash160();
-        v.do_bech32enc();
+        uint8_t* pc = P;
+        v.do_bech32enc(&pc);
         const char* str = v.str_value().c_str();
         // first 3 letters are bc1; we do not test for this as it slows this down
         // assert(str[0] == 'b' && str[1] == 'c' && str[2] == '1');
