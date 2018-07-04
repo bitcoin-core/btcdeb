@@ -207,6 +207,26 @@ std::string timestr(unsigned long seconds) {
     return s;
 }
 
+std::string shorttimestr(unsigned long seconds) {
+    unsigned long minutes = seconds / 60;
+    seconds %= 60;
+    unsigned long hours = minutes / 60;
+    minutes %= 60;
+    unsigned long days = hours / 24;
+    hours %= 24;
+    unsigned long qdays = days << 2;
+    unsigned long years = qdays / 1461;
+    qdays %= 1461;
+    days = qdays >> 2;
+    std::string s = "";
+    if (years > 0) s += strprintf(" %luY", years);
+    if (years + days > 0) s += strprintf(" %luD", days);
+    s += strprintf(" %02lu:%02lu.%02lu", hours, minutes, seconds);
+    return s.substr(1);
+}
+
+#define xprintf(args...) printf("%s ", shorttimestr(std::chrono::duration<double>(time_ms() - store->start_time).count()).c_str()); printf(args)
+
 static const char* spaces = "                                                                    ";
 
 void finder(size_t id, int step, const char* prefix, privkey_store* store) {
@@ -270,17 +290,17 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
             }
             switch (c) {
             // case 1000000UL:        printf("*** First million down, many more to go ... ... ... ***                                                                                                  \n"); break;
-            case 100000000UL:      printf("*** One hundred million. Woot. Should be done in no time...! ***                                                                                         \n"); break;
-            case 250000000UL:      printf("*** Quarter to a billion. You don't give up do you? ***                                                                                                  \n"); break;
-            case 500000000UL:      printf("*** Half a billion! Now we just have to wait ANOTHER %s to get to a billion.                                                                             \n", timestr(std::chrono::duration<double>(time_ms() - store->start_time).count()).c_str()); break;
-            case 1000000000UL:     printf("*** One billion! I deserve a raise. Are you gonna give up soon btw? ***                                                                                  \n"); break;
-            case 10000000000UL:    printf("*** This is getting a little bit ridiculous. 10 billion. How much is your vanity worth anyway? ***                                                       \n"); break;
-            case 100000000000UL:   printf("*** 100 billion. If this was one per second, you would have spent 3168 years at this point. ***                                                          \n"); break;
-            case 250000000000UL:   printf("*** Quarter to a trillion. This seems hopeless... ***    ***                                                                                                  \n"); break;
-            case 500000000000UL:   printf("*** We haven't found your magic phrase, but we HAVE shuffled through half a trillion bech32 addresses. There is that, right? Right? ***                                                       \n"); break;
-            case 750000000000UL:   printf("*** Fun fact: did you know that, despite the fact we have now processed three quarters of a trillion bech32 addresses, the probability that the next address we look at is 'the one' is exactly the same as the probability that the first address we checked out was 'the one'. In other words, we have made absolutely no progress whatsoever. The estimated time to find your magic phrase is still the same as it was the first second when we started processing. Neat, huh? ***\n"); break;
-            case 1000000000000UL:  printf("*** 1 trillion. T R I L L I O N. You've spent a trillion attempts to find a vanity address. You are like the god of self-loving vanity freaks. ***       \n"); break;
-            case 10000000000000UL: printf("*** 10 trillion. I don't think I need to say anything else here. You sure love yourself. ***                                                             \n"); break;
+            case 100000000UL:      xprintf("*** One hundred million. Woot. Should be done in no time...! ***                                                                                         \n"); break;
+            case 250000000UL:      xprintf("*** Quarter to a billion. You don't give up do you? ***                                                                                                  \n"); break;
+            case 500000000UL:      xprintf("*** Half a billion! Now we just have to wait ANOTHER %s to get to a billion.                                                                             \n", timestr(std::chrono::duration<double>(time_ms() - store->start_time).count()).c_str()); break;
+            case 1000000000UL:     xprintf("*** One billion! I deserve a raise. Are you gonna give up soon btw? ***                                                                                  \n"); break;
+            case 10000000000UL:    xprintf("*** This is getting a little bit ridiculous. 10 billion. How much is your vanity worth anyway? ***                                                       \n"); break;
+            case 100000000000UL:   xprintf("*** 100 billion. If this was one per second, you would have spent 3168 years at this point. ***                                                          \n"); break;
+            case 250000000000UL:   xprintf("*** Quarter to a trillion. This seems hopeless... ***    ***                                                                                                  \n"); break;
+            case 500000000000UL:   xprintf("*** We haven't found your magic phrase, but we HAVE shuffled through half a trillion bech32 addresses. There is that, right? Right? ***                                                       \n"); break;
+            case 750000000000UL:   xprintf("*** Fun fact: did you know that, despite the fact we have now processed three quarters of a trillion bech32 addresses, the probability that the next address we look at is 'the one' is exactly the same as the probability that the first address we checked out was 'the one'. In other words, we have made absolutely no progress whatsoever. The estimated time to find your magic phrase is still the same as it was the first second when we started processing. Neat, huh? ***\n"); break;
+            case 1000000000000UL:  xprintf("*** 1 trillion. T R I L L I O N. You've spent a trillion attempts to find a vanity address. You are like the god of self-loving vanity freaks. ***       \n"); break;
+            case 10000000000000UL: xprintf("*** 10 trillion. I don't think I need to say anything else here. You sure love yourself. ***                                                             \n"); break;
             }
             if (id == 0) {
                 printf(" %zu: %s\r", c, HexStr(&privs[iter<<5], &privs[(iter+1)<<5]).c_str()); fflush(stdout);
@@ -299,14 +319,21 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
         // v.do_get_pubkey();
         v.do_hash160();
         uint8_t* pc = P;
-        v.do_bech32enc(&pc);
+        v.do_bech32enc(&pc, true);
         const char* str = v.str_value().c_str();
         // first 3 letters are bc1; we do not test for this as it slows this down
         // assert(str[0] == 'b' && str[1] == 'c' && str[2] == '1');
         str = &str[3];
         if (prefixcmp(start, prefix, str, plen)) {
-            // found a match
-            store->new_match(&str[-3], &privs[iter<<5], plen, true);
+            // found a match; recreate with checksum component
+            v = Value::from_secp256k1_pubkey(&pubs[iter]);
+            // Value v(u);
+            // v.do_get_pubkey();
+            v.do_hash160();
+            uint8_t* pc = P;
+            v.do_bech32enc(&pc);
+            const char* str = v.str_value().c_str();
+            store->new_match(str, &privs[iter<<5], plen, true);
             secp256k1_context_destroy(ctx);
             delete [] pubs;
             delete [] privs;
@@ -325,7 +352,15 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
         if (matches > longest_known_match || (matches > SHOW_ALTS_AT && matches == longest_known_match)) {
             longest_known_match = store->longest_match;
             if (matches > longest_known_match || (matches > SHOW_ALTS_AT && matches == longest_known_match)) {
-                store->new_match(&str[-3], &privs[iter<<5], matches, false);
+                // found a longest match; recreate with checksum component
+                v = Value::from_secp256k1_pubkey(&pubs[iter]);
+                // Value v(u);
+                // v.do_get_pubkey();
+                v.do_hash160();
+                uint8_t* pc = P;
+                v.do_bech32enc(&pc);
+                const char* str = v.str_value().c_str();
+                store->new_match(str, &privs[iter<<5], matches, false);
             }
         }
         iter++;

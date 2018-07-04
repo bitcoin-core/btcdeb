@@ -405,11 +405,11 @@ struct Value {
         str = bech32::Encode("bc", tmp);
         type = T_STRING;
     }
-    void do_bech32enc(uint8_t** P) {
+    void do_bech32enc(uint8_t** P, bool skip_checksum = false) {
         std::vector<unsigned char> tmp = {0};
         tmp.reserve(1 + data.size() * 8 / 5);
         ConvertBits<8, 5, true>(tmp, data.begin(), data.end());
-        str = bech32::Encode(P, bech32::bc, tmp);
+        str = bech32::Encode(P, bech32::bc, tmp, skip_checksum);
         type = T_STRING;
     }
     void do_bech32dec() {

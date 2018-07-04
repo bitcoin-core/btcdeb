@@ -174,10 +174,15 @@ data CreateChecksum(uint8_t** P, const HRPX& hx, const data& values)
 }
 
 /** Encode a Bech32 string. */
-std::string Encode(uint8_t** P, const HRPX& hx, const std::vector<uint8_t>& values) {
+std::string Encode(uint8_t** P, const HRPX& hx, const std::vector<uint8_t>& values, bool skip_checksum) {
     data dvalues = data_from_vector(*const_cast<std::vector<uint8_t>*>(&values));
-    data checksum = CreateChecksum(P, hx, dvalues);
-    data combined = Cat(P, dvalues, checksum);
+    data checksum, combined;
+    if (!skip_checksum) {
+        checksum = CreateChecksum(P, hx, dvalues);
+        combined = Cat(P, dvalues, checksum);
+    } else {
+        combined = dvalues;
+    }
     size_t hrp_size = hx.hrp.size();
     char ret[91];
     memcpy(ret, hx.hrp.c_str(), hrp_size);

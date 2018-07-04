@@ -31,7 +31,7 @@ struct HRPX {
 extern HRPX bc;
 
 /** Encode a Bech32 string. Returns the empty string in case of failure. */
-std::string Encode(uint8_t** P, const HRPX& hrp, const std::vector<uint8_t>& values);
+std::string Encode(uint8_t** P, const HRPX& hrp, const std::vector<uint8_t>& values, bool skip_checksum = false);
 
 /** Decode a Bech32 string. Returns (hrp, data). Empty hrp means failure. */
 std::pair<std::string, std::vector<uint8_t>> Decode(uint8_t** P, const std::string& str);
