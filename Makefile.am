@@ -109,6 +109,7 @@ libbitcoin_a_LIBADD = $(LIBSECP256K1)
 libbitcoin_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_a_CXXFLAGS = $(AM_CXXFLAGS)
 libbitcoin_a_SOURCES = \
+	$(crypto_libbitcoin_crypto_base_a_SOURCES) \
 	base58.cpp \
 	bech32.cpp \
 	debugger/hash.cpp \
@@ -144,7 +145,6 @@ btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
-	$(LIBBITCOIN_CRYPTO) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
 	$(LIBKERL)
@@ -156,7 +156,6 @@ btcc_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 btcc_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 btcc_LDADD = \
-	$(LIBBITCOIN_CRYPTO) \
 	$(LIBBITCOIN)
 
 # vanitygen binary #
@@ -168,7 +167,6 @@ vanitygen_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 vanitygen_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 vanitygen_LDADD = \
-	$(LIBBITCOIN_CRYPTO) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1)
 
@@ -185,7 +183,6 @@ test_btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 test_btcdeb_LDADD = \
-	$(LIBBITCOIN_CRYPTO) \
 	$(LIBBITCOIN) \
 	$(LIBKERL) \
 	$(LIBSECP256K1)
