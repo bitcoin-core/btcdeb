@@ -156,8 +156,7 @@ std::string Encode(const std::string& hrp, const data& values) {
     for (auto c : combined) {
         *(ptr++) = CHARSET[c];
     }
-    *ptr = 0;
-    return ret;
+    return std::string(ret, ptr);
 }
 
 /** Decode a Bech32 string. */
