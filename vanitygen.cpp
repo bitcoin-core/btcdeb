@@ -86,7 +86,7 @@ struct privkey_store {
     milliseconds start_time;
     std::vector<std::vector<uint8_t>> v;
     std::mutex mtx;
-    size_t longest_match = 5;
+    size_t longest_match = 3;
     probability& prob;
     size_t cap = 0;
     bool complete_match = false;
