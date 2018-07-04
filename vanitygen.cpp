@@ -17,6 +17,8 @@
 
 #include <support/allocators/secure.h>
 
+#include <ansi-colors.h>
+
 bool quiet = false;
 
 const char* bech32_chars = "acdefghjklmnpqrstuvwxyz023456789";
@@ -82,7 +84,29 @@ inline bool in(char c, const char* v, size_t l) {
     return false;
 }
 
+void ansi_print_compare(const char* show, const char* compare, size_t offset) {
+    bool matching = false;
+    size_t i;
+    for (i = 0; show[i] && i < offset; ++i) putchar(show[i]);
+    std::string wrong = ansi::fg_red + ansi::bold;
+    std::string right = ansi::fg_green + ansi::bold;
+    printf("%s", wrong.c_str());
+    for (; show[i] && compare[i-offset]; ++i) {
+        if ((compare[i-offset] == '?' || show[i] == compare[i-offset]) && !matching) {
+            printf("%s", right.c_str());
+            matching = true;
+        } else if (compare[i-offset] != '?' && show[i] != compare[i-offset] && matching) {
+            printf("%s", wrong.c_str());
+            matching = false;
+        }
+        putchar(show[i]);
+    }
+    printf("%s", ansi::reset.c_str());
+    printf("%s", &show[i]);
+}
+
 struct privkey_store {
+    const char* prefix;
     milliseconds start_time;
     std::vector<std::vector<uint8_t>> v;
     std::mutex mtx;
@@ -104,14 +128,16 @@ struct privkey_store {
         std::lock_guard<std::mutex> guard(mtx);
         if (!(longest > longest_match || (longest > SHOW_ALTS_AT && longest == longest_match))) return;
         if (longest_match == longest) {
-            printf("\n* alternative match: %s\n", str);
-            printf("* privkey:           %s\n", HexStr(u, u + 32).c_str());
+            printf("\n* alternative match: ");
+            ansi_print_compare(str, prefix, 3);
+            printf("\n* privkey:           %s\n", HexStr(u, u + 32).c_str());
             return;
         }
         longest_match = longest;
         complete_match = complete;
-        printf("\n* new %s match: %s\n", complete ? "full" : "longest", str);
-        printf("* privkey:%s        %s\n", complete ? "" :     "   ", HexStr(u, u + 32).c_str());
+        printf("\n* new %s match: ", complete ? "full" : "longest");
+        ansi_print_compare(str, prefix, 3);
+        printf("\n* privkey:%s        %s\n", complete ? "" :     "   ", HexStr(u, u + 32).c_str());
     }
 
     // inline void add(const std::vector<uint8_t>& privkey) {
@@ -349,6 +375,7 @@ int main(int argc, char* const* argv)
     // since randomness is slow, we dedicate a thread to simply spewing out random 32 byte values
     // and use semaphores to pull them out
     privkey_store* store = new privkey_store(prob);
+    store->prefix = prefix;
     if (ca.m.count('x')) store->cap = (size_t)atoll(ca.m['x'].c_str());
     std::vector<std::thread> finders;
     // std::vector<uint8_t> base = store->pop();
