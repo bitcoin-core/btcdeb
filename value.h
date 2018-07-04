@@ -314,16 +314,16 @@ struct Value {
         }
     }
     void do_sha256() {
-        data_value();
-        type = T_DATA;
+        // data_value();
+        // type = T_DATA;
         CSHA256 s;
         s.Write(data.data(), data.size());
         data.resize(CSHA256::OUTPUT_SIZE);
         s.Finalize(data.data());
     }
     void do_ripemd160() {
-        data_value();
-        type = T_DATA;
+        // data_value();
+        // type = T_DATA;
         CRIPEMD160 s;
         s.Write(data.data(), data.size());
         data.resize(CRIPEMD160::OUTPUT_SIZE);
