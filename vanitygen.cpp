@@ -57,7 +57,7 @@ void decode_bech32_prefix(const char* prefix, std::vector<uint8_t>& result, uint
 }
 
 #define KP_CHUNK_SIZE 1024
-#define SHOW_ALTS_AT  7     // start showing alternatives at this many matching letters
+#define SHOW_ALTS_AT  4     // start showing alternatives at this many matching letters
 
 struct probability {
     size_t letters, bits;
@@ -137,6 +137,53 @@ void ansi_print_compare(const char* show, const char* compare, size_t offset) {
     printf("%s", &show[i]);
 }
 
+void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t len, uint8_t final_mask, size_t& matches, size_t& count) {
+    matches = count = 0;
+    bool matching = false;
+    size_t i;
+    std::string wrong = ansi::fg_red + ansi::bold;
+    std::string right = ansi::fg_green + ansi::bold;
+    printf("%s", wrong.c_str());
+    size_t fiveblocker = 0;
+    for (i = 0; i < len - 1; ++i) {
+        uint8_t a = show[i] ^ compare[i];
+        for (size_t j = 1; j < 256; j <<= 1) {
+            count++;
+            if (a & j) {
+                if (matching) printf("%s", wrong.c_str());
+                matching = false;
+            } else if (!matching) {
+                printf("%s", right.c_str());
+                matching = true;
+            }
+            putchar('1' - !(show[i] & j));
+            matches += matching != false;
+            fiveblocker++;
+            if (fiveblocker == 5) {
+                fiveblocker = 0;
+                printf("%s|%s", (ansi::fg_cyan + ansi::bold).c_str(), matching ? right.c_str() : wrong.c_str());
+            }
+        }
+        putchar(' ');
+    }
+    uint8_t a = show[len-1] ^ compare[len-1];
+    for (size_t j = 1; j < 256; j <<= 1) {
+        if (final_mask & j) {
+            count++;
+            if (a & j) {
+                if (matching) printf("%s", wrong.c_str());
+                matching = false;
+            } else if (!matching) {
+                printf("%s", right.c_str());
+                matching = true;
+            }
+            putchar('1' - !(show[i] & j));
+            matches += matching != false;
+        }
+    }
+    printf("%s", ansi::reset.c_str());
+}
+
 struct privkey_store {
     const char* prefix;
     milliseconds start_time;
@@ -158,7 +205,8 @@ struct privkey_store {
 
     inline void new_match(const char* str, const uint8_t* u, size_t longest, bool complete) {
         std::lock_guard<std::mutex> guard(mtx);
-        if (!(longest > longest_match || (longest > SHOW_ALTS_AT && longest == longest_match))) return;
+        if (longest < longest_match) return;
+        // if (!(longest > longest_match || (longest > SHOW_ALTS_AT && longest == longest_match))) return;
         if (longest_match == longest) {
             printf("\n* alternative match: ");
             ansi_print_compare(str, prefix, 4);
@@ -290,7 +338,7 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
             if (id == 0) {
                 printf(" %zu: %s\r", c, HexStr(&privs[iter<<5], &privs[(iter+1)<<5]).c_str()); fflush(stdout);
             }
-            if (c >= store->cap) {
+            if (store->cap && c >= store->cap) {
                 store->end = true;
                 secp256k1_context_destroy(ctx);
                 delete [] pubs;
@@ -327,6 +375,10 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
             v.do_bech32enc(&pc);
             const char* str = v.str_value().c_str();
             store->new_match(str, &privs[iter<<5], matches, false);
+            size_t matches, count;
+            printf("* bits:              ");
+            ansi_print_compare_bits(v.data.data(), coded.data(), clen, final_mask, matches, count);
+            printf(" [%zu/%zu]\n", matches, count);
         }
         iter++;
     }
@@ -377,9 +429,15 @@ int main(int argc, char* const* argv)
     privkey_store* store = new privkey_store(prob);
     store->prefix = prefix;
     if (ca.m.count('x')) store->cap = (size_t)atoll(ca.m['x'].c_str());
-    std::vector<std::thread> finders;
-    for (size_t i = 0; i < processes; i++) {
-        finders.emplace_back(finder, i, processes, prefix, coded_prefix, final_mask, store);
+    if (processes == 1) {
+        // run on main thread
+        finder(0, 1, prefix, coded_prefix, final_mask, store);
+    } else {
+        // spawn and join
+        std::vector<std::thread> finders;
+        for (size_t i = 0; i < processes; i++) {
+            finders.emplace_back(finder, i, processes, prefix, coded_prefix, final_mask, store);
+        }
+        for (std::thread& t : finders) t.join();
     }
-    for (std::thread& t : finders) t.join();
 }
