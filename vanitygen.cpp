@@ -137,8 +137,27 @@ void ansi_print_compare(const char* show, const char* compare, size_t offset) {
     printf("%s", &show[i]);
 }
 
-void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t len, uint8_t final_mask, size_t& matches, size_t& count) {
+void count_bits(const uint8_t* show, const uint8_t* compare, size_t len, uint8_t final_mask, size_t& matches, size_t& count) {
     matches = count = 0;
+    bool matching = false;
+    size_t i;
+    for (i = 0; i < len - 1; ++i) {
+        uint8_t a = show[i] ^ compare[i];
+        for (size_t j = 1; j < 256; j <<= 1) {
+            count++;
+            matches += !(a & j);
+        }
+    }
+    uint8_t a = show[len-1] ^ compare[len-1];
+    for (size_t j = 1; j < 256; j <<= 1) {
+        if (final_mask & j) {
+            count++;
+            matches += !(a & j);
+        }
+    }
+}
+
+void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t len, uint8_t final_mask) {
     bool matching = false;
     size_t i;
     std::string wrong = ansi::fg_red + ansi::bold;
@@ -148,7 +167,6 @@ void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t
     for (i = 0; i < len - 1; ++i) {
         uint8_t a = show[i] ^ compare[i];
         for (size_t j = 1; j < 256; j <<= 1) {
-            count++;
             if (a & j) {
                 if (matching) printf("%s", wrong.c_str());
                 matching = false;
@@ -157,7 +175,6 @@ void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t
                 matching = true;
             }
             putchar('1' - !(show[i] & j));
-            matches += matching != false;
             fiveblocker++;
             if (fiveblocker == 5) {
                 fiveblocker = 0;
@@ -169,7 +186,6 @@ void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t
     uint8_t a = show[len-1] ^ compare[len-1];
     for (size_t j = 1; j < 256; j <<= 1) {
         if (final_mask & j) {
-            count++;
             if (a & j) {
                 if (matching) printf("%s", wrong.c_str());
                 matching = false;
@@ -178,7 +194,6 @@ void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t
                 matching = true;
             }
             putchar('1' - !(show[i] & j));
-            matches += matching != false;
         }
     }
     printf("%s", ansi::reset.c_str());
@@ -190,6 +205,7 @@ struct privkey_store {
     std::vector<std::vector<uint8_t>> v;
     std::mutex mtx;
     size_t longest_match = 3;
+    size_t longest_match_bits = 24;
     probability& prob;
     size_t cap = 0;
     bool complete_match = false;
@@ -203,16 +219,17 @@ struct privkey_store {
         start_time = time_ms();
     }
 
-    inline void new_match(const char* str, const uint8_t* u, size_t longest, bool complete) {
+    inline void new_match(const char* str, const uint8_t* u, size_t longest, size_t longest_bits, bool complete) {
         std::lock_guard<std::mutex> guard(mtx);
         if (longest < longest_match) return;
         // if (!(longest > longest_match || (longest > SHOW_ALTS_AT && longest == longest_match))) return;
-        if (longest_match == longest) {
+        if (longest_match == longest && longest_bits <= longest_match_bits) {
             printf("\n* alternative match: ");
             ansi_print_compare(str, prefix, 4);
             printf("\n* privkey:           %s\n", HexStr(u, u + 32).c_str());
             return;
         }
+        if (longest_match_bits < longest_bits) longest_match_bits = longest_bits;
         longest_match = longest;
         complete_match = complete;
         printf("\n* new %s match: ", complete ? "full" : "longest");
@@ -362,7 +379,7 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
             uint8_t* pc = P;
             v.do_bech32enc(&pc);
             const char* str = v.str_value().c_str();
-            store->new_match(str, &privs[iter<<5], plen, true);
+            store->new_match(str, &privs[iter<<5], plen, 0, true);
             secp256k1_context_destroy(ctx);
             delete [] pubs;
             delete [] privs;
@@ -370,15 +387,18 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
         }
 
         if (matches > store->longest_match || (matches > SHOW_ALTS_AT && matches == store->longest_match)) {
-            // found a longest match
-            uint8_t* pc = P;
-            v.do_bech32enc(&pc);
-            const char* str = v.str_value().c_str();
-            store->new_match(str, &privs[iter<<5], matches, false);
-            size_t matches, count;
-            printf("* bits:              ");
-            ansi_print_compare_bits(v.data.data(), coded.data(), clen, final_mask, matches, count);
-            printf(" [%zu/%zu]\n", matches, count);
+            // found a potential longest match
+            size_t matched_bits, count;
+            count_bits(v.data.data(), coded.data(), clen, final_mask, matched_bits, count);
+            if (matched_bits >= store->longest_match_bits) {
+                uint8_t* pc = P;
+                v.do_bech32enc(&pc);
+                const char* str = v.str_value().c_str();
+                store->new_match(str, &privs[iter<<5], matches, matched_bits, false);
+                printf("* bits:              ");
+                ansi_print_compare_bits(v.data.data(), coded.data(), clen, final_mask);
+                printf(" [%zu/%zu]\n", matched_bits, count);
+            }
         }
         iter++;
     }
