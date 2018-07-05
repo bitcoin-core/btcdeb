@@ -21,8 +21,40 @@
 
 bool quiet = false;
 
-const char* bech32_chars = "acdefghjklmnpqrstuvwxyz023456789";
-size_t bech32_char_count = 32;
+/** The Bech32 character set for encoding. */
+const char* CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+/** The Bech32 character set for decoding. */
+const int8_t CHARSET_REV[128] = {
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    15, -1, 10, 17, 21, 20, 26, 30,  7,  5, -1, -1, -1, -1, -1, -1,
+    -1, 29, -1, 24, 13, 25,  9,  8, 23, -1, 18, 22, 31, 27, 19, -1,
+     1,  0,  3, 16, 11, 28, 12, 14,  6,  4,  2, -1, -1, -1, -1, -1,
+    -1, 29, -1, 24, 13, 25,  9,  8, 23, -1, 18, 22, 31, 27, 19, -1,
+     1,  0,  3, 16, 11, 28, 12, 14,  6,  4,  2, -1, -1, -1, -1, -1
+};
+
+void decode_bech32_prefix(const char* prefix, std::vector<uint8_t>& result, uint8_t& final_mask) {
+    size_t len = strlen(prefix);
+    int8_t fivebitvals[len];
+    for (size_t i = 0; prefix[i]; ++i) {
+        fivebitvals[i] = CHARSET_REV[prefix[i]];
+        if (fivebitvals[i] == -1) printf("CHARACTER %c IS %d IN CHARSET_REV !!!\n", prefix[i], CHARSET_REV[prefix[i]]);
+        assert(-1 < fivebitvals[i]);
+    }
+    if (!ConvertBits<5, 8, true>(result, fivebitvals, fivebitvals + len)) {
+        assert(!"failed ConvertBits call");
+    }
+    // 5 bit        3
+    // 10 bit       6
+    // 15           1
+    // 8 - (5 % 8) = 8 - 5 = 3
+    // 8 - (10 % 8) = 8 - 2 = 6
+    // 8 - (15 % 8) = 8 - 7 = 1
+    final_mask = 0xff << (8 - ((5 * len) & 0x07));
+}
 
 #define KP_CHUNK_SIZE 1024
 #define SHOW_ALTS_AT  7     // start showing alternatives at this many matching letters
@@ -129,14 +161,14 @@ struct privkey_store {
         if (!(longest > longest_match || (longest > SHOW_ALTS_AT && longest == longest_match))) return;
         if (longest_match == longest) {
             printf("\n* alternative match: ");
-            ansi_print_compare(str, prefix, 3);
+            ansi_print_compare(str, prefix, 4);
             printf("\n* privkey:           %s\n", HexStr(u, u + 32).c_str());
             return;
         }
         longest_match = longest;
         complete_match = complete;
         printf("\n* new %s match: ", complete ? "full" : "longest");
-        ansi_print_compare(str, prefix, 3);
+        ansi_print_compare(str, prefix, 4);
         printf("\n* privkey:%s        %s\n", complete ? "" :     "   ", HexStr(u, u + 32).c_str());
     }
 
@@ -229,7 +261,7 @@ std::string shorttimestr(unsigned long seconds) {
 
 static const char* spaces = "                                                                    ";
 
-void finder(size_t id, int step, const char* prefix, privkey_store* store) {
+void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded, uint8_t final_mask, privkey_store* store) {
     secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY|SECP256K1_CONTEXT_SIGN);
     assert(ctx != nullptr);
 
@@ -252,6 +284,7 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
     while (prefix[start] == '?') start++;
     uint8_t P[256];
     size_t longest_known_match = store->longest_match;
+    size_t clen = coded.size();
     for (;;) {
         if (store->complete_match || store->end) {
             secp256k1_context_destroy(ctx);
@@ -318,18 +351,24 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
         // Value v(u);
         // v.do_get_pubkey();
         v.do_hash160();
-        uint8_t* pc = P;
-        v.do_bech32enc(&pc, true);
-        const char* str = v.str_value().c_str();
-        // first 3 letters are bc1; we do not test for this as it slows this down
-        // assert(str[0] == 'b' && str[1] == 'c' && str[2] == '1');
-        str = &str[3];
-        if (prefixcmp(start, prefix, str, plen)) {
-            // found a match; recreate with checksum component
-            v = Value::from_secp256k1_pubkey(&pubs[iter]);
-            // Value v(u);
-            // v.do_get_pubkey();
-            v.do_hash160();
+        size_t matches = 0;
+        for (size_t i = 0; i < clen - 1; ++i) {
+            matches += v.data[i] == coded[i];
+        }
+        matches += (v.data[clen - 1] & final_mask) == (coded[clen - 1] & final_mask);
+        if (matches > store->longest_match || matches == clen) {
+            matches = 0;
+            printf("matches (%s):", matches == clen ? "full match" : "longest match");
+            for (size_t i = 0; i < clen - 1; ++i) {
+                matches += v.data[i] == coded[i];
+                printf("  (%02x == %02x: %zu)", v.data[i], coded[i], matches);
+            }
+            matches += (v.data[clen - 1] & final_mask) == (coded[clen - 1] & final_mask);
+            printf("  (%02x & %02x == %02x & %02x: %zu)\n", v.data[clen - 1], final_mask, coded[clen - 1], final_mask, matches);
+        }
+
+        if (matches == clen) {
+            // found a full match
             uint8_t* pc = P;
             v.do_bech32enc(&pc);
             const char* str = v.str_value().c_str();
@@ -339,29 +378,12 @@ void finder(size_t id, int step, const char* prefix, privkey_store* store) {
             delete [] privs;
             return;
         }
-        size_t mlen = strlen(prefix);
-        size_t mlen2 = strlen(str);
-        if (mlen > mlen2) mlen = mlen2;
-        size_t matches = 0;
-        size_t potential = mlen;
-
-        for (size_t i = start; i < mlen && potential + matches >= longest_known_match; ++i) {
-            matches += prefix[i] == '?' || str[i] == prefix[i];
-            potential--;
-        }
-        if (matches > longest_known_match || (matches > SHOW_ALTS_AT && matches == longest_known_match)) {
-            longest_known_match = store->longest_match;
-            if (matches > longest_known_match || (matches > SHOW_ALTS_AT && matches == longest_known_match)) {
-                // found a longest match; recreate with checksum component
-                v = Value::from_secp256k1_pubkey(&pubs[iter]);
-                // Value v(u);
-                // v.do_get_pubkey();
-                v.do_hash160();
-                uint8_t* pc = P;
-                v.do_bech32enc(&pc);
-                const char* str = v.str_value().c_str();
-                store->new_match(str, &privs[iter<<5], matches, false);
-            }
+        if (matches > store->longest_match || (matches > SHOW_ALTS_AT && matches == store->longest_match)) {
+            // found a longest match
+            uint8_t* pc = P;
+            v.do_bech32enc(&pc);
+            const char* str = v.str_value().c_str();
+            store->new_match(str, &privs[iter<<5], matches, false);
         }
         iter++;
     }
@@ -381,31 +403,32 @@ int main(int argc, char* const* argv)
     quiet = ca.m.count('q');
 
     if (ca.m.count('h') || ca.l.size() != 1) {
-        fprintf(stderr, "syntax: %s [-q|--quiet] [-j<n>|--processes=<n>] [-x<n>|--max-iters=<n>] \"<prefix>\"\n<prefix> may contain the character ? any number of times to indicate wildcard character, e.g. '??foo?bar'\n", argv[0]);
+        fprintf(stderr, "syntax: %s [-q|--quiet] [-j<n>|--processes=<n>] [-x<n>|--max-iters=<n>] \"<prefix>\"\n", argv[0]);
         return 1;
     }
 
     const char* prefix = ca.l[0];
-    if (prefix[0] != '?' && prefix[0] != 'q') {
-        printf("all bech32 adresses must begin with a 'q'\n");
-        return 1;
-    }
     size_t len = strlen(prefix);
-    if (len > 33) {
-        printf("restricted to 33 characters, you are using %zu\n", len);
+    if (len > 32) {
+        printf("restricted to 32 characters, you are using %zu\n", len);
         return 1;
     }
     for (size_t i = 0; i < len; ++i) {
-        if (prefix[i] != '?' && !in(prefix[i], bech32_chars, bech32_char_count)) {
-            printf("the character '%c' is unavailable. bech32 allows these -> %s\n", prefix[i], bech32_chars);
+        if (!in(prefix[i], CHARSET, 32)) {
+            printf("the character '%c' is unavailable. bech32 allows these -> %s\n", prefix[i], CHARSET);
             return 1;
         }
     }
-    // assume 32 letter combinations for all except first one, but remove wildcards
-    size_t letters = len - 1;
-    for (size_t i = 1; i < len; i++) letters -= prefix[i] == '?';
+    // assume 32 letter combinations
+    size_t letters = len;
+    // for (size_t i = 1; i < len; i++) letters -= prefix[i] == '?';
     probability prob(letters, 5);
     printf("%zu letter prefix; 1/%s probability (%s%%) of encountering\n", len, prob.one_in_string().c_str(), prob.percentage().c_str());
+
+    // decode bech32 prefix
+    std::vector<uint8_t> coded_prefix;
+    uint8_t final_mask;
+    decode_bech32_prefix(prefix, coded_prefix, final_mask);
 
     size_t processes = ca.m.count('j') ? atoi(ca.m['j'].c_str()) : 1;
     // bc1... is he bech32 encoding of the hash160 of the pubkey
@@ -423,7 +446,7 @@ int main(int argc, char* const* argv)
     std::vector<std::thread> finders;
     // std::vector<uint8_t> base = store->pop();
     for (size_t i = 0; i < processes; i++) {
-        finders.emplace_back(finder, i, processes, prefix, store);
+        finders.emplace_back(finder, i, processes, prefix, coded_prefix, final_mask, store);
     }
     for (std::thread& t : finders) t.join();
 }
