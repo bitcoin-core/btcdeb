@@ -308,16 +308,6 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
             matches += v.data[i] == coded[i];
         }
         matches += (v.data[clen - 1] & final_mask) == (coded[clen - 1] & final_mask);
-        if (matches > store->longest_match || matches == clen) {
-            matches = 0;
-            printf("matches (%s):", matches == clen ? "full match" : "longest match");
-            for (size_t i = 0; i < clen - 1; ++i) {
-                matches += v.data[i] == coded[i];
-                printf("  (%02x == %02x: %zu)", v.data[i], coded[i], matches);
-            }
-            matches += (v.data[clen - 1] & final_mask) == (coded[clen - 1] & final_mask);
-            printf("  (%02x & %02x == %02x & %02x: %zu)\n", v.data[clen - 1], final_mask, coded[clen - 1], final_mask, matches);
-        }
 
         if (matches == clen) {
             // found a full match
