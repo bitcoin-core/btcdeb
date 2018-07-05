@@ -67,6 +67,17 @@ void Value::do_combine_pubkeys() {
     secp256k1_ec_pubkey_serialize(secp256k1_context_sign, data.data(), &publen, &result, SECP256K1_EC_COMPRESSED);
 }
 
+Value Value::from_secp256k1_pubkey(const void* secp256k1_pubkey_ptr) {
+    if (!secp256k1_context_sign) ECC_Start();
+
+    size_t clen = CPubKey::PUBLIC_KEY_SIZE;
+    CPubKey result;
+    secp256k1_ec_pubkey_serialize(secp256k1_context_sign, (unsigned char*)result.begin(), &clen, (const secp256k1_pubkey *)secp256k1_pubkey_ptr, SECP256K1_EC_COMPRESSED);
+    assert(result.size() == clen);
+    assert(result.IsValid());
+    return Value(std::vector<uint8_t>(result.begin(), result.end()));
+}
+
 #ifdef ENABLE_DANGEROUS
 
 void Value::do_combine_privkeys() {

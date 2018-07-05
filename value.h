@@ -101,6 +101,8 @@ struct Value {
         return HexStr(s);
     }
 
+    static Value from_secp256k1_pubkey(const void* secp256k1_pubkey_ptr);
+
     explicit Value(const int64_t i)                { int64 = i; type = T_INT; }
     explicit Value(const opcodetype o)             { opcode = o; type = T_OPCODE; }
     explicit Value(const std::vector<uint8_t>& d)  { data = d; type = T_DATA; }
