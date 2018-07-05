@@ -170,8 +170,8 @@ vanitygen_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 vanitygen_LDADD = \
 	$(LIBBITCOIN_CRYPTO) \
-	$(LIBBITCOIN) \
-	$(LIBSECP256K1)
+	$(LIBSECP256K1) \
+	$(LIBBITCOIN)
 
 # test-btcdeb binary #
 test_btcdeb_SOURCES = \
