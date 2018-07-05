@@ -141,7 +141,7 @@ void count_bits(const uint8_t* show, const uint8_t* compare, size_t len, uint8_t
     matches = count = 0;
     bool matching = false;
     size_t i;
-    for (i = 0; i < len - 1; ++i) {
+    for (i = 0; i < len; ++i) {
         uint8_t a = show[i] ^ compare[i];
         for (size_t j = 1; j < 256; j <<= 1) {
             count++;
@@ -164,17 +164,21 @@ void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t
     std::string right = ansi::fg_green + ansi::bold;
     printf("%s", wrong.c_str());
     size_t fiveblocker = 0;
+    #define match_and_put() {\
+        if (a & j) { \
+            if (matching) printf("%s", wrong.c_str()); \
+            matching = false; \
+        } else if (!matching) { \
+            printf("%s", right.c_str()); \
+            matching = true; \
+        } \
+        putchar('1' - !(show[i] & j)); \
+    }
+
     for (i = 0; i < len - 1; ++i) {
         uint8_t a = show[i] ^ compare[i];
         for (size_t j = 1; j < 256; j <<= 1) {
-            if (a & j) {
-                if (matching) printf("%s", wrong.c_str());
-                matching = false;
-            } else if (!matching) {
-                printf("%s", right.c_str());
-                matching = true;
-            }
-            putchar('1' - !(show[i] & j));
+            match_and_put();
             fiveblocker++;
             if (fiveblocker == 5) {
                 fiveblocker = 0;
@@ -185,16 +189,7 @@ void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t
     }
     uint8_t a = show[len-1] ^ compare[len-1];
     for (size_t j = 1; j < 256; j <<= 1) {
-        if (final_mask & j) {
-            if (a & j) {
-                if (matching) printf("%s", wrong.c_str());
-                matching = false;
-            } else if (!matching) {
-                printf("%s", right.c_str());
-                matching = true;
-            }
-            putchar('1' - !(show[i] & j));
-        }
+        if (final_mask & j) match_and_put();
     }
     printf("%s", ansi::reset.c_str());
 }
