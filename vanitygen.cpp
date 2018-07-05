@@ -171,53 +171,7 @@ struct privkey_store {
         ansi_print_compare(str, prefix, 4);
         printf("\n* privkey:%s        %s\n", complete ? "" :     "   ", HexStr(u, u + 32).c_str());
     }
-
-    // inline void add(const std::vector<uint8_t>& privkey) {
-    //     while (v.size() >= 100) {}
-    //     {
-    //         std::lock_guard<std::mutex> guard(mtx);
-    //         v.push_back(privkey);
-    //     }
-    // }
-    inline std::vector<uint8_t> pop() {
-        for (;;) {
-            while (v.size() == 0) {
-                std::vector<uint8_t> x;
-                x.resize(32);
-                if (fp) {
-                    // we don't wait for random keys, we just make one ourselves
-                    if (!fread(x.data(), 1, 32, fp)) {
-                        fprintf(stderr, "Failed to read random data; aborting\n");
-                        exit(1);
-                    }
-                    return x;
-                }
-            }
-            {
-                std::lock_guard<std::mutex> guard(mtx);
-                if (v.size() == 0) continue;
-                std::vector<uint8_t> u = v[0];
-                v.erase(v.begin());
-                return u;
-            }
-        }
-    }
 };
-
-inline bool prefixcmp(size_t start, const char* prefix, const char* str, size_t plen) {
-    for (size_t i = start; i < plen; ++i) if (prefix[i] != '?' && prefix[i] != str[i]) return false;
-    return true;
-}
-
-inline void inc(std::vector<uint8_t>& u, int amt) {
-    size_t i = 0;
-    while (i < 32 && u[i] > 0xff - amt) {
-        u[i] += amt;
-        i++;
-        amt = 1;
-    }
-    if (i < 32) u[i] += amt;
-}
 
 std::string timestr(unsigned long seconds) {
     unsigned long minutes = seconds / 60;
@@ -258,8 +212,6 @@ std::string shorttimestr(unsigned long seconds) {
 }
 
 #define xprintf(args...) printf("%s ", shorttimestr(std::chrono::duration<double>(time_ms() - store->start_time).count()).c_str()); printf(args)
-
-static const char* spaces = "                                                                    ";
 
 void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded, uint8_t final_mask, privkey_store* store) {
     secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY|SECP256K1_CONTEXT_SIGN);
@@ -431,20 +383,10 @@ int main(int argc, char* const* argv)
     decode_bech32_prefix(prefix, coded_prefix, final_mask);
 
     size_t processes = ca.m.count('j') ? atoi(ca.m['j'].c_str()) : 1;
-    // bc1... is he bech32 encoding of the hash160 of the pubkey
-    // so we need to:
-    // 1. make a new random private key
-    // 2. get its public key equivalent
-    // 3. get the pubkey hash160
-    // 4. get the pubkey hash160 bech32 encoding
-    // 5. check the prefix
-    // since randomness is slow, we dedicate a thread to simply spewing out random 32 byte values
-    // and use semaphores to pull them out
     privkey_store* store = new privkey_store(prob);
     store->prefix = prefix;
     if (ca.m.count('x')) store->cap = (size_t)atoll(ca.m['x'].c_str());
     std::vector<std::thread> finders;
-    // std::vector<uint8_t> base = store->pop();
     for (size_t i = 0; i < processes; i++) {
         finders.emplace_back(finder, i, processes, prefix, coded_prefix, final_mask, store);
     }
