@@ -141,7 +141,7 @@ void count_bits(const uint8_t* show, const uint8_t* compare, size_t len, uint8_t
     matches = count = 0;
     bool matching = false;
     size_t i;
-    for (i = 0; i < len; ++i) {
+    for (i = 0; i < len - 1; ++i) {
         uint8_t a = show[i] ^ compare[i];
         for (size_t j = 1; j < 256; j <<= 1) {
             count++;
