@@ -290,7 +290,7 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
             if (id == 0) {
                 printf(" %zu: %s\r", c, HexStr(&privs[iter<<5], &privs[(iter+1)<<5]).c_str()); fflush(stdout);
             }
-            if (c == store->cap) {
+            if (c >= store->cap) {
                 store->end = true;
                 secp256k1_context_destroy(ctx);
                 delete [] pubs;
