@@ -23,7 +23,9 @@ env:
 # # Win32
 #     - HOST=i686-w64-mingw32 DPKG_ADD_ARCH="i386" PACKAGES="nsis g++-mingw-w64-i686 wine1.6" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-reduce-exports"
 # System libs
-    - HOST=x86_64-unknown-linux-gnu PACKAGES="libssl-dev bsdmainutils xvfb" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports
+    - HOST=x86_64-unknown-linux-gnu PACKAGES="libssl-dev bsdmainutils xvfb" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports"
+# With enable-dangerous
+    - HOST=x86_64-unknown-linux-gnu PACKAGES="libssl-dev bsdmainutils xvfb" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports --enable-dangerous"
 # # 32-bit + dash
 #     - HOST=i686-pc-linux-gnu PACKAGES="g++-multilib" RUN_TESTS=true GOAL="install" BITCOIN_CONFIG="--enable-glibc-back-compat --enable-reduce-exports LDFLAGS=-static-libstdc++" USE_SHELL="/bin/dash"
 # # Win64
