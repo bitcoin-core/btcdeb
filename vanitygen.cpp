@@ -320,6 +320,7 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
             delete [] privs;
             return;
         }
+
         if (matches > store->longest_match || (matches > SHOW_ALTS_AT && matches == store->longest_match)) {
             // found a longest match
             uint8_t* pc = P;
