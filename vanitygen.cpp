@@ -62,6 +62,7 @@ void decode_bech32_prefix(const char* prefix, std::vector<uint8_t>& result, uint
 struct probability {
     size_t letters, bits;
     probability(size_t letters_in, size_t bits_in) : letters(letters_in), bits(bits_in) {}
+    probability(const probability& prob) : letters(prob.letters), bits(prob.bits) {}
     std::string one_in_string() const {
         static const char* v = "kMGTPE";
         size_t unit = (letters * bits) / 10;
@@ -204,7 +205,7 @@ struct privkey_store {
     std::mutex mtx;
     size_t longest_match = 3;
     size_t longest_match_bits = 24;
-    probability& prob;
+    probability prob;
     size_t cap = 0;
     bool complete_match = false;
     bool end = false;
