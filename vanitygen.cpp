@@ -194,9 +194,12 @@ void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t
     printf("%s", ansi::reset.c_str());
 }
 
+FILE* dev_urandom = nullptr;
+milliseconds start_time;
+std::atomic<size_t> counter;
+
 struct privkey_store {
     const char* prefix;
-    milliseconds start_time;
     std::vector<std::vector<uint8_t>> v;
     std::mutex mtx;
     size_t longest_match = 3;
@@ -205,14 +208,8 @@ struct privkey_store {
     size_t cap = 0;
     bool complete_match = false;
     bool end = false;
-    FILE* fp = nullptr;
-    std::atomic<size_t> counter;
 
-    privkey_store(probability& prob_in) : prob(prob_in) {
-        fp = fopen("/dev/urandom", "rb");
-        assert(fp && "/dev/urandom required");
-        start_time = time_ms();
-    }
+    privkey_store(probability& prob_in) : prob(prob_in) {}
 
     inline void new_match(const char* str, const uint8_t* u, size_t longest, size_t longest_bits, bool complete) {
         std::lock_guard<std::mutex> guard(mtx);
@@ -231,6 +228,21 @@ struct privkey_store {
         ansi_print_compare(str, prefix, 4);
         printf("\n* privkey:%s        %s\n", complete ? "" :     "   ", HexStr(u, u + 32).c_str());
     }
+};
+
+struct query {
+    const char* prefix;
+    size_t plen, clen;
+    std::vector<uint8_t> coded;
+    uint8_t final_mask;
+    privkey_store* store;
+    query(const char* prefix_in, std::vector<uint8_t>& coded_in, uint8_t final_mask_in, privkey_store* store_in)
+    : prefix(prefix_in)
+    , plen(strlen(prefix_in))
+    , clen(coded_in.size())
+    , coded(coded_in)
+    , final_mask(final_mask_in)
+    , store(store_in) {}
 };
 
 std::string timestr(unsigned long seconds) {
@@ -271,9 +283,9 @@ std::string shorttimestr(unsigned long seconds) {
     return s.substr(1);
 }
 
-#define xprintf(args...) printf("%s ", shorttimestr(std::chrono::duration<double>(time_ms() - store->start_time).count()).c_str()); printf(args)
+#define xprintf(args...) printf("%s ", shorttimestr(std::chrono::duration<double>(time_ms() - start_time).count()).c_str()); printf(args)
 
-void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded, uint8_t final_mask, privkey_store* store) {
+void finder(size_t id, int step, std::vector<query*>* queries) {
     secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY|SECP256K1_CONTEXT_SIGN);
     assert(ctx != nullptr);
 
@@ -286,28 +298,18 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
         assert(ret);
     }
 
-    size_t plen = strlen(prefix);
     secp256k1_pubkey* pubs = new secp256k1_pubkey[KP_CHUNK_SIZE];
     unsigned char* privs = new unsigned char[32 * KP_CHUNK_SIZE];
     size_t iter = KP_CHUNK_SIZE;
     size_t local_ctr = 0;
     size_t next_eta = 1000000000;
-    size_t start = 0;
-    while (prefix[start] == '?') start++;
     uint8_t P[256];
-    size_t longest_known_match = store->longest_match;
-    size_t clen = coded.size();
+
     for (;;) {
-        if (store->complete_match || store->end) {
-            secp256k1_context_destroy(ctx);
-            delete [] pubs;
-            delete [] privs;
-            return;
-        }
         if (iter == KP_CHUNK_SIZE) {
             // generate new chunk of keys
             unsigned char seed[32];
-            if (!fread(seed, 1, 32, store->fp)) {
+            if (!fread(seed, 1, 32, dev_urandom)) {
                 fprintf(stderr, "unable to read from /dev/urandom; aborting\n");
                 exit(1);
             }
@@ -322,13 +324,13 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
         local_ctr++;
         if (local_ctr == 100000) {
             local_ctr = 0;
-            size_t c = 100000 * (++store->counter);
+            size_t c = 100000 * (++counter);
             if (c % next_eta == 0) {
                 next_eta <<= 1;
                 auto now = time_ms();
-                double elapsed_secs = std::chrono::duration<double>(now - store->start_time).count();
-                double addresses_per_sec = double(c) / elapsed_secs;
-                double exp_time = store->prob.expected_time(addresses_per_sec);
+                double elapsed_secs = std::chrono::duration<double>(now - start_time).count();
+                double addresses_per_sec = double(c) * queries->size() / elapsed_secs;
+                double exp_time = (*queries)[0]->store->prob.expected_time(addresses_per_sec);
                 uint64_t seconds = exp_time;
                 std::string tstr = timestr(seconds);
                 printf("(%zu addresses in %s; %.3f addresses/second; statistical expected time: %s)                                    \n", c, timestr(elapsed_secs).c_str(), addresses_per_sec, tstr.c_str());
@@ -337,7 +339,7 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
             // case 1000000UL:        printf("*** First million down, many more to go ... ... ... ***                                                                                                  \n"); break;
             case 100000000UL:      xprintf("*** One hundred million. Woot. Should be done in no time...! ***                                                                                         \n"); break;
             case 250000000UL:      xprintf("*** Quarter to a billion. You don't give up do you? ***                                                                                                  \n"); break;
-            case 500000000UL:      xprintf("*** Half a billion! Now we just have to wait ANOTHER %s to get to a billion.                                                                             \n", timestr(std::chrono::duration<double>(time_ms() - store->start_time).count()).c_str()); break;
+            case 500000000UL:      xprintf("*** Half a billion! Now we just have to wait ANOTHER %s to get to a billion.                                                                             \n", timestr(std::chrono::duration<double>(time_ms() - start_time).count()).c_str()); break;
             case 1000000000UL:     xprintf("*** One billion! I deserve a raise. Are you gonna give up soon btw? ***                                                                                  \n"); break;
             case 10000000000UL:    xprintf("*** This is getting a little bit ridiculous. 10 billion. How much is your vanity worth anyway? ***                                                       \n"); break;
             case 42000000000UL:    xprintf("*** 42 billion. If this was distance traveled in meters, you would have reached Venus. ***                                                           \n"); break;
@@ -368,8 +370,8 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
             if (id == 0) {
                 printf(" %zu: %s\r", c, HexStr(&privs[iter<<5], &privs[(iter+1)<<5]).c_str()); fflush(stdout);
             }
-            if (store->cap && c >= store->cap) {
-                store->end = true;
+            if ((*queries)[0]->store->cap && c >= (*queries)[0]->store->cap) {
+                (*queries)[0]->store->end = true;
                 secp256k1_context_destroy(ctx);
                 delete [] pubs;
                 delete [] privs;
@@ -381,36 +383,49 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
         // Value v(u);
         // v.do_get_pubkey();
         v.do_hash160();
-        size_t matches = 0;
-        for (size_t i = 0; i < clen - 1; ++i) {
-            matches += v.data[i] == coded[i];
-        }
-        matches += (v.data[clen - 1] & final_mask) == (coded[clen - 1] & final_mask);
+        for (query* q : *queries) {
+            size_t clen = q->clen;
+            std::vector<uint8_t>& coded = q->coded;
+            uint8_t final_mask = q->final_mask;
+            privkey_store* store = q->store;
 
-        if (matches == clen) {
-            // found a full match
-            uint8_t* pc = P;
-            v.do_bech32enc(&pc);
-            const char* str = v.str_value().c_str();
-            store->new_match(str, &privs[iter<<5], plen, 0, true);
-            secp256k1_context_destroy(ctx);
-            delete [] pubs;
-            delete [] privs;
-            return;
-        }
+            if (store->complete_match || store->end) {
+                secp256k1_context_destroy(ctx);
+                delete [] pubs;
+                delete [] privs;
+                return;
+            }
+            size_t matches = 0;
+            for (size_t i = 0; i < clen - 1; ++i) {
+                matches += v.data[i] == coded[i];
+            }
+            matches += (v.data[clen - 1] & final_mask) == (coded[clen - 1] & final_mask);
 
-        if (matches > store->longest_match || (matches > SHOW_ALTS_AT && matches == store->longest_match)) {
-            // found a potential longest match
-            size_t matched_bits, count;
-            count_bits(v.data.data(), coded.data(), clen, final_mask, matched_bits, count);
-            if (matched_bits >= store->longest_match_bits) {
+            if (matches == clen) {
+                // found a full match
                 uint8_t* pc = P;
                 v.do_bech32enc(&pc);
                 const char* str = v.str_value().c_str();
-                store->new_match(str, &privs[iter<<5], matches, matched_bits, false);
-                printf("* bits:              ");
-                ansi_print_compare_bits(v.data.data(), coded.data(), clen, final_mask);
-                printf(" [%zu/%zu]\n", matched_bits, count);
+                store->new_match(str, &privs[iter<<5], q->plen, 0, true);
+                secp256k1_context_destroy(ctx);
+                delete [] pubs;
+                delete [] privs;
+                return;
+            }
+
+            if (matches > store->longest_match || (matches > SHOW_ALTS_AT && matches == store->longest_match)) {
+                // found a potential longest match
+                size_t matched_bits, count;
+                count_bits(v.data.data(), coded.data(), clen, final_mask, matched_bits, count);
+                if (matched_bits >= store->longest_match_bits) {
+                    uint8_t* pc = P;
+                    v.do_bech32enc(&pc);
+                    const char* str = v.str_value().c_str();
+                    store->new_match(str, &privs[iter<<5], matches, matched_bits, false);
+                    printf("* bits:              ");
+                    ansi_print_compare_bits(v.data.data(), coded.data(), clen, final_mask);
+                    printf(" [%zu/%zu]\n", matched_bits, count);
+                }
             }
         }
         iter++;
@@ -430,46 +445,55 @@ int main(int argc, char* const* argv)
     ca.parse(argc, argv);
     quiet = ca.m.count('q');
 
-    if (ca.m.count('h') || ca.l.size() != 1) {
-        fprintf(stderr, "syntax: %s [-q|--quiet] [-j<n>|--processes=<n>] [-x<n>|--max-iters=<n>] \"<prefix>\"\n", argv[0]);
+    if (ca.m.count('h') || ca.l.size() == 0) {
+        fprintf(stderr, "syntax: %s [-q|--quiet] [-j<n>|--processes=<n>] [-x<n>|--max-iters=<n>] \"<prefix>\" [\"<prefix2>\" [...]]\n", argv[0]);
+        fprintf(stderr, "you can search for any number of prefixes by simply listing them; the system will, for each keypair/hash160 entry, compare each prefix and report best matches for each prefix. note that the scan will stop if ANY of the prefixes is found in full\n");
         return 1;
     }
 
-    const char* prefix = ca.l[0];
-    size_t len = strlen(prefix);
-    if (len > 32) {
-        printf("restricted to 32 characters, you are using %zu\n", len);
-        return 1;
-    }
-    for (size_t i = 0; i < len; ++i) {
-        if (!in(prefix[i], CHARSET, 32)) {
-            printf("the character '%c' is unavailable. bech32 allows these -> %s\n", prefix[i], CHARSET);
+    dev_urandom = fopen("/dev/urandom", "rb");
+    assert(dev_urandom && "/dev/urandom required");
+    start_time = time_ms();
+
+    std::vector<query*> queries;
+    for (const char* prefix : ca.l) {
+        size_t len = strlen(prefix);
+        if (len > 32) {
+            printf("restricted to 32 characters, you are using %zu\n", len);
             return 1;
         }
-    }
-    // assume 32 letter combinations
-    size_t letters = len;
-    // for (size_t i = 1; i < len; i++) letters -= prefix[i] == '?';
-    probability prob(letters, 5);
-    printf("%zu letter prefix; 1/%s probability (%s%%) of encountering\n", len, prob.one_in_string().c_str(), prob.percentage().c_str());
+        for (size_t i = 0; i < len; ++i) {
+            if (!in(prefix[i], CHARSET, 32)) {
+                printf("the character '%c' is unavailable. bech32 allows these -> %s\n", prefix[i], CHARSET);
+                return 1;
+            }
+        }
+        // assume 32 letter combinations
+        size_t letters = len;
+        // for (size_t i = 1; i < len; i++) letters -= prefix[i] == '?';
+        probability prob(letters, 5);
+        printf("%zu letter prefix; 1/%s probability (%s%%) of encountering\n", len, prob.one_in_string().c_str(), prob.percentage().c_str());
 
-    // decode bech32 prefix
-    std::vector<uint8_t> coded_prefix;
-    uint8_t final_mask;
-    decode_bech32_prefix(prefix, coded_prefix, final_mask);
+        // decode bech32 prefix
+        std::vector<uint8_t> coded_prefix;
+        uint8_t final_mask;
+        decode_bech32_prefix(prefix, coded_prefix, final_mask);
+        privkey_store* store = new privkey_store(prob);
+        store->prefix = prefix;
+        if (ca.m.count('x')) store->cap = (size_t)atoll(ca.m['x'].c_str());
+
+        queries.push_back(new query(prefix, coded_prefix, final_mask, store));
+    }
 
     size_t processes = ca.m.count('j') ? atoi(ca.m['j'].c_str()) : 1;
-    privkey_store* store = new privkey_store(prob);
-    store->prefix = prefix;
-    if (ca.m.count('x')) store->cap = (size_t)atoll(ca.m['x'].c_str());
     if (processes == 1) {
         // run on main thread
-        finder(0, 1, prefix, coded_prefix, final_mask, store);
+        finder(0, 1, &queries);
     } else {
         // spawn and join
         std::vector<std::thread> finders;
         for (size_t i = 0; i < processes; i++) {
-            finders.emplace_back(finder, i, processes, prefix, coded_prefix, final_mask, store);
+            finders.emplace_back(finder, i, processes, &queries);
         }
         for (std::thread& t : finders) t.join();
     }
