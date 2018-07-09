@@ -53,7 +53,7 @@ void decode_bech32_prefix(const char* prefix, std::vector<uint8_t>& result, uint
     // 8 - (5 % 8) = 8 - 5 = 3
     // 8 - (10 % 8) = 8 - 2 = 6
     // 8 - (15 % 8) = 8 - 7 = 1
-    final_mask = 0xff << (8 - ((5 * len) & 0x07));
+    final_mask = 0xff << ((8 - ((5 * len) & 0x07)) & 0x07);
 }
 
 #define KP_CHUNK_SIZE 1024
@@ -340,12 +340,30 @@ void finder(size_t id, int step, const char* prefix, std::vector<uint8_t> coded,
             case 500000000UL:      xprintf("*** Half a billion! Now we just have to wait ANOTHER %s to get to a billion.                                                                             \n", timestr(std::chrono::duration<double>(time_ms() - store->start_time).count()).c_str()); break;
             case 1000000000UL:     xprintf("*** One billion! I deserve a raise. Are you gonna give up soon btw? ***                                                                                  \n"); break;
             case 10000000000UL:    xprintf("*** This is getting a little bit ridiculous. 10 billion. How much is your vanity worth anyway? ***                                                       \n"); break;
-            case 100000000000UL:   xprintf("*** 100 billion. If this was one per second, you would have spent 3168 years at this point. ***                                                          \n"); break;
-            case 250000000000UL:   xprintf("*** Quarter to a trillion. This seems hopeless...    ***                                                                                                  \n"); break;
+            case 42000000000UL:    xprintf("*** 42 billion. If this was distance traveled in meters, you would have reached Venus. ***                                                           \n"); break;
+            case 78000000000UL:    xprintf("*** 78 billion. [distance in meters] Welcome to Mars. ***                                                                                \n"); break;
+            case 91500000000UL:    xprintf("*** 91.5 billion. [distance in meters] Welcome to Mercury. ***                                                                                \n"); break;
+            case 100000000000UL:   xprintf("*** 100 billion. If this was one address per second, you would have spent 3168 years at this point. ***                                                          \n"); break;
+            case 146000000000UL:   xprintf("*** 146 billion. If this was distance traveled in meters, you would have now reached the sun, presuming distance to earth was the closest (perihelion, early January)."); break;
+            case 152000000000UL:   xprintf("*** 152 billion. If this was distance traveled in meters, you would have now reached the sun, presuming distance to earth was the FARTHEST (aphelion, early July)."); break;
+            case 197600250000UL:   xprintf("*** 197.6 billion. If we were traveling back in time at a pace of 1 address = 1 day, we would have now reached the beginning of the phanerozoic eon (541 mya (megayear = 1,000,000 years) in the past) and returned into the proterozoic eon ***\n"); break;
+            case 250000000000UL:   xprintf("*** Quarter to a trillion. This seems hopeless, but let's not give up...!    ***                                                                                                  \n"); break;
             case 500000000000UL:   xprintf("*** We haven't found your magic phrase, but we HAVE shuffled through half a trillion bech32 addresses. There is that, right? Right? ***                                                       \n"); break;
+            case 630000000000UL:   xprintf("*** 630 billion. [distance in meters] Welcome to Jupiter. ***                                                                                \n"); break;
             case 750000000000UL:   xprintf("*** Fun fact: did you know that, despite the fact we have now processed three quarters of a trillion bech32 addresses, the probability that the next address we look at is 'the one' is exactly the same as the probability that the first address we checked out was 'the one'. In other words, we have made absolutely no progress whatsoever. The estimated time to find your magic phrase is still the same as it was the first second when we started processing. Neat, huh? ***\n"); break;
+            case 913125000000UL:   xprintf("*** 913.1 billion. [traveling back in time 1 addr=1 day] We have now passed through the proterozoic eon (starting 2,500 mya in the past) and are entering into the archean eon. It will last for 1,500 mya ***\n"); break;
             case 1000000000000UL:  xprintf("*** 1 trillion. T R I L L I O N. You've spent a trillion attempts to find a vanity address. You are like the god of self-loving vanity freaks. ***       \n"); break;
+            case 1287000000000UL:   xprintf("*** 1.287 trillion. [distance in meters] Welcome to Saturn. ***                                                                                \n"); break;
+            case 1461000000000UL:  xprintf("*** 1.461 trillion. [traveling back in time 1 addr=1 day] We have returned to the beginning of the archean eon, 4 billion years ago. We are passing into the first eon of earth's history, the Hadean eon ***\n"); break;
+            case 1658235000000UL:  xprintf("*** 1.658 trillion. [traveling back in time 1 addr=1 day] We have returned to the beginning of the Hadean eon, 4.5 billion years ago. Earth has not yet formed (end of earth geochronology series) ***\n"); break;
+            case 2000000000000UL:  xprintf("*** 2 trillion. That's a 2 followed by 12 zeroes. ***                                                                                                     \n"); break;
+            case 2730000000000UL:  xprintf("*** 2.73 trillion. [distance in meters] Welcome to Uranus. ***                                                                                \n"); break;
+            case 4357500000000UL:  xprintf("*** 4.3575 trillion. [distance in meters] Welcome to Neptune. ***                                                                                \n"); break;
+            case 5772000000000UL:  xprintf("*** 5.772 trillion. [distance in meters] Welcome to Pluto. ***                                                                                \n"); break;
             case 10000000000000UL: xprintf("*** 10 trillion. I don't think I need to say anything else here. You sure love yourself. ***                                                             \n"); break;
+            case 31557600000000UL: xprintf("*** 31.5576 trillion. If 1 address equaled 1 second, you would have now passed 1 mya (megayear = 1,000,000 years), assuming 1 year = 365.25 days ***                      \n"); break;
+            case 37200000000000UL: xprintf("*** 37.2 trillion. For every cell in your body, you have now created a private and public key pair, calculated the public key's hash160, and compared it to the corresponding bech32 output. And you have failed to find an exact match each and every time. ***\n"); break;
+            case 40000000000000UL: xprintf("*** 40 trillion. [distance in KILOmeters] Welcome to Alpha Centauri. ***                                                                                \n"); break;
             }
             if (id == 0) {
                 printf(" %zu: %s\r", c, HexStr(&privs[iter<<5], &privs[(iter+1)<<5]).c_str()); fflush(stdout);
