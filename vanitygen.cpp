@@ -327,7 +327,7 @@ void finder(size_t id, int step, std::vector<query*>* queries) {
             local_ctr = 0;
             size_t c = 100000 * (++counter);
             if (c % next_eta == 0) {
-                next_eta <<= 1;
+                next_eta *= 3;
                 auto now = time_ms();
                 double elapsed_secs = std::chrono::duration<double>(now - start_time).count();
                 double addresses_per_sec = double(c) / elapsed_secs;
@@ -335,7 +335,13 @@ void finder(size_t id, int step, std::vector<query*>* queries) {
                 double combinations_per_sec = addresses_per_sec * queries->size();
                 uint64_t seconds = exp_time;
                 std::string tstr = timestr(seconds);
-                printf("(%zu addresses in %s; %.3f combinations*/second; statistical expected time: %s) [* 1 combination = %zu address%s]                                   \n", c, timestr(elapsed_secs).c_str(), combinations_per_sec, tstr.c_str(), queries->size(), queries->size() == 1 ? "" : "es");
+                static bool explained = false;
+                if (explained) {
+                    printf("(%zu addresses in %s; %.3f combinations/second; statistical expected time: %s)                                   \n", c, timestr(elapsed_secs).c_str(), combinations_per_sec, tstr.c_str());
+                } else {
+                    printf("(%zu addresses in %s; %.3f combinations*/second; statistical expected time: %s) [* 1 combination = %zu address%s]                                   \n", c, timestr(elapsed_secs).c_str(), combinations_per_sec, tstr.c_str(), queries->size(), queries->size() == 1 ? "" : "es");
+                    explained = true;
+                }
             }
             switch (c) {
             // case 1000000UL:        printf("*** First million down, many more to go ... ... ... ***                                                                                                  \n"); break;
