@@ -306,7 +306,6 @@ void finder(size_t id, int step, std::vector<query*>* queries) {
     size_t iter = KP_CHUNK_SIZE;
     size_t local_ctr = 0;
     size_t next_eta = 1000000000;
-    uint8_t P[256];
 
     for (;;) {
         if (iter == KP_CHUNK_SIZE) {
@@ -420,8 +419,7 @@ void finder(size_t id, int step, std::vector<query*>* queries) {
 
             if (matches == clen) {
                 // found a full match
-                uint8_t* pc = P;
-                v.do_bech32enc(&pc);
+                v.do_bech32enc();
                 const char* str = v.str_value().c_str();
                 store->new_match(str, &privs[iter<<5], q->plen, 0, true);
                 secp256k1_context_destroy(ctx);
@@ -435,8 +433,7 @@ void finder(size_t id, int step, std::vector<query*>* queries) {
                 size_t matched_bits, count;
                 count_bits(v.data.data(), coded.data(), clen, final_mask, matched_bits, count);
                 if (matched_bits >= store->longest_match_bits) {
-                    uint8_t* pc = P;
-                    v.do_bech32enc(&pc);
+                    v.do_bech32enc();
                     const char* str = v.str_value().c_str();
                     store->new_match(str, &privs[iter<<5], matches, matched_bits, false);
                     printf("* bits:              ");

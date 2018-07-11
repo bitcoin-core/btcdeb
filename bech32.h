@@ -16,36 +16,10 @@
 namespace bech32
 {
 
-struct data {
-    uint8_t* d;
-    size_t len;
-};
-
-struct HRPX {
-    std::string hrp;
-    data hrpx;
-    HRPX(const std::string& hrp_in);
-    ~HRPX() { free(hrpx.d); }
-};
-
-extern HRPX bc;
-
 /** Encode a Bech32 string. Returns the empty string in case of failure. */
-std::string Encode(uint8_t** P, const HRPX& hrp, const std::vector<uint8_t>& values, bool skip_checksum = false);
+std::string Encode(const std::string& hrp, const std::vector<uint8_t>& values);
 
 /** Decode a Bech32 string. Returns (hrp, data). Empty hrp means failure. */
-std::pair<std::string, std::vector<uint8_t>> Decode(uint8_t** P, const std::string& str);
-
-/** Encode a Bech32 string. Returns the empty string in case of failure. */
-inline std::string Encode(const std::string& hrp, const std::vector<uint8_t>& values) {
-    uint8_t P[256];
-    return Encode((uint8_t**)&P, HRPX(hrp), values);
-}
-
-/** Decode a Bech32 string. Returns (hrp, data). Empty hrp means failure. */
-inline std::pair<std::string, std::vector<uint8_t>> Decode(const std::string& str) {
-    uint8_t P[128];
-    return Decode((uint8_t**)&P, str);
-}
+std::pair<std::string, std::vector<uint8_t>> Decode(const std::string& str);
 
 } // namespace bech32
