@@ -218,7 +218,7 @@ struct privkey_store {
         if (longest < longest_match) return;
         // if (!(longest > longest_match || (longest > SHOW_ALTS_AT && longest == longest_match))) return;
         Value p(std::vector<uint8_t>(u, u + 32));
-        p.value.push_back(0x01);
+        p.data.push_back(0x01);
         p.do_encode_wif();
         if (longest_match == longest && longest_bits <= longest_match_bits) {
             printf("\n* alternative match: ");
@@ -386,7 +386,7 @@ void finder(size_t id, int step, std::vector<query*>* queries) {
             case 40000000000000UL: xprintf("*** 40 trillion. [distance in KILOmeters] Welcome to Alpha Centauri. ***                                                                                \n"); break;
             }
             if (id == 0) {
-                printf(" %zu: %s\r", c, HexStr(&privs[iter<<5], &privs[(iter+1)<<5]).c_str()); fflush(stdout);
+                printf(" %zu\r", c); fflush(stdout);
             }
             if ((*queries)[0]->store->cap && c >= (*queries)[0]->store->cap) {
                 (*queries)[0]->store->end = true;
