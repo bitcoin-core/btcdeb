@@ -216,10 +216,12 @@ struct privkey_store {
         std::lock_guard<std::mutex> guard(mtx);
         if (longest < longest_match) return;
         // if (!(longest > longest_match || (longest > SHOW_ALTS_AT && longest == longest_match))) return;
+        Value p(std::vector<uint8_t>(u, u + 32));
+        p.do_encode_wif();
         if (longest_match == longest && longest_bits <= longest_match_bits) {
             printf("\n* alternative match: ");
             ansi_print_compare(str, prefix, 4);
-            printf("\n* privkey:           %s\n", HexStr(u, u + 32).c_str());
+            printf("\n* privkey:           %s\n", p.str.c_str()); // HexStr(u, u + 32).c_str());
             return;
         }
         if (longest_match_bits < longest_bits) longest_match_bits = longest_bits;
@@ -227,7 +229,7 @@ struct privkey_store {
         complete_match = complete;
         printf("\n* new %s match: ", complete ? "full" : "longest");
         ansi_print_compare(str, prefix, 4);
-        printf("\n* privkey:%s        %s\n", complete ? "" :     "   ", HexStr(u, u + 32).c_str());
+        printf("\n* privkey:%s        %s\n", complete ? "" :     "   ", p.str.c_str()); // HexStr(u, u + 32).c_str());
     }
 };
 
