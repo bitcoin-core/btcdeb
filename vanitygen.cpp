@@ -165,7 +165,6 @@ void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t
     std::string wrong = ansi::fg_red + ansi::bold;
     std::string right = ansi::fg_green + ansi::bold;
     printf("%s", wrong.c_str());
-    size_t fiveblocker = 0;
     #define match_and_put() {\
         if (a & j) { \
             if (matching) printf("%s", wrong.c_str()); \
@@ -181,11 +180,6 @@ void ansi_print_compare_bits(const uint8_t* show, const uint8_t* compare, size_t
         uint8_t a = show[i] ^ compare[i];
         for (size_t j = 1; j < 256; j <<= 1) {
             match_and_put();
-            fiveblocker++;
-            if (fiveblocker == 5) {
-                fiveblocker = 0;
-                printf("%s|%s", (ansi::fg_cyan + ansi::bold).c_str(), matching ? right.c_str() : wrong.c_str());
-            }
         }
         putchar(' ');
     }
