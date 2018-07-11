@@ -19,6 +19,7 @@
 
 #include <ansi-colors.h>
 
+std::string hrp = "bc";
 bool quiet = false;
 
 /** The Bech32 character set for encoding. */
@@ -217,10 +218,11 @@ struct privkey_store {
         if (longest < longest_match) return;
         // if (!(longest > longest_match || (longest > SHOW_ALTS_AT && longest == longest_match))) return;
         Value p(std::vector<uint8_t>(u, u + 32));
+        p.value.push_back(0x01);
         p.do_encode_wif();
         if (longest_match == longest && longest_bits <= longest_match_bits) {
             printf("\n* alternative match: ");
-            ansi_print_compare(str, prefix, 4);
+            ansi_print_compare(str, prefix, 2 + hrp.size());
             printf("\n* privkey:           %s\n", p.str.c_str()); // HexStr(u, u + 32).c_str());
             return;
         }
@@ -228,7 +230,7 @@ struct privkey_store {
         longest_match = longest;
         complete_match = complete;
         printf("\n* new %s match: ", complete ? "full" : "longest");
-        ansi_print_compare(str, prefix, 4);
+        ansi_print_compare(str, prefix, 2 + hrp.size());
         printf("\n* privkey:%s        %s\n", complete ? "" :     "   ", p.str.c_str()); // HexStr(u, u + 32).c_str());
     }
 };
@@ -419,7 +421,7 @@ void finder(size_t id, int step, std::vector<query*>* queries) {
 
             if (matches == clen) {
                 // found a full match
-                v.do_bech32enc();
+                v.do_bech32enc(hrp);
                 const char* str = v.str_value().c_str();
                 store->new_match(str, &privs[iter<<5], q->plen, 0, true);
                 secp256k1_context_destroy(ctx);
@@ -433,7 +435,7 @@ void finder(size_t id, int step, std::vector<query*>* queries) {
                 size_t matched_bits, count;
                 count_bits(v.data.data(), coded.data(), clen, final_mask, matched_bits, count);
                 if (matched_bits >= store->longest_match_bits) {
-                    v.do_bech32enc();
+                    v.do_bech32enc(hrp);
                     const char* str = v.str_value().c_str();
                     store->new_match(str, &privs[iter<<5], matches, matched_bits, false);
                     printf("* bits:              ");
@@ -456,11 +458,12 @@ int main(int argc, char* const* argv)
     ca.add_option("addrtype", 't', req_arg);
     ca.add_option("processes", 'j', req_arg);
     ca.add_option("max-iters", 'x', req_arg);
+    ca.add_option("hrp", 'r', req_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q');
 
     if (ca.m.count('h') || ca.l.size() == 0) {
-        fprintf(stderr, "syntax: %s [-q|--quiet] [-j<n>|--processes=<n>] [-x<n>|--max-iters=<n>] \"<prefix>\" [\"<prefix2>\" [...]]\n", argv[0]);
+        fprintf(stderr, "syntax: %s [-q|--quiet] [--hrp=<string>] [-j<n>|--processes=<n>] [-x<n>|--max-iters=<n>] \"<prefix>\" [\"<prefix2>\" [...]]\n", argv[0]);
         fprintf(stderr, "you can search for any number of prefixes by simply listing them; the system will, for each keypair/hash160 entry, compare each prefix and report best matches for each prefix. note that the scan will stop if ANY of the prefixes is found in full\n");
         return 1;
     }
@@ -468,6 +471,8 @@ int main(int argc, char* const* argv)
     dev_urandom = fopen("/dev/urandom", "rb");
     assert(dev_urandom && "/dev/urandom required");
     start_time = time_ms();
+
+    if (ca.m.count('r')) hrp = ca.m['r'];
 
     std::vector<query*> queries;
     for (const char* prefix : ca.l) {

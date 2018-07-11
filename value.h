@@ -397,12 +397,12 @@ struct Value {
         data.resize(21);
         do_base58chkenc();
     }
-    void do_bech32enc() {
+    void do_bech32enc(std::string hrp = "bc") {
         data_value();
         std::vector<unsigned char> tmp = {0};
         tmp.reserve(1 + data.size() * 8 / 5);
         ConvertBits<8, 5, true>(tmp, data.begin(), data.end());
-        str = bech32::Encode("bc", tmp);
+        str = bech32::Encode(hrp, tmp);
         type = T_STRING;
     }
     void do_bech32dec() {
