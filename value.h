@@ -246,11 +246,7 @@ struct Value {
     std::string& str_value() {
         switch (type) {
         case T_DATA: {
-            // we assume the data IS a string
-            char buf[data.size() + 1];
-            memcpy(buf, data.data(), data.size());
-            buf[data.size()] = 0;
-            str = buf;
+            str = HexStr(data);
             break;
         }
         case T_OPCODE:
