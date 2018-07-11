@@ -310,13 +310,20 @@ void finder(size_t id, int step, std::vector<query*>* queries) {
         if (iter == KP_CHUNK_SIZE) {
             // generate new chunk of keys
             unsigned char seed[32];
-            if (!fread(seed, 1, 32, dev_urandom)) {
-                fprintf(stderr, "unable to read from /dev/urandom; aborting\n");
-                exit(1);
-            }
-            if (1 != secp256k1_ec_grind(ctx, pubs, privs, KP_CHUNK_SIZE, seed, nullptr)) {
-                fprintf(stderr, "seed invalid; should probably try with more than one\n");
-                exit(1);
+            int counter = 500;
+            while (1) {
+                if (!fread(seed, 1, 32, dev_urandom)) {
+                    fprintf(stderr, "unable to read from /dev/urandom; aborting\n");
+                    exit(1);
+                }
+                if (1 == secp256k1_ec_grind(ctx, pubs, privs, KP_CHUNK_SIZE, seed, nullptr)) {
+                    break;
+                }
+                counter--;
+                if (counter <= 0) {
+                    fprintf(stderr, "unable to grind key pairs; aborting\n");
+                    exit(1);
+                }
             }
             iter = 0;
             // loop back since this takes awhile; we may have found a complete match at this point
