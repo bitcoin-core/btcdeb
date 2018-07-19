@@ -359,7 +359,7 @@ int main(int argc, char* const* argv)
                 validation = CScript() << OP_DUP << OP_HASH160 << program << OP_EQUALVERIFY << OP_CHECKSIG;
             } else {
                 wstack_to_stack--; // do not include the script on the stack
-                validation = CScript(wstack.back());
+                validation = CScript(wstack.back().begin(), wstack.back().end());
             }
 
             if (instance.parse_script(std::vector<uint8_t>(validation.begin(), validation.end()))) {
