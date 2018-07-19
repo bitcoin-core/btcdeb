@@ -117,7 +117,7 @@ The above is the script pub key for a transaction in Bitcoin in human readable f
 
 ## MAST stuff
 
-`btcdeb` also has some stuff related to MAST (merkelized abstract syntax trees), based on the implementation by Mark Friedenbach.
+`btcdeb` also has some stuff related to MAST (merkelized abstract syntax trees), based on the implementation by Mark Friedenbach, in the [mbv-taileval](https://github.com/kallewoof/btcdeb/tree/mbv-taileval) branch.
 
 There are two commands, `merklebranch` and `mastify`.
 
