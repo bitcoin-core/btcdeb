@@ -6,15 +6,26 @@ This is a set of tools used to debug or construct scripts for use in Bitcoin.
 
 [![Build Status](https://travis-ci.org/kallewoof/btcdeb.svg?branch=master)](https://travis-ci.org/kallewoof/btcdeb)
 
+## Preparation
+
+Mac users need the macOS command line tools:
+
+```
+xcode-select --install
+```
+
+And [Homebrew](https://brew.sh/).
+
 ## Dependencies
 
-btcdeb depends on the following libraries:
+btcdeb depends on the following:
 
+* libtool
 * libssl
 
-Ubuntu/debian users can do `apt-get install libssl-dev` (with `sudo` prepended if necessary).
+Ubuntu/debian users can do: `apt-get install libtool libssl-dev` (with `sudo` prepended if necessary)
 
-Mac users most likely have libssl already ([let me know if not](https://github.com/kallewoof/btcdeb/issues/new)).
+Mac users can do: `brew install libtool`
 
 ## Installation
 
