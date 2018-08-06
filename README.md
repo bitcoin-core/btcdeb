@@ -34,6 +34,7 @@ On linux or mac, grab the source code and do:
 $ ./autogen.sh
 $ ./configure
 $ make
+$ sudo make install
 ```
 
 If any of those give an error, please file an issue and I'll take a look. It could
