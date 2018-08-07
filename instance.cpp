@@ -187,7 +187,7 @@ bool Instance::eval(const size_t argc, char* const* argv) {
     }
     CScriptIter it = script.begin();
     while (it != script.end()) {
-        if (!StepScript(*env, it)) {
+        if (!StepScript(*env, it, &script)) {
             fprintf(stderr, "Error: %s\n", ScriptErrorString(*env->serror));
             return false;
         }
