@@ -34,6 +34,7 @@ On linux or mac, grab the source code and do:
 $ ./autogen.sh
 $ ./configure
 $ make
+$ sudo make install
 ```
 
 If any of those give an error, please file an issue and I'll take a look. It could
@@ -58,7 +59,21 @@ Note: most things work, but the console in btcdeb does not. You can work around 
 
 ## Script debugger
 
-The `btcdeb` command can step through a Bitcoin Script and show stack content and operations on a per op level (note that the example below will fail on the OP_CHECKSIG part; see "Signature checking" below).
+The `btcdeb` command can step through a Bitcoin Script and show stack content and operations on a per op level. 
+```
+btcdeb> help
+step     Execute one instruction and iterate in the script.
+rewind   Go back in time one instruction.
+stack    Print stack content.
+altstack Print altstack content.
+vfexec   Print vfexec content.
+exec     Execute command.
+tf       Transform a value using a given function.
+print    Print script.
+help     Show help information.
+```
+
+(note this example will fail on the OP_CHECKSIG part; see "Signature checking" below).
 
 ```Bash
 $ btcdeb '[OP_DUP OP_HASH160 897c81ac37ae36f7bc5b91356cfb0138bfacb3c1 OP_EQUALVERIFY OP_CHECKSIG]' 3045022100c7d8e302908fdc601b125c2734de63ed3bf54353e13a835313c2a2aa5e8f21810220131fad73787989d7fbbdbbd8420674f56bdf61fed5dc2653c826a4789c68501101 03b05bdbdf395e495a61add92442071e32703518b8fca3fc34149db4b56c93be42
