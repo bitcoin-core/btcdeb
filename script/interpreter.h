@@ -203,7 +203,7 @@ struct ScriptExecutionEnvironment {
     ScriptExecutionEnvironment(std::vector<std::vector<unsigned char> >& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in);
 };
 
-bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc);
+bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local_script = nullptr);
 
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* error = nullptr);
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror = nullptr);

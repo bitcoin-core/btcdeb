@@ -255,7 +255,7 @@ int FindAndDelete(CScript& script, const CScript& b)
     return nFound;
 }
 
-bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc)
+bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local_script)
 {
     static const CScriptNum bnZero(0);
     static const CScriptNum bnOne(1);
@@ -274,7 +274,7 @@ bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc)
     auto& nOpCount = env.nOpCount;
     auto& fRequireMinimal = env.fRequireMinimal;
     auto& stack = env.stack;
-    auto& script = env.script;
+    auto& script = local_script ? *local_script : env.script;
     auto& flags = env.flags;
     auto& checker = env.checker;
     auto& sigversion = env.sigversion;
