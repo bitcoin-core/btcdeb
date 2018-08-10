@@ -425,9 +425,11 @@ int main(int argc, char* const* argv)
         if (!ContinueScript(*env)) {
             fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
             print_dualstack();
-        } else {
-            print_stack(env->stack, true);
+            return 1;
         }
+
+        print_stack(env->stack, true);
+        return 0;
     } else {
         kerl_set_history_file(".btcdeb_history");
         kerl_set_repeat_on_empty(true);
