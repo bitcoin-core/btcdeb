@@ -168,7 +168,7 @@ int main(int argc, const char** argv)
         // process each input of each transaction, except coinbases
         size_t idx = 0;
         for (auto& x : b.vtx) {
-            printf("tx #%zu=%s: ", idx, x.hash.ToString().c_str()); fflush(stdout);
+            // printf("tx #%zu=%s: ", idx, x.hash.ToString().c_str()); fflush(stdout);
             std::shared_ptr<tiny::tx> ptx = std::make_shared<tiny::tx>(x);
             if (!x.IsCoinBase()) {
                 std::string tx_str;
@@ -225,12 +225,12 @@ int main(int argc, const char** argv)
                         return 1;
                     }
 
-                    printf("."); fflush(stdout);
+                    // printf("."); fflush(stdout);
                 }
             }
             view.insert(ptx);
             idx++;
-            printf("\n");
+            // printf("\n");
         }
 
         if ((height % 100) == 0) {
