@@ -117,11 +117,12 @@ int main(int argc, char* const* argv)
     ca.add_option("tx", 'x', req_arg);
     ca.add_option("txin", 'i', req_arg);
     ca.add_option("modify-flags", 'f', req_arg);
+    ca.add_option("select", 's', req_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q') || pipe_in || pipe_out;
 
     if (ca.m.count('h')) {
-        fprintf(stderr, "syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
+        fprintf(stderr, "syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
         fprintf(stderr, "if executed with no arguments, an empty script and empty stack is provided\n");
         fprintf(stderr, "to debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
             "as well as (SegWit only) every amount for the inputs\n");
@@ -147,6 +148,11 @@ int main(int argc, char* const* argv)
         if (!quiet) fprintf(stderr, "resulting flags:\n・ %s\n", svf_string(flags, "\n・ ").c_str());
     }
 
+    int selected = -1;
+    if (ca.m.count('s')) {
+        selected = atoi(ca.m['s'].c_str());
+    }
+
     if (ca.l.size() > 0 && !strncmp(ca.l[0], "tx=", 3)) {
         // backwards compatibility; move into tx
         ca.m['x'] = &ca.l[0][3];
@@ -158,13 +164,13 @@ int main(int argc, char* const* argv)
         if (!instance.parse_transaction(ca.m['x'].c_str(), true)) {
             return 1;
         }
-        if (!quiet) fprintf(stderr, "got %stransaction:\n%s\n", instance.sigver == SigVersion::WITNESS_V0 ? "segwit " : "", instance.tx->ToString().c_str());
+        if (!quiet) fprintf(stderr, "got %stransaction %s:\n%s\n", instance.sigver == SigVersion::WITNESS_V0 ? "segwit " : "", instance.tx->GetHash().ToString().c_str(), instance.tx->ToString().c_str());
     }
     if (ca.m.count('i')) {
-        if (!instance.parse_input_transaction(ca.m['i'].c_str())) {
+        if (!instance.parse_input_transaction(ca.m['i'].c_str(), selected)) {
             return 1;
         }
-        if (!quiet) fprintf(stderr, "got input tx #%" PRId64 ":\n%s\n", instance.txin_index, instance.txin->ToString().c_str());
+        if (!quiet) fprintf(stderr, "got input tx #%" PRId64 " %s:\n%s\n", instance.txin_index, instance.txin->GetHash().ToString().c_str(), instance.txin->ToString().c_str());
     }
     char* script_str = nullptr;
     if (pipe_in) {
