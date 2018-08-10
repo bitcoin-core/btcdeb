@@ -34,8 +34,8 @@ public:
     {}
 
     ~Instance() {
-        delete checker;
         delete env;
+        delete checker;
     }
 
     bool parse_transaction(const char* txdata, bool parse_amounts = false);
