@@ -79,7 +79,7 @@ bool StepScript(InterpreterEnv& env)
             return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
         // Additional validation for spend-to-script-hash transactions:
         if (env.scriptIn.IsPayToScriptHash()) {
-            printf("Drop-in P2SH redeem script\n");
+            btc_logf("Drop-in P2SH redeem script\n");
             // // scriptSig must be literals-only or validation fails
             // if (!scriptSig.IsPushOnly())
             //     return set_error(serror, SCRIPT_ERR_SIG_PUSHONLY);
@@ -99,19 +99,21 @@ bool StepScript(InterpreterEnv& env)
             script = pubKey2;
             popstack(stack);
 
-            printf("Restoring stack:\n");
-            for (auto& it : stack) {
-                printf("- %s\n", HexStr(it).c_str());
-            }
-            printf("Script:\n");
-            CScriptIter it = script.begin();
-            valtype vchPushValue;
-            opcodetype opcode;
-            while (script.GetOp(it, opcode, vchPushValue)) {
-                if (vchPushValue.size() > 0) {
-                    printf("- %s\n", HexStr(vchPushValue).c_str());
-                } else {
-                    printf("- %s\n", GetOpName(opcode));
+            if (btc_enabled(btc_logf)) {
+                printf("Restoring stack:\n");
+                for (auto& it : stack) {
+                    printf("- %s\n", HexStr(it).c_str());
+                }
+                printf("Script:\n");
+                CScriptIter it = script.begin();
+                valtype vchPushValue;
+                opcodetype opcode;
+                while (script.GetOp(it, opcode, vchPushValue)) {
+                    if (vchPushValue.size() > 0) {
+                        printf("- %s\n", HexStr(vchPushValue).c_str());
+                    } else {
+                        printf("- %s\n", GetOpName(opcode));
+                    }
                 }
             }
 
@@ -130,15 +132,17 @@ bool StepScript(InterpreterEnv& env)
         script = env.successor_script;
         env.successor_script.clear();
 
-        printf("Drop-in successor script (e.g. input scriptPubKey):\n");
-        CScriptIter it = script.begin();
-        valtype vchPushValue;
-        opcodetype opcode;
-        while (script.GetOp(it, opcode, vchPushValue)) {
-            if (vchPushValue.size() > 0) {
-                printf("- %s\n", HexStr(vchPushValue).c_str());
-            } else {
-                printf("- %s\n", GetOpName(opcode));
+        if (btc_enabled(btc_logf)) {
+            printf("Drop-in successor script (e.g. input scriptPubKey):\n");
+            CScriptIter it = script.begin();
+            valtype vchPushValue;
+            opcodetype opcode;
+            while (script.GetOp(it, opcode, vchPushValue)) {
+                if (vchPushValue.size() > 0) {
+                    printf("- %s\n", HexStr(vchPushValue).c_str());
+                } else {
+                    printf("- %s\n", GetOpName(opcode));
+                }
             }
         }
 
