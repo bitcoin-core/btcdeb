@@ -26,7 +26,8 @@ int print_stack(std::vector<valtype>&, bool raw = false);
 int print_bool_stack(std::vector<valtype>&);
 
 bool quiet = false;
-bool piping = false;
+bool pipe_in = false;  // xxx | btcdeb
+bool pipe_out = false; // btcdeb xxx > file
 int count = 0;
 char** script_lines;
 Instance instance;
@@ -106,8 +107,9 @@ void print_dualstack();
 
 int main(int argc, char* const* argv)
 {
-    piping = !isatty(fileno(stdin));
-    if (piping) btc_logf = btc_logf_dummy;
+    pipe_in = !isatty(fileno(stdin)) || std::getenv("DEBUG_SET_PIPE_IN");
+    pipe_out = !isatty(fileno(stdout)) || std::getenv("DEBUG_SET_PIPE_OUT");
+    if (pipe_in || pipe_out) btc_logf = btc_logf_dummy;
 
     cliargs ca;
     ca.add_option("help", 'h', no_arg);
@@ -116,7 +118,7 @@ int main(int argc, char* const* argv)
     ca.add_option("txin", 'i', req_arg);
     ca.add_option("modify-flags", 'f', req_arg);
     ca.parse(argc, argv);
-    quiet = ca.m.count('q');
+    quiet = ca.m.count('q') || pipe_in || pipe_out;
 
     if (ca.m.count('h')) {
         fprintf(stderr, "syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
@@ -133,7 +135,7 @@ int main(int argc, char* const* argv)
         btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
     }
 
-    if (!piping) {
+    if (!pipe_in) {
         if (std::getenv("DEBUG_SIGHASH")) btc_sighash_logf = btc_logf_stderr;
         if (std::getenv("DEBUG_SIGNING")) btc_sign_logf = btc_logf_stderr;
         if (std::getenv("DEBUG_SEGWIT"))  btc_segwit_logf = btc_logf_stderr;
@@ -165,7 +167,7 @@ int main(int argc, char* const* argv)
         if (!quiet) fprintf(stderr, "got input tx #%" PRId64 ":\n%s\n", instance.txin_index, instance.txin->ToString().c_str());
     }
     char* script_str = nullptr;
-    if (piping) {
+    if (pipe_in) {
         char buf[1024];
         if (!fgets(buf, 1024, stdin)) {
             fprintf(stderr, "warning: no input\n");
@@ -421,7 +423,7 @@ int main(int argc, char* const* argv)
         script_lines[i-1] = strdup(buf);
     }
 
-    if (piping) {
+    if (pipe_in || pipe_out) {
         if (!ContinueScript(*env)) {
             fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
             print_dualstack();
