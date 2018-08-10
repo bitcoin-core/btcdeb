@@ -48,6 +48,8 @@ public:
     void parse_stack_args(size_t argc, char* const* argv, size_t starting_index);
     void parse_stack_args(const std::vector<const char*> args);
 
+    bool configure_tx_txin();
+
     bool setup_environment(unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS);
 
     bool at_end();
