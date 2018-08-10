@@ -105,6 +105,31 @@ bool StepScript(InterpreterEnv& env)
         return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
     }
 
+    if (env.successor_script.size()) {
+        if (stack.empty())
+            return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
+        if (CastToBool(stack.back()) == false)
+            return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
+        script = env.successor_script;
+        env.successor_script.clear();
+
+        printf("Drop-in successor script (e.g. input scriptPubKey):\n");
+        CScriptIter it = script.begin();
+        valtype vchPushValue;
+        opcodetype opcode;
+        while (script.GetOp(it, opcode, vchPushValue)) {
+            if (vchPushValue.size() > 0) {
+                printf("- %s\n", HexStr(vchPushValue).c_str());
+            } else {
+                printf("- %s\n", GetOpName(opcode));
+            }
+        }
+
+        pc = env.pbegincodehash = script.begin();
+        pend = script.end();
+        return true;
+    }
+
     // we are at end; set done var
     env.done = true;
 

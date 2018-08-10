@@ -20,6 +20,7 @@ public:
     std::vector<CAmount> amounts;
     SigVersion sigver;
     CScript script;
+    CScript successor_script;
     std::vector<valtype> stack;
     BaseSignatureChecker* checker;
     ScriptError error;

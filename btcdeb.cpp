@@ -377,16 +377,8 @@ int main(int argc, char* const* argv)
         } else {
             // legacy
             instance.sigver = SigVersion::BASE;
-            instance.script = scriptPubKey;
-            CScript scriptSig = instance.tx->vin[instance.txin_index].scriptSig;
-            CScriptIter it = scriptSig.begin();
-            while (scriptSig.GetOp(it, opcode, pushval)) {
-                if (pushval.size() > 0) {
-                    push_del.push_back(strdup(strprintf("0x%s", HexStr(pushval).c_str()).c_str()));
-                } else {
-                    push_del.push_back(strdup(GetOpName(opcode)));
-                }
-            }
+            instance.script = scriptSig;
+            instance.successor_script = scriptPubKey;
         }
         instance.parse_stack_args(push_del);
         while (!push_del.empty()) {

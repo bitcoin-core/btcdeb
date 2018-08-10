@@ -66,6 +66,9 @@ struct InterpreterEnv : public ScriptExecutionEnvironment {
     // P2SH support
     bool is_p2sh;
     stack_type p2shstack;
+
+    // Executed sigScript support (archaeology)
+    CScript successor_script;
 };
 
 bool StepScript(InterpreterEnv& env);
