@@ -56,24 +56,38 @@ bool Instance::parse_transaction(const char* txdata, bool parse_amounts) {
     return true;
 }
 
-bool Instance::parse_input_transaction(const char* txdata) {
+bool Instance::parse_input_transaction(const char* txdata, int select_index) {
     txin = parse_tx(txdata);
     if (!txin) return false;
     if (tx) {
-        // figure out index from tx vin
         const uint256& txin_hash = txin->GetHash();
-        int64_t i = 0;
-        for (const auto& input : tx->vin) {
-            if (input.prevout.hash == txin_hash) {
-                txin_index = i;
-                txin_vout_index = input.prevout.n;
-                break;
+        if (select_index > -1) {
+            // verify index is valid
+            if (select_index >= tx->vin.size()) {
+                fprintf(stderr, "error: the selected index %d is out of bounds (must be less than %zu, the number of inputs in the transaction)\n", select_index, tx->vin.size());
+                return false;
             }
-            i++;
-        }
-        if (txin_index == -1) {
-            fprintf(stderr, "error: the input transaction %s is not found in any of the inputs for the provided transaction %s\n", txin_hash.ToString().c_str(), tx->GetHash().ToString().c_str());
-            return false;
+            if (txin_hash != tx->vin[select_index].prevout.hash) {
+                fprintf(stderr, "error: the selected index (%d) of the transaction refers to txid %s, but the input transaction has txid %s\n", select_index, tx->vin[select_index].prevout.hash.ToString().c_str(), txin_hash.ToString().c_str());
+                return false;
+            }
+            txin_index = select_index;
+            txin_vout_index = tx->vin[select_index].prevout.n;
+        } else {
+            // figure out index from tx vin
+            int64_t i = 0;
+            for (const auto& input : tx->vin) {
+                if (input.prevout.hash == txin_hash) {
+                    txin_index = i;
+                    txin_vout_index = input.prevout.n;
+                    break;
+                }
+                i++;
+            }
+            if (txin_index == -1) {
+                fprintf(stderr, "error: the input transaction %s is not found in any of the inputs for the provided transaction %s\n", txin_hash.ToString().c_str(), tx->GetHash().ToString().c_str());
+                return false;
+            }
         }
     }
     return true;
@@ -108,7 +122,7 @@ bool Instance::setup_environment(unsigned int flags) {
     } else {
         checker = new BaseSignatureChecker();
     }
-    
+
     env = new InterpreterEnv(stack, script, flags, *checker, sigver, &error);
     env->successor_script = successor_script;
 
