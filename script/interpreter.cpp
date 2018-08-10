@@ -1359,8 +1359,10 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
     CTransactionSignatureSerializer<T> txTmp(txTo, scriptCode, nIn, nHashType);
 
     // Serialize and hash
+    CHashWriter::debug = btc_enabled(btc_sighash_logf);
     CHashWriter ss(SER_GETHASH, 0);
     ss << txTmp << nHashType;
+    CHashWriter::debug = false;
     return ss.GetHash();
 }
 
