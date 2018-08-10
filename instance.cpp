@@ -118,7 +118,7 @@ void Instance::parse_stack_args(size_t argc, char* const* argv, size_t starting_
 
 bool Instance::setup_environment(unsigned int flags) {
     if (tx) {
-        checker = new TransactionSignatureChecker(tx.get(), txin_index, amounts[0]);
+        checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[0]);
     } else {
         checker = new BaseSignatureChecker();
     }

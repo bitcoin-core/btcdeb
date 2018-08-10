@@ -19,7 +19,10 @@ tx=8.947024:010000000001019086ce64fce1bb086395faf6fac37c73f32ba4ea89330432bf8ee8
 #define TXAMT  "8.947024"
 
 TEST_CASE("Segwit Multisig Signing", "[signing-segwit-multisig]") {
-    btc_logf = btc_logf_dummy;
+    if (std::getenv("DEBUG_SIGHASH")) btc_sighash_logf = btc_logf_stderr;
+    if (std::getenv("DEBUG_SIGNING")) btc_sign_logf = btc_logf_stderr;
+    if (std::getenv("DEBUG_SEGWIT"))  btc_segwit_logf = btc_logf_stderr;
+    // btc_logf = btc_logf_dummy;
 
     SECTION("Valid inputs") {
         Instance instance;
