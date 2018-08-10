@@ -26,7 +26,7 @@ EXTRA_LIBRARIES += \
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc test-btcdeb
+bin_PROGRAMS = btcdeb btcc test-btcdeb sync
 noinst_PROGRAMS =
 
 if ENABLE_DANGEROUS
@@ -185,6 +185,23 @@ test_ecide_LDADD = \
 	$(LIBSECP256K1)
 
 endif
+
+# sync binary #
+sync_SOURCES = \
+	instance.h \
+	instance.cpp \
+	sync.cpp \
+	tinyblock.h \
+	tinycv.h \
+	tinytx.h
+sync_CPPFLAGS = $(AM_CPPFLAGS)
+sync_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+sync_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
+
+sync_LDADD = \
+	$(LIBBITCOIN_DEB) \
+	$(LIBBITCOIN) \
+	$(LIBSECP256K1)
 
 # btcc binary #
 btcc_SOURCES = \
