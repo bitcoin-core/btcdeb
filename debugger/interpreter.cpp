@@ -46,7 +46,24 @@ bool StepScript(InterpreterEnv& env)
     auto& pc = env.pc;
 
     if (pc < pend) {
-        return StepScript(env, pc);
+        // Store history entry
+        env.stack_history.push_back(env.stack);
+        env.altstack_history.push_back(env.altstack);
+        env.pc_history.push_back(env.pc);
+        env.nOpCount_history.push_back(env.nOpCount);
+
+        if (!StepScript(env, pc)) {
+            // undo above pushes
+            env.stack_history.pop_back();
+            env.altstack_history.pop_back();
+            env.pc_history.pop_back();
+            env.nOpCount_history.pop_back();
+            return false;
+        }
+
+        // Update environment
+        env.curr_op_seq++;
+        return true;
     }
 
     auto& vfExec = env.vfExec;
@@ -100,7 +117,7 @@ bool StepScript(InterpreterEnv& env)
 
             pc = env.pbegincodehash = script.begin();
             pend = script.end();
-            return true; // ExecIterator(env, script, pc, true);
+            return true;
         }
         return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
     }
@@ -142,6 +159,7 @@ bool StepScript(InterpreterEnv& env)
 bool RewindScript(InterpreterEnv& env)
 {
     if (env.stack_history.size() == 0) {
+        printf("no stack history\n");
         return false;
     }
     // Rewind from history
