@@ -124,7 +124,9 @@ public:
             // no spendable outputs so.. bye
             return;
         }
-        assert(coin_map.count(x->hash) == 0);
+        // exception for d5d27987d2a3dfc724e359870c6644b40e497bdc0589a033220fe15429d88599 which
+        // in fact exists twice, due to coinbase tx duplication
+        assert(x->hash != uint256S("d5d27987d2a3dfc724e359870c6644b40e497bdc0589a033220fe15429d88599") || coin_map.count(x->hash) == 0);
         coin_map[x->hash] = c;
     }
     tx* get(const uint256& txid) const {
