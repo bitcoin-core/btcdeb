@@ -119,6 +119,7 @@ void rpc_get_block(uint32_t height, tiny::block& b, uint256& blockhex) {
         fp = fopen(dstfinal.c_str(), "wb");
         CAutoFile af(fp, SER_DISK, 0);
         af << blockhex;
+        push_purgable(dstfinal.c_str());
         return rpc_get_block(blockhex, b, height);
     }
     CAutoFile af(fp, SER_DISK, 0);
