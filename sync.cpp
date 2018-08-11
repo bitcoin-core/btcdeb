@@ -3,8 +3,7 @@
 #include <instance.h>
 #include <script/script.h>
 
-// this should be 2
-int tiny::coin_view_version = 1;
+int tiny::coin_view_version = 2;
 
 std::string rpc_call = "";
 

@@ -66,7 +66,6 @@ static inline uint64_t DeserializeBoolVector(Stream& s, std::vector<bool>& v) {
 }
 
 struct coin {
-    int version = coin_view_version;
     std::shared_ptr<tx> x;
     std::vector<bool> spent;
     uint32_t spendable = 0;
@@ -100,7 +99,7 @@ struct coin {
             READWRITE(*x.get());
             SerializeBoolVector(s, spent);
         }
-        if (version == 1) {
+        if (coin_view_version == 1) {
             uint8_t u;
             READWRITE(u);
         }
@@ -148,10 +147,7 @@ public:
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
-        // transition phase only: should always read coin view version
-        if (coin_view_version > 1) {
-            READWRITE(coin_view_version);
-        }
+        READWRITE(coin_view_version);
         READWRITE(coin_map);
         coin_view_version = 2;
     }
