@@ -72,11 +72,14 @@ struct coin {
         x = x_in;
         spendable = 0;
         spent.resize(x->vout.size());
+        // bool necessary = false;
         for (size_t i = 0; i < x->vout.size(); ++i) {
             assert(spendable < 255);
             spent[i] = x->vout[i].provably_unspendable();
             spendable += !spent[i];
+            // necessary |= CScript(x->vout[i].scriptPubKey.begin(), x->vout[i].scriptPubKey.end()).IsPayToScriptHash();
         }
+        // if (!necessary) spendable = 0;
     }
     bool spend_exhausts(int n) {
         assert(!spent[n]);
