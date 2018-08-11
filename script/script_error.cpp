@@ -52,7 +52,7 @@ const char* ScriptErrorString(const ScriptError serror)
         case SCRIPT_ERR_UNSATISFIED_LOCKTIME:
             return "Locktime requirement not satisfied";
         case SCRIPT_ERR_SIG_HASHTYPE:
-            return "Signature hash type missing or not understood";
+            return "Signature hash type missing or not understood (is this transaction pre-BIP66? Try with --modify-flags=-STRICTENC)";
         case SCRIPT_ERR_SIG_DER:
             return "Non-canonical DER signature";
         case SCRIPT_ERR_MINIMALDATA:
@@ -60,7 +60,7 @@ const char* ScriptErrorString(const ScriptError serror)
         case SCRIPT_ERR_SIG_PUSHONLY:
             return "Only non-push operators allowed in signatures";
         case SCRIPT_ERR_SIG_HIGH_S:
-            return "Non-canonical signature: S value is unnecessarily high";
+            return "Non-canonical signature: S value is unnecessarily high (is this a historical transaction from before LOW_S enforcement? Try with --modify-flags=-LOW_S)";
         case SCRIPT_ERR_SIG_NULLDUMMY:
             return "Dummy CHECKMULTISIG argument must be zero";
         case SCRIPT_ERR_MINIMALIF:
