@@ -211,6 +211,7 @@ int main(int argc, const char** argv)
                     auto& env = instance.env;
 
                     if (!ContinueScript(*env)) {
+                        fprintf(stderr, "block %s, index %zu tx %s failed to validate input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string());
                         fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
                         return 1;
                     }
