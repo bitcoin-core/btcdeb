@@ -128,9 +128,16 @@ void rpc_get_block(uint32_t height, tiny::block& b, uint256& blockhex) {
 
 bool CastToBool(const valtype& vch);
 
+// From chainparams.cpp:
+#define BIP34Height 227931
+#define BIP34Hash   uint256S("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8")
+#define BIP65Height 388381 // 000000000000000004c2b624ed5d7756c508d90fd0da2c7c679febfa6c4735f0
+#define BIP66Height 363725 // 00000000000000000379eaa19dce8c9b722d46ae6a57c2f1a988119488b50931
+
 unsigned int get_flags(int height) {
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
-    if (height < 163686) flags ^= SCRIPT_VERIFY_LOW_S;
+    if (height < 163686) flags ^= SCRIPT_VERIFY_LOW_S; // last known low S offending block = 163685
+    if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC;
     return flags;
 }
 
