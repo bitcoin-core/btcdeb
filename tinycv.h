@@ -11,6 +11,8 @@
 
 namespace tiny {
 
+extern int coin_view_version;
+
 template<typename Stream>
 static inline void SerializeBoolVector(Stream& s, const std::vector<bool>& v) {
     uint64_t len = v.size();
@@ -36,45 +38,44 @@ static inline void SerializeBoolVector(Stream& s, const std::vector<bool>& v) {
 }
 
 template<typename Stream>
-static inline void DeserializeBoolVector(Stream& s, std::vector<bool>& v) {
+static inline uint64_t DeserializeBoolVector(Stream& s, std::vector<bool>& v) {
+    uint64_t trues = 0;
     size_t i = 0;
     uint64_t len = ::ReadCompactSize(s);
     v.resize(len);
-    while (i < v.size()) {
+    for (;;) {
         uint8_t b;
         s >> b;
         if (i + 7 < v.size()) {
-            v[i++] = b & 1; b >>= 1;
-            v[i++] = b & 1; b >>= 1;
-            v[i++] = b & 1; b >>= 1;
-            v[i++] = b & 1; b >>= 1;
-            v[i++] = b & 1; b >>= 1;
-            v[i++] = b & 1; b >>= 1;
-            v[i++] = b & 1; b >>= 1;
-            v[i++] = b;
+            trues += (v[i++] = b & 1); b >>= 1;
+            trues += (v[i++] = b & 1); b >>= 1;
+            trues += (v[i++] = b & 1); b >>= 1;
+            trues += (v[i++] = b & 1); b >>= 1;
+            trues += (v[i++] = b & 1); b >>= 1;
+            trues += (v[i++] = b & 1); b >>= 1;
+            trues += (v[i++] = b & 1); b >>= 1;
+            trues += (v[i++] = b);
         } else {
-            for (; i < v.size(); ++i) {
-                v[i] = b & 1;
+            for (; b && i < v.size(); ++i) {
+                trues += (v[i] = b & 1);
                 b >>= 1;
             }
+            return trues;
         }
     }
 }
 
 struct coin {
+    int version = coin_view_version;
     std::shared_ptr<tx> x;
     std::vector<bool> spent;
-    uint8_t spendable;
-    coin() {
-        spendable = 0;
-    }
+    uint32_t spendable = 0;
+    coin() {}
     coin(std::shared_ptr<tx> x_in) {
         x = x_in;
-        spendable = 0;
         spent.resize(x->vout.size());
         // bool necessary = false;
         for (size_t i = 0; i < x->vout.size(); ++i) {
-            assert(spendable < 255);
             spent[i] = x->vout[i].provably_unspendable();
             spendable += !spent[i];
             // necessary |= CScript(x->vout[i].scriptPubKey.begin(), x->vout[i].scriptPubKey.end()).IsPayToScriptHash();
@@ -94,12 +95,15 @@ struct coin {
         if (ser_action.ForRead()) {
             x = std::make_shared<tx>();
             READWRITE(*x.get());
-            DeserializeBoolVector(s, spent);
+            spendable = DeserializeBoolVector(s, spent);
         } else {
             READWRITE(*x.get());
             SerializeBoolVector(s, spent);
         }
-        READWRITE(spendable);
+        if (version == 1) {
+            uint8_t u;
+            READWRITE(u);
+        }
     }
 };
 
@@ -144,7 +148,12 @@ public:
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
+        // transition phase only: should always read coin view version
+        if (coin_view_version > 1) {
+            READWRITE(coin_view_version);
+        }
         READWRITE(coin_map);
+        coin_view_version = 2;
     }
 };
 
