@@ -251,6 +251,13 @@ int main(int argc, const char** argv)
                 CAutoFile af(fp, SER_DISK, 0);
                 af << height << view;
             }
+            {
+                FILE* fp = fopen("current-sync-state.dat", "rb");
+                if (fp) {
+                    CAutoFile af(fp, SER_DISK, 0);
+                    af >> height >> view;
+                }
+            }
             printf("\n");
         }
     }
