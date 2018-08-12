@@ -247,17 +247,19 @@ int main(int argc, const char** argv)
             // save view and height to disk
             printf("writing state to disk..."); fflush(stdout);
             {
-                FILE* fp = fopen("current-sync-state.dat", "wb");
+                FILE* fp = fopen("current-sync-state.new", "wb");
                 CAutoFile af(fp, SER_DISK, 0);
                 af << height << view;
             }
             {
-                FILE* fp = fopen("current-sync-state.dat", "rb");
+                FILE* fp = fopen("current-sync-state.new", "rb");
                 if (fp) {
                     CAutoFile af(fp, SER_DISK, 0);
                     af >> height >> view;
                 }
             }
+            unlink("current-sync-state.dat");
+            rename("current-sync-state.new", "current-sync-state.dat");
             printf("\n");
         }
     }
