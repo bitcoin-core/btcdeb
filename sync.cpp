@@ -139,7 +139,7 @@ bool CastToBool(const valtype& vch);
 unsigned int get_flags(int height) {
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
     if (height < 163686) flags ^= SCRIPT_VERIFY_LOW_S; // last known low S offending block = 163685
-    if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC;
+    if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC | SCRIPT_VERIFY_DERSIG;
     return flags;
 }
 
