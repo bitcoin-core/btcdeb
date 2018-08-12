@@ -139,6 +139,9 @@ public:
         coin_map[x->hash] = c;
     }
     tx* get(const uint256& txid) const {
+        if (coin_map.count(txid) == 0) {
+            printf("MISSING TXID %s\n", txid.ToString().c_str());
+        }
         assert(coin_map.count(txid) == 1);
         return coin_map.at(txid).x.get();
     }
