@@ -118,6 +118,22 @@ protected:
     }
 
 public:
+    bool operator==(const view& other) const {
+        bool equal = true;
+        for (const auto& x : coin_map) {
+            if (other.coin_map.count(x.first) != 1) {
+                printf("other is missing txid %s\n", x.first.ToString().c_str());
+                equal = false;
+            }
+        }
+        for (const auto& x : other.coin_map) {
+            if (coin_map.count(x.first) != 1) {
+                printf("I am missing txid %s\n", x.first.ToString().c_str());
+                equal = false;
+            }
+        }
+        return equal;
+    }
     void insert(std::shared_ptr<tx> x) {
         if (!x->IsCoinBase()) {
             // spend inputs

@@ -252,11 +252,13 @@ int main(int argc, const char** argv)
                 af << height << view;
             }
             {
+                tiny::view view2;
                 FILE* fp = fopen("current-sync-state.new", "rb");
                 if (fp) {
                     CAutoFile af(fp, SER_DISK, 0);
-                    af >> height >> view;
+                    af >> height >> view2;
                 }
+                assert(view == view2);
             }
             unlink("current-sync-state.dat");
             rename("current-sync-state.new", "current-sync-state.dat");
