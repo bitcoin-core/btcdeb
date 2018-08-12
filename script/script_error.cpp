@@ -54,7 +54,7 @@ const char* ScriptErrorString(const ScriptError serror)
         case SCRIPT_ERR_SIG_HASHTYPE:
             return "Signature hash type missing or not understood (is this transaction pre-BIP66? Try with --modify-flags=-STRICTENC)";
         case SCRIPT_ERR_SIG_DER:
-            return "Non-canonical DER signature";
+            return "Non-canonical DER signature (is this transaction pre-BIP66? Try with --modify-flags=-DERSIG)";
         case SCRIPT_ERR_MINIMALDATA:
             return "Data push larger than necessary";
         case SCRIPT_ERR_SIG_PUSHONLY:
