@@ -60,8 +60,8 @@ static inline uint64_t DeserializeBoolVector(Stream& s, std::vector<bool>& v) {
                 trues += (v[i] = b & 1);
                 b >>= 1;
             }
-            return trues;
         }
+        if (i == v.size()) return trues;
     }
 }
 
