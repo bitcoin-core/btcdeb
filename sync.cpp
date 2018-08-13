@@ -156,6 +156,7 @@ int main(int argc, const char** argv)
 
     tiny::view view;
     int height = 0;
+    uint64_t txs = 0;
     tiny::block b;
     uint256 blockhex;
 
@@ -164,15 +165,16 @@ int main(int argc, const char** argv)
     if (fp) {
         printf("restoring from state..."); fflush(stdout);
         CAutoFile af(fp, SER_DISK, 0);
-        af >> height >> view;
+        af >> height >> view >> txs;
         printf("\n");
     }
 
     for (;;) {
         ++height;
+        txs += b.vtx.size();
         printf("block #%d", height); fflush(stdout);
         rpc_get_block(height, b, blockhex);
-        printf("=%s (#tx = %zu)\n", blockhex.ToString().c_str(), b.vtx.size());
+        printf("=%s (#tx = %zu; total = %llu)\n", blockhex.ToString().c_str(), b.vtx.size(), txs);
         
         // process each input of each transaction, except coinbases
         size_t idx = 0;
@@ -249,20 +251,42 @@ int main(int argc, const char** argv)
             {
                 FILE* fp = fopen("current-sync-state.new", "wb");
                 CAutoFile af(fp, SER_DISK, 0);
-                af << height << view;
+                af << height << view << txs;
             }
             {
                 tiny::view view2;
                 FILE* fp = fopen("current-sync-state.new", "rb");
                 if (fp) {
                     CAutoFile af(fp, SER_DISK, 0);
-                    af >> height >> view2;
+                    af >> height >> view2 >> txs;
                 }
                 assert(view == view2);
             }
             unlink("current-sync-state.dat");
             rename("current-sync-state.new", "current-sync-state.dat");
             printf("\n");
+            if ((height % 1000) == 0) {
+                printf("backing up 1k block state..."); fflush(stdout);
+                FILE* fp = fopen("current-sync-state.dat", "rb");
+                FILE* fp2 = fopen("backup-state-1k.dat", "wb");
+                char* buf = (char*)malloc(65536);
+                size_t sz;
+                while (0 < (sz = fread(buf, 1, 65536, fp))) {
+                    (void)fwrite(buf, 1, sz, fp2);
+                }
+                fclose(fp);
+                fclose(fp2);
+                {
+                    tiny::view view2;
+                    FILE* fp = fopen("backup-state-1k.dat", "rb");
+                    if (fp) {
+                        CAutoFile af(fp, SER_DISK, 0);
+                        af >> height >> view2 >> txs;
+                    }
+                    assert(view == view2);
+                }
+                printf("\n");
+            }
         }
     }
 }
