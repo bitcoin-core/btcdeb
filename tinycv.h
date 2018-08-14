@@ -15,23 +15,26 @@ extern int coin_view_version;
 
 template<typename Stream>
 static inline void SerializeBoolVector(Stream& s, const std::vector<bool>& v) {
+    size_t i = 0;
     uint64_t len = v.size();
     s << COMPACTSIZE(len);
-    for (size_t i = 0; i < v.size(); i += 8) {
+    while (i + 7 < v.size()) {
+        uint8_t b =
+          v[i]
+        | (v[i+1] << 1)
+        | (v[i+2] << 2)
+        | (v[i+3] << 3)
+        | (v[i+4] << 4)
+        | (v[i+5] << 5)
+        | (v[i+6] << 6)
+        | (v[i+7] << 7);
+        s << b;
+        i += 8;
+    }
+    if (i < v.size()) {
         uint8_t b = v[i];
-        if (i + 7 < v.size()) {
-            b 
-            |= (v[i+1] << 1)
-            |  (v[i+2] << 2)
-            |  (v[i+3] << 3)
-            |  (v[i+4] << 4)
-            |  (v[i+5] << 5)
-            |  (v[i+6] << 6)
-            |  (v[i+7] << 7);
-        } else {
-            for (size_t j = i + 1; j < v.size(); ++j) {
-                b |= (v[j] << (j-i));
-            }
+        for (size_t j = i + 1; j < v.size(); ++j) {
+            b |= (v[j] << (j-i));
         }
         s << b;
     }
