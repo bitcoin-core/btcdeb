@@ -261,6 +261,33 @@ int main(int argc, const char** argv)
                     af >> height >> view2 >> txs;
                 }
                 assert(view == view2);
+                FILE* fp2 = fopen("tmpfile", "wb");
+                if (fp2) {
+                    CAutoFile af(fp2, SER_DISK, 0);
+                    af << height << view2 << txs;
+                }
+            }
+            {
+                FILE* fp = fopen("current-sync-state.new", "rb");
+                FILE* fp2 = fopen("tmpfile", "rb");
+                char* buf = (char*)malloc(65536);
+                char* buf2 = (char*)malloc(65536);
+                size_t z, z2;
+                while (0 != (z = fread(buf, 1, 65536, fp))) {
+                    z2 = fread(buf2, 1, 65536, fp2);
+                    if (z != z2) {
+                        printf("file sizes differ: read %zu vs %zu b\n", z, z2);
+                        exit(99);
+                    }
+                    if (memcmp(buf, buf2, z)) {
+                        printf("files differ around byte %ld\n", ftell(fp) - z);
+                        exit(99);
+                    }
+                }
+                fclose(fp);
+                fclose(fp2);
+                free(buf);
+                free(buf2);
             }
             unlink("current-sync-state.dat");
             rename("current-sync-state.new", "current-sync-state.dat");
