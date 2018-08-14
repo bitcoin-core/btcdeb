@@ -95,11 +95,8 @@ void rpc_get_block(const uint256& blockhex, tiny::block& b, uint32_t& height) {
         unlink(dstheight.c_str());
     }
     // read height
-    if (sizeof(uint32_t) != fread(&height, sizeof(uint32_t), 1, fp)) {
+    if (1 != fread(&height, sizeof(uint32_t), 1, fp)) {
         fprintf(stderr, "unable to read from input file %s\n", dstfinal.c_str());
-        // destroy and retry
-        unlink(dstfinal.c_str());
-        return rpc_get_block(blockhex, b, height);
     }
     // deserialize block
     CAutoFile deserializer(fp, SER_DISK, 0);
