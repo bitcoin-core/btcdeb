@@ -43,7 +43,7 @@ static inline uint64_t DeserializeBoolVector(Stream& s, std::vector<bool>& v) {
     size_t i = 0;
     uint64_t len = ::ReadCompactSize(s);
     v.resize(len);
-    for (;;) {
+    while (i < v.size()) {
         uint8_t b;
         s >> b;
         if (i + 7 < v.size()) {
@@ -61,8 +61,8 @@ static inline uint64_t DeserializeBoolVector(Stream& s, std::vector<bool>& v) {
                 b >>= 1;
             }
         }
-        if (i == v.size()) return trues;
     }
+    return trues;
 }
 
 struct coin {
