@@ -39,27 +39,27 @@ static inline void SerializeBoolVector(Stream& s, const std::vector<bool>& v) {
 
 template<typename Stream>
 static inline uint64_t DeserializeBoolVector(Stream& s, std::vector<bool>& v) {
+    uint8_t b;
     uint64_t trues = 0;
     size_t i = 0;
     uint64_t len = ::ReadCompactSize(s);
     v.resize(len);
-    while (i < v.size()) {
-        uint8_t b;
+    while (i + 7 < v.size()) {
         s >> b;
-        if (i + 7 < v.size()) {
-            trues += (v[i++] = b & 1); b >>= 1;
-            trues += (v[i++] = b & 1); b >>= 1;
-            trues += (v[i++] = b & 1); b >>= 1;
-            trues += (v[i++] = b & 1); b >>= 1;
-            trues += (v[i++] = b & 1); b >>= 1;
-            trues += (v[i++] = b & 1); b >>= 1;
-            trues += (v[i++] = b & 1); b >>= 1;
-            trues += (v[i++] = b);
-        } else {
-            for (; i < v.size(); ++i) {
-                trues += (v[i] = b & 1);
-                b >>= 1;
-            }
+        trues += (v[i++] = b & 1); b >>= 1;
+        trues += (v[i++] = b & 1); b >>= 1;
+        trues += (v[i++] = b & 1); b >>= 1;
+        trues += (v[i++] = b & 1); b >>= 1;
+        trues += (v[i++] = b & 1); b >>= 1;
+        trues += (v[i++] = b & 1); b >>= 1;
+        trues += (v[i++] = b & 1); b >>= 1;
+        trues += (v[i++] = b);
+    }
+    if (i < v.size()) {
+        s >> b;
+        for (; i < v.size(); ++i) {
+            trues += (v[i] = b & 1);
+            b >>= 1;
         }
     }
     return trues;
