@@ -22,7 +22,7 @@ inline FILE* rpc_fetch(const char* cmd, const char* dst, bool abort_on_failure =
     if (rpc_call == "") {
         assert(!"no RPC call available");
     }
-    system(cmd);
+    if (system(cmd)) { fprintf(stderr, "failed to run command: %s\n", cmd); exit(1); }
     FILE* fp = fopen(dst, "r");
     if (!fp) {
         fprintf(stderr, "RPC call failed: %s\n", cmd);
@@ -69,7 +69,7 @@ void rpc_get_block(const uint256& blockhex, tiny::block& b, uint32_t& height) {
         fclose(fphdr);                                      // closes fphdr
         std::string dstheight = std::string("blockdata/") + blockhex.ToString() + ".height";
         std::string cmd = std::string("cat ") + dsthdr + " | jq -r .height > " + dstheight;
-        system(cmd.c_str());
+        if (system(cmd.c_str())) { fprintf(stderr, "failed to run command: %s\n", cmd.c_str()); exit(1); }
         fphdr = fopen(dstheight.c_str(), "r");
         assert(1 == fscanf(fphdr, "%u", &height));
         fclose(fphdr);                                      // closes fphdr (.height open)
@@ -78,7 +78,7 @@ void rpc_get_block(const uint256& blockhex, tiny::block& b, uint32_t& height) {
         fseek(fphex, 0, SEEK_SET);
         char* blk = (char*)malloc(sz + 1);
         assert(blk);
-        fread(blk, 1, sz, fphex);
+        if (sz != fread(blk, 1, sz, fphex)) { fprintf(stderr, "unable to read from input file %s\n", dsthex.c_str()); exit(1); }
         fclose(fphex);                                      // closes fphex
         blk[sz] = 0;
         std::vector<uint8_t> blkdata = ParseHex(blk);
@@ -95,7 +95,12 @@ void rpc_get_block(const uint256& blockhex, tiny::block& b, uint32_t& height) {
         unlink(dstheight.c_str());
     }
     // read height
-    fread(&height, sizeof(uint32_t), 1, fp);
+    if (sizeof(uint32_t) != fread(&height, sizeof(uint32_t), 1, fp)) {
+        fprintf(stderr, "unable to read from input file %s\n", dstfinal.c_str());
+        // destroy and retry
+        unlink(dstfinal.c_str());
+        return rpc_get_block(blockhex, b, height);
+    }
     // deserialize block
     CAutoFile deserializer(fp, SER_DISK, 0);
     deserializer >> b;
@@ -113,7 +118,7 @@ void rpc_get_block(uint32_t height, tiny::block& b, uint256& blockhex) {
             fptxt = rpc_fetch(cmd.c_str(), dsttxt.c_str());
         }
         char hex[128];
-        fscanf(fptxt, "%s", hex);
+        if (1 != fscanf(fptxt, "%s", hex)) { fprintf(stderr, "unable to scan from input file %s\n", dsttxt.c_str()); exit(1); }
         assert(strlen(hex) == 64);
         blockhex = uint256S(hex);
         fclose(fptxt);
@@ -174,7 +179,7 @@ int main(int argc, const char** argv)
         txs += b.vtx.size();
         printf("block #%d", height); fflush(stdout);
         rpc_get_block(height, b, blockhex);
-        printf("=%s (#tx = %zu; total = %llu)\n", blockhex.ToString().c_str(), b.vtx.size(), txs);
+        printf("=%s (#tx = %zu; total = %llu)\n", blockhex.ToString().c_str(), b.vtx.size(), (unsigned long long)txs);
         
         // process each input of each transaction, except coinbases
         size_t idx = 0;
