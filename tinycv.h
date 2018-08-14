@@ -65,7 +65,7 @@ static inline uint64_t DeserializeBoolVector(Stream& s, std::vector<bool>& v) {
             b >>= 1;
         }
     }
-    return trues;
+    return len - trues;
 }
 
 struct coin {
