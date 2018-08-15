@@ -140,8 +140,7 @@ bool CastToBool(const valtype& vch);
 
 unsigned int get_flags(int height) {
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
-    if (height < 163686) flags ^= SCRIPT_VERIFY_LOW_S; // last known low S offending block = 163685
-    if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC | SCRIPT_VERIFY_DERSIG;
+    if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC | SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S;
     if (height < BIP65Height) flags ^= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
     return flags;
 }
@@ -252,24 +251,24 @@ int main(int argc, const char** argv)
             // save view and height to disk
             printf("writing state to disk..."); fflush(stdout);
             {
-                FILE* fp = fopen("current-sync-state.dat", "wb");
+                FILE* fp = fopen("current-sync-state.new", "wb");
                 CAutoFile af(fp, SER_DISK, 0);
                 af << height << view << txs;
             }
-            // {
-            //     tiny::view view2;
-            //     FILE* fp = fopen("current-sync-state.new", "rb");
-            //     if (fp) {
-            //         CAutoFile af(fp, SER_DISK, 0);
-            //         af >> height >> view2 >> txs;
-            //     }
-            //     assert(view == view2);
-            //     FILE* fp2 = fopen("tmpfile", "wb");
-            //     if (fp2) {
-            //         CAutoFile af(fp2, SER_DISK, 0);
-            //         af << height << view2 << txs;
-            //     }
-            // }
+            {
+                tiny::view view2;
+                FILE* fp = fopen("current-sync-state.new", "rb");
+                if (fp) {
+                    CAutoFile af(fp, SER_DISK, 0);
+                    af >> height >> view2 >> txs;
+                }
+                assert(view == view2);
+                // FILE* fp2 = fopen("tmpfile", "wb");
+                // if (fp2) {
+                //     CAutoFile af(fp2, SER_DISK, 0);
+                //     af << height << view2 << txs;
+                // }
+            }
             // {
             //     FILE* fp = fopen("current-sync-state.new", "rb");
             //     FILE* fp2 = fopen("tmpfile", "rb");
@@ -292,8 +291,8 @@ int main(int argc, const char** argv)
             //     free(buf);
             //     free(buf2);
             // }
-            // unlink("current-sync-state.dat");
-            // rename("current-sync-state.new", "current-sync-state.dat");
+            unlink("current-sync-state.dat");
+            rename("current-sync-state.new", "current-sync-state.dat");
             printf("\n");
             // if ((height % 1000) == 0) {
             //     printf("backing up 1k block state..."); fflush(stdout);
