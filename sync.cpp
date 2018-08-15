@@ -142,6 +142,7 @@ unsigned int get_flags(int height) {
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
     if (height < 163686) flags ^= SCRIPT_VERIFY_LOW_S; // last known low S offending block = 163685
     if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC | SCRIPT_VERIFY_DERSIG;
+    if (height < BIP65Height) flags ^= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
     return flags;
 }
 
@@ -251,71 +252,71 @@ int main(int argc, const char** argv)
             // save view and height to disk
             printf("writing state to disk..."); fflush(stdout);
             {
-                FILE* fp = fopen("current-sync-state.new", "wb");
+                FILE* fp = fopen("current-sync-state.dat", "wb");
                 CAutoFile af(fp, SER_DISK, 0);
                 af << height << view << txs;
             }
-            {
-                tiny::view view2;
-                FILE* fp = fopen("current-sync-state.new", "rb");
-                if (fp) {
-                    CAutoFile af(fp, SER_DISK, 0);
-                    af >> height >> view2 >> txs;
-                }
-                assert(view == view2);
-                FILE* fp2 = fopen("tmpfile", "wb");
-                if (fp2) {
-                    CAutoFile af(fp2, SER_DISK, 0);
-                    af << height << view2 << txs;
-                }
-            }
-            {
-                FILE* fp = fopen("current-sync-state.new", "rb");
-                FILE* fp2 = fopen("tmpfile", "rb");
-                char* buf = (char*)malloc(65536);
-                char* buf2 = (char*)malloc(65536);
-                size_t z, z2;
-                while (0 != (z = fread(buf, 1, 65536, fp))) {
-                    z2 = fread(buf2, 1, 65536, fp2);
-                    if (z != z2) {
-                        printf("file sizes differ: read %zu vs %zu b\n", z, z2);
-                        exit(99);
-                    }
-                    if (memcmp(buf, buf2, z)) {
-                        printf("files differ around byte %ld\n", ftell(fp) - z);
-                        exit(99);
-                    }
-                }
-                fclose(fp);
-                fclose(fp2);
-                free(buf);
-                free(buf2);
-            }
-            unlink("current-sync-state.dat");
-            rename("current-sync-state.new", "current-sync-state.dat");
+            // {
+            //     tiny::view view2;
+            //     FILE* fp = fopen("current-sync-state.new", "rb");
+            //     if (fp) {
+            //         CAutoFile af(fp, SER_DISK, 0);
+            //         af >> height >> view2 >> txs;
+            //     }
+            //     assert(view == view2);
+            //     FILE* fp2 = fopen("tmpfile", "wb");
+            //     if (fp2) {
+            //         CAutoFile af(fp2, SER_DISK, 0);
+            //         af << height << view2 << txs;
+            //     }
+            // }
+            // {
+            //     FILE* fp = fopen("current-sync-state.new", "rb");
+            //     FILE* fp2 = fopen("tmpfile", "rb");
+            //     char* buf = (char*)malloc(65536);
+            //     char* buf2 = (char*)malloc(65536);
+            //     size_t z, z2;
+            //     while (0 != (z = fread(buf, 1, 65536, fp))) {
+            //         z2 = fread(buf2, 1, 65536, fp2);
+            //         if (z != z2) {
+            //             printf("file sizes differ: read %zu vs %zu b\n", z, z2);
+            //             exit(99);
+            //         }
+            //         if (memcmp(buf, buf2, z)) {
+            //             printf("files differ around byte %ld\n", ftell(fp) - z);
+            //             exit(99);
+            //         }
+            //     }
+            //     fclose(fp);
+            //     fclose(fp2);
+            //     free(buf);
+            //     free(buf2);
+            // }
+            // unlink("current-sync-state.dat");
+            // rename("current-sync-state.new", "current-sync-state.dat");
             printf("\n");
-            if ((height % 1000) == 0) {
-                printf("backing up 1k block state..."); fflush(stdout);
-                FILE* fp = fopen("current-sync-state.dat", "rb");
-                FILE* fp2 = fopen("backup-state-1k.dat", "wb");
-                char* buf = (char*)malloc(65536);
-                size_t sz;
-                while (0 < (sz = fread(buf, 1, 65536, fp))) {
-                    (void)fwrite(buf, 1, sz, fp2);
-                }
-                fclose(fp);
-                fclose(fp2);
-                {
-                    tiny::view view2;
-                    FILE* fp = fopen("backup-state-1k.dat", "rb");
-                    if (fp) {
-                        CAutoFile af(fp, SER_DISK, 0);
-                        af >> height >> view2 >> txs;
-                    }
-                    assert(view == view2);
-                }
-                printf("\n");
-            }
+            // if ((height % 1000) == 0) {
+            //     printf("backing up 1k block state..."); fflush(stdout);
+            //     FILE* fp = fopen("current-sync-state.dat", "rb");
+            //     FILE* fp2 = fopen("backup-state-1k.dat", "wb");
+            //     char* buf = (char*)malloc(65536);
+            //     size_t sz;
+            //     while (0 < (sz = fread(buf, 1, 65536, fp))) {
+            //         (void)fwrite(buf, 1, sz, fp2);
+            //     }
+            //     fclose(fp);
+            //     fclose(fp2);
+            //     {
+            //         tiny::view view2;
+            //         FILE* fp = fopen("backup-state-1k.dat", "rb");
+            //         if (fp) {
+            //             CAutoFile af(fp, SER_DISK, 0);
+            //             af >> height >> view2 >> txs;
+            //         }
+            //         assert(view == view2);
+            //     }
+            //     printf("\n");
+            // }
         }
     }
 }
