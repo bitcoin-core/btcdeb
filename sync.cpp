@@ -11,7 +11,7 @@ std::vector<std::string> fetched_purgable;
 
 void push_purgable(const char* path) {
     fetched_purgable.emplace_back(path);
-    while (fetched_purgable.size() > 10000) {
+    while (fetched_purgable.size() > 100) {
         std::string s = fetched_purgable[0];
         fetched_purgable.erase(fetched_purgable.begin());
         unlink(s.c_str());
