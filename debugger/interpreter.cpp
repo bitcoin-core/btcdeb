@@ -99,24 +99,6 @@ bool StepScript(InterpreterEnv& env)
             script = pubKey2;
             popstack(stack);
 
-            if (btc_enabled(btc_logf)) {
-                printf("Restoring stack:\n");
-                for (auto& it : stack) {
-                    printf("- %s\n", HexStr(it).c_str());
-                }
-                printf("Script:\n");
-                CScriptIter it = script.begin();
-                valtype vchPushValue;
-                opcodetype opcode;
-                while (script.GetOp(it, opcode, vchPushValue)) {
-                    if (vchPushValue.size() > 0) {
-                        printf("- %s\n", HexStr(vchPushValue).c_str());
-                    } else {
-                        printf("- %s\n", GetOpName(opcode));
-                    }
-                }
-            }
-
             pc = env.pbegincodehash = script.begin();
             pend = script.end();
             env.curr_op_seq++;

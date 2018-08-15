@@ -216,23 +216,31 @@ int main(int argc, char* const* argv)
     script_headers.push_back("");
     CScriptIter it = env->script.begin();
     opcodetype opcode;
-    valtype vchPushValue;
-    while (env->script.GetOp(it, opcode, vchPushValue)) ++count;
+    valtype vchPushValue, p2sh_script_payload;
+    while (env->script.GetOp(it, opcode, vchPushValue)) { p2sh_script_payload = vchPushValue; ++count; }
 
+    CScript p2sh_script;
+    bool has_p2sh = false;
+    if (env->is_p2sh && env->p2shstack.size() > 0) {
+        has_p2sh = true;
+        const valtype& p2sh_script_val = env->p2shstack.back();
+        p2sh_script = CScript(p2sh_script_val.begin(), p2sh_script_val.end());
+    }
     if (instance.successor_script.size()) {
         script_ptrs.push_back(&instance.successor_script);
         script_headers.push_back("<<< scriptPubKey >>>");
         count++;
         it = instance.successor_script.begin();
         while (instance.successor_script.GetOp(it, opcode, vchPushValue)) ++count;
+        if (instance.successor_script.IsPayToScriptHash()) {
+            has_p2sh = true;
+            p2sh_script = CScript(p2sh_script_payload.begin(), p2sh_script_payload.end());
+        }
     }
-    CScript p2sh_script;
-    if (env->is_p2sh && env->p2shstack.size() > 0) {
+    if (has_p2sh) {
         script_ptrs.push_back(&p2sh_script);
         script_headers.push_back("<<< P2SH script >>>");
         count++;
-        const valtype& p2sh_script_val = env->p2shstack.back();
-        p2sh_script = CScript(p2sh_script_val.begin(), p2sh_script_val.end());
         it = p2sh_script.begin();
         while (p2sh_script.GetOp(it, opcode, vchPushValue)) ++count;
     }
@@ -358,16 +366,28 @@ void print_dualstack() {
     std::vector<std::string> headers;
     scripts.push_back(&env->script);
     headers.push_back("");
+    CScript p2sh_script;
+    bool has_p2sh = false;
+    if (env->is_p2sh && env->p2shstack.size() > 0) {
+        has_p2sh = true;
+        const valtype& p2sh_script_val = env->p2shstack.back();
+        p2sh_script = CScript(p2sh_script_val.begin(), p2sh_script_val.end());
+    }
     if (env->successor_script.size()) {
         scripts.push_back(&env->successor_script);
         headers.push_back("<<< scriptPubKey >>>");
+        if (env->successor_script.IsPayToScriptHash()) {
+            has_p2sh = true;
+            CScriptIter it = env->script.begin();
+            opcodetype opcode;
+            valtype vchPushValue, p2sh_script_payload;
+            while (env->script.GetOp(it, opcode, vchPushValue)) { p2sh_script_payload = vchPushValue; }
+            p2sh_script = CScript(p2sh_script_payload.begin(), p2sh_script_payload.end());
+        }
     }
-    CScript p2sh_script;
-    if (env->is_p2sh && env->p2shstack.size() > 0) {
+    if (has_p2sh) {
         scripts.push_back(&p2sh_script);
         headers.push_back("<<< P2SH script >>>");
-        const valtype& p2sh_script_val = env->p2shstack.back();
-        p2sh_script = CScript(p2sh_script_val.begin(), p2sh_script_val.end());
     }
     svprintscripts(l, lmax, scripts, headers, it);
 
