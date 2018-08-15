@@ -215,6 +215,7 @@ int main(int argc, const char** argv)
                         fprintf(stderr, "block %s, index %zu tx %s failed to configure tx/txin for input %d=%s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str());
                         exit(1);
                     }
+                    bool require_cleanstack = instance.sigver == SigVersion::WITNESS_V0;
 
                     if (!instance.setup_environment(get_flags(height))) {
                         fprintf(stderr, "block %s, index %zu tx %s failed to initialize script environment for input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string());
@@ -232,7 +233,7 @@ int main(int argc, const char** argv)
                     // stack should have 1 item. it should be true
                     if (env->stack.size() != 1) {
                         fprintf(stderr, "block %s, index %zu tx %s finished execution with non-1 stack size for input %d=%s: size() == %zu\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), env->stack.size());
-                        return 1;
+                        if (require_cleanstack) return 1;
                     }
                     if (!CastToBool(env->stack[0])) {
                         fprintf(stderr, "block %s, index %zu tx %s finished execution with non-truthy on stack for input %d=%s: stack top = %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), HexStr(env->stack[0]).c_str());
