@@ -78,7 +78,7 @@ bool StepScript(InterpreterEnv& env)
         if (CastToBool(stack.back()) == false)
             return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
         // Additional validation for spend-to-script-hash transactions:
-        if (env.scriptIn.IsPayToScriptHash()) {
+        if (env.script.IsPayToScriptHash()) {
             btc_logf("Drop-in P2SH redeem script\n");
             // // scriptSig must be literals-only or validation fails
             // if (!scriptSig.IsPushOnly())
@@ -135,6 +135,19 @@ bool StepScript(InterpreterEnv& env)
         pc = env.pbegincodehash = script.begin();
         pend = script.end();
         env.curr_op_seq++;
+
+        // figure out if p2sh
+        env.is_p2sh = (
+            script.size() == 23 &&
+            script[0] == OP_HASH160 &&
+            script[1] == 20 &&
+            script[22] == OP_EQUAL
+        );
+        if (env.is_p2sh) {
+            // we have "executed" the sigscript already (in the form of pushes onto the stack),
+            // so we need to copy the stack here
+            env.p2shstack = env.stack;
+        }
         return true;
     }
 
