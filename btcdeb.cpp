@@ -232,7 +232,7 @@ int main(int argc, char* const* argv)
         count++;
         it = instance.successor_script.begin();
         while (instance.successor_script.GetOp(it, opcode, vchPushValue)) ++count;
-        if (instance.successor_script.IsPayToScriptHash()) {
+        if ((env->flags & SCRIPT_VERIFY_P2SH) && instance.successor_script.IsPayToScriptHash()) {
             has_p2sh = true;
             p2sh_script = CScript(p2sh_script_payload.begin(), p2sh_script_payload.end());
         }
@@ -376,7 +376,7 @@ void print_dualstack() {
     if (env->successor_script.size()) {
         scripts.push_back(&env->successor_script);
         headers.push_back("<<< scriptPubKey >>>");
-        if (env->successor_script.IsPayToScriptHash()) {
+        if ((env->flags & SCRIPT_VERIFY_P2SH) && env->successor_script.IsPayToScriptHash()) {
             has_p2sh = true;
             CScriptIter it = env->script.begin();
             opcodetype opcode;

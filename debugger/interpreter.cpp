@@ -26,6 +26,7 @@ InterpreterEnv::InterpreterEnv(std::vector<valtype>& stack_in, const CScript& sc
     fRequireMinimal = (flags & SCRIPT_VERIFY_MINIMALDATA) != 0;
     // figure out if p2sh
     is_p2sh = (
+        (flags & SCRIPT_VERIFY_P2SH) &&
         script.size() == 23 &&
         script[0] == OP_HASH160 &&
         script[1] == 20 &&
@@ -119,6 +120,7 @@ bool StepScript(InterpreterEnv& env)
 
         // figure out if p2sh
         env.is_p2sh = (
+            (env.flags & SCRIPT_VERIFY_P2SH) &&
             script.size() == 23 &&
             script[0] == OP_HASH160 &&
             script[1] == 20 &&
