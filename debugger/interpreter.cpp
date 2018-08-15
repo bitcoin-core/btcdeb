@@ -79,7 +79,6 @@ bool StepScript(InterpreterEnv& env)
             return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
         // Additional validation for spend-to-script-hash transactions:
         if (env.script.IsPayToScriptHash()) {
-            btc_logf("Drop-in P2SH redeem script\n");
             // // scriptSig must be literals-only or validation fails
             // if (!scriptSig.IsPushOnly())
             //     return set_error(serror, SCRIPT_ERR_SIG_PUSHONLY);
