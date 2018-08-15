@@ -209,25 +209,52 @@ int main(int argc, char* const* argv)
 
     env = instance.env;
 
+    std::vector<CScript*> script_ptrs;
+    std::vector<std::string> script_headers;
+
+    script_ptrs.push_back(&env->script);
+    script_headers.push_back("");
     CScriptIter it = env->script.begin();
     opcodetype opcode;
     valtype vchPushValue;
     while (env->script.GetOp(it, opcode, vchPushValue)) ++count;
+
+    if (instance.successor_script.size()) {
+        script_ptrs.push_back(&instance.successor_script);
+        script_headers.push_back("<<< scriptPubKey >>>");
+        count++;
+        it = instance.successor_script.begin();
+        while (instance.successor_script.GetOp(it, opcode, vchPushValue)) ++count;
+    }
+    CScript p2sh_script;
+    if (env->is_p2sh && env->p2shstack.size() > 0) {
+        script_ptrs.push_back(&p2sh_script);
+        script_headers.push_back("<<< P2SH script >>>");
+        count++;
+        const valtype& p2sh_script_val = env->p2shstack.back();
+        p2sh_script = CScript(p2sh_script_val.begin(), p2sh_script_val.end());
+        it = p2sh_script.begin();
+        while (p2sh_script.GetOp(it, opcode, vchPushValue)) ++count;
+    }
     script_lines = (char**)malloc(sizeof(char*) * count);
-    
-    it = env->script.begin();
+
     int i = 0;
     char buf[1024];
-    while (env->script.GetOp(it, opcode, vchPushValue)) {
-        ++i;
-        char* pbuf = buf;
-        pbuf += sprintf(pbuf, "#%04d ", i);
-        if (vchPushValue.size() > 0) {
-            sprintf(pbuf, "%s", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
-        } else {
-            sprintf(pbuf, "%s", GetOpName(opcode));
+    for (size_t siter = 0; siter < script_ptrs.size(); ++siter) {
+        CScript* script = script_ptrs[siter];
+        const std::string& header = script_headers[siter];
+        if (header != "") script_lines[i++] = strdup(header.c_str());
+        it = script->begin();
+        while (script->GetOp(it, opcode, vchPushValue)) {
+            char* pbuf = buf;
+            pbuf += sprintf(pbuf, "#%04d ", i);
+            if (vchPushValue.size() > 0) {
+                sprintf(pbuf, "%s", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
+            } else {
+                sprintf(pbuf, "%s", GetOpName(opcode));
+            }
+            script_lines[i++] = strdup(buf);
         }
-        script_lines[i-1] = strdup(buf);
     }
 
     if (pipe_in || pipe_out) {
@@ -286,28 +313,64 @@ int fn_rewind(const char* arg) {
     return 0;
 }
 
-void print_dualstack() {
-    // generate lines for left and right hand side (stack vs script)
-    std::vector<std::string> l, r;
-    auto it = env->pc;
+inline void svprintscripts(std::vector<std::string>& l, int& lmax, std::vector<CScript*>& scripts, std::vector<std::string>& headers, CScriptIter it) {
     char buf[1024];
     opcodetype opcode;
     valtype vchPushValue;
+    bool begun = false;
+    for (size_t siter = 0; siter < scripts.size(); ++siter) {
+        CScript* script = scripts[siter];
+
+        if (begun) {
+            if (headers[siter] != "") {
+                if (headers[siter].length() > lmax) lmax = headers[siter].length();
+                l.push_back(headers[siter]);
+            }
+            it = script->begin();
+        }
+
+        while (script->GetOp(it, opcode, vchPushValue)) {
+            begun = true;
+            char* pbuf = buf;
+            if (vchPushValue.size() > 0) {
+                sprintf(pbuf, "%s", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
+            } else {
+                sprintf(pbuf, "%s", GetOpName(opcode));
+            }
+            auto s = std::string(buf);
+            if (s.length() > lmax) lmax = s.length();
+            l.push_back(s);
+        }
+
+        if (it == script->end()) begun = true;
+    }
+}
+
+void print_dualstack() {
+    // generate lines for left and right hand side (stack vs script)
+    auto it = env->pc;
+    std::vector<std::string> l, r;
     static int glmax = 7;
     static int grmax = 7;
     int lmax = 0;
     int rmax = 0;
-    while (env->script.GetOp(it, opcode, vchPushValue)) {
-        char* pbuf = buf;
-        if (vchPushValue.size() > 0) {
-            sprintf(pbuf, "%s", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
-        } else {
-            sprintf(pbuf, "%s", GetOpName(opcode));
-        }
-        auto s = std::string(buf);
-        if (s.length() > lmax) lmax = s.length();
-        l.push_back(s);
+    std::vector<CScript*> scripts;
+    std::vector<std::string> headers;
+    scripts.push_back(&env->script);
+    headers.push_back("");
+    if (env->successor_script.size()) {
+        scripts.push_back(&env->successor_script);
+        headers.push_back("<<< scriptPubKey >>>");
     }
+    CScript p2sh_script;
+    if (env->is_p2sh && env->p2shstack.size() > 0) {
+        scripts.push_back(&p2sh_script);
+        headers.push_back("<<< P2SH script >>>");
+        const valtype& p2sh_script_val = env->p2shstack.back();
+        p2sh_script = CScript(p2sh_script_val.begin(), p2sh_script_val.end());
+    }
+    svprintscripts(l, lmax, scripts, headers, it);
+
     for (int j = env->stack.size() - 1; j >= 0; j--) {
         auto& it = env->stack[j];
         auto s = it.begin() == it.end() ? "0x" : HexStr(it.begin(), it.end());

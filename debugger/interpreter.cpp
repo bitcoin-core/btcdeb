@@ -119,6 +119,7 @@ bool StepScript(InterpreterEnv& env)
 
             pc = env.pbegincodehash = script.begin();
             pend = script.end();
+            env.curr_op_seq++;
             return true;
         }
         return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
@@ -131,23 +132,9 @@ bool StepScript(InterpreterEnv& env)
             return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
         script = env.successor_script;
         env.successor_script.clear();
-
-        if (btc_enabled(btc_logf)) {
-            printf("Drop-in successor script (e.g. input scriptPubKey):\n");
-            CScriptIter it = script.begin();
-            valtype vchPushValue;
-            opcodetype opcode;
-            while (script.GetOp(it, opcode, vchPushValue)) {
-                if (vchPushValue.size() > 0) {
-                    printf("- %s\n", HexStr(vchPushValue).c_str());
-                } else {
-                    printf("- %s\n", GetOpName(opcode));
-                }
-            }
-        }
-
         pc = env.pbegincodehash = script.begin();
         pend = script.end();
+        env.curr_op_seq++;
         return true;
     }
 
