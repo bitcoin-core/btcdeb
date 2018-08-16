@@ -125,6 +125,7 @@ bool Instance::setup_environment(unsigned int flags) {
 
     env = new InterpreterEnv(stack, script, flags, *checker, sigver, &error);
     env->successor_script = successor_script;
+    env->done &= successor_script.size() == 0;
 
     return env->operational;
 }
