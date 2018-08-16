@@ -108,10 +108,6 @@ bool StepScript(InterpreterEnv& env)
     }
 
     if (env.successor_script.size()) {
-        if (stack.empty())
-            return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
-        if (CastToBool(stack.back()) == false)
-            return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
         script = env.successor_script;
         env.successor_script.clear();
         pc = env.pbegincodehash = script.begin();
