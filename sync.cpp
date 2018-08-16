@@ -130,6 +130,21 @@ void rpc_get_block(uint32_t height, tiny::block& b, uint256& blockhex) {
     return rpc_get_block(blockhex, b, height);
 }
 
+int print_stack(std::vector<valtype>& stack, bool raw) {
+    if (raw) {
+        for (auto& it : stack) printf("%s\n", HexStr(it.begin(), it.end()).c_str());
+    } else {
+        if (stack.size() == 0) printf("- empty stack -\n");
+        int i = 0;
+        for (int j = stack.size() - 1; j >= 0; j--) {
+            auto& it = stack[j];
+            i++;
+            printf("<%02d>\t%s%s\n", i, HexStr(it.begin(), it.end()).c_str(), i == 1 ? "\t(top)" : "");
+        }
+    }
+    return 0;
+}
+
 bool CastToBool(const valtype& vch);
 
 // From chainparams.cpp:
@@ -138,7 +153,9 @@ static const auto BIP16Exception = uint256S("0x00000000000002dc756eebf4f49723ed8
 #define BIP34Hash   uint256S("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8")
 #define BIP65Height 388381 // 000000000000000004c2b624ed5d7756c508d90fd0da2c7c679febfa6c4735f0
 #define BIP66Height 363725 // 00000000000000000379eaa19dce8c9b722d46ae6a57c2f1a988119488b50931
-static const auto MinimalDataExceptTX = uint256S("0f24294a1d23efbb49c1765cf443fba7930702752aba6d765870082fe4f13cae");
+static const auto MinimalDataExceptTX = std::set<uint256>{
+    uint256S("0f24294a1d23efbb49c1765cf443fba7930702752aba6d765870082fe4f13cae"),
+};
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
 unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid) {
@@ -147,7 +164,7 @@ unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid
     if (height < BIP65Height) flags ^= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
     if (height < UpgradableNops) flags ^= SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS;
     if (blockhash == BIP16Exception) flags ^= SCRIPT_VERIFY_P2SH;
-    if (txid == MinimalDataExceptTX) flags ^= SCRIPT_VERIFY_MINIMALDATA;
+    if (MinimalDataExceptTX.count(txid)) flags ^= SCRIPT_VERIFY_MINIMALDATA;
     return flags;
 }
 
@@ -242,8 +259,9 @@ int main(int argc, const char** argv)
                         fprintf(stderr, "block %s, index %zu tx %s finished execution with non-1 stack size for input %d=%s: size() == %zu\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), env->stack.size());
                         if (require_cleanstack) return 1;
                     }
-                    if (!CastToBool(env->stack[0])) {
+                    if (!CastToBool(env->stack.back())) {
                         fprintf(stderr, "block %s, index %zu tx %s finished execution with non-truthy on stack for input %d=%s: stack top = %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), HexStr(env->stack[0]).c_str());
+                        print_stack(env->stack, false);
                         return 1;
                     }
 
