@@ -52,7 +52,7 @@ bool Instance::parse_transaction(const char* txdata, bool parse_amounts) {
     tx = parse_tx(p);
     if (!tx) return false;
     while (amounts.size() < tx->vin.size()) amounts.push_back(0);
-    if (tx->vin[0].scriptSig.size() == 0) sigver = SigVersion::WITNESS_V0;
+    if (tx->HasWitness()) sigver = SigVersion::WITNESS_V0;
     return true;
 }
 
