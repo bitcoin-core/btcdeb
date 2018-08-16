@@ -139,11 +139,13 @@ static const auto BIP16Exception = uint256S("0x00000000000002dc756eebf4f49723ed8
 #define BIP65Height 388381 // 000000000000000004c2b624ed5d7756c508d90fd0da2c7c679febfa6c4735f0
 #define BIP66Height 363725 // 00000000000000000379eaa19dce8c9b722d46ae6a57c2f1a988119488b50931
 static const auto MinimalDataExceptTX = uint256S("0f24294a1d23efbb49c1765cf443fba7930702752aba6d765870082fe4f13cae");
+#define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
 unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid) {
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
     if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC | SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S;
     if (height < BIP65Height) flags ^= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
+    if (height < UpgradableNops) flags ^= SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS;
     if (blockhash == BIP16Exception) flags ^= SCRIPT_VERIFY_P2SH;
     if (txid == MinimalDataExceptTX) flags ^= SCRIPT_VERIFY_MINIMALDATA;
     return flags;
