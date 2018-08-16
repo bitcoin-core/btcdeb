@@ -183,7 +183,7 @@ int main(int argc, const char** argv)
         txs += b.vtx.size();
         printf("block #%d", height); fflush(stdout);
         rpc_get_block(height, b, blockhex);
-        printf("=%s (#tx = %zu; total = %llu)\n", blockhex.ToString().c_str(), b.vtx.size(), (unsigned long long)txs);
+        printf("=%s (#tx = %3zu; total = %9llu)\n", blockhex.ToString().c_str(), b.vtx.size(), (unsigned long long)txs);
         
         // process each input of each transaction, except coinbases
         size_t idx = 0;
