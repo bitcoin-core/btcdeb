@@ -155,6 +155,7 @@ static const auto BIP16Exception = uint256S("0x00000000000002dc756eebf4f49723ed8
 #define BIP66Height 363725 // 00000000000000000379eaa19dce8c9b722d46ae6a57c2f1a988119488b50931
 static const auto MinimalDataExceptTX = std::set<uint256>{
     uint256S("0f24294a1d23efbb49c1765cf443fba7930702752aba6d765870082fe4f13cae"),
+    uint256S("7caed7650c392c24e44a093f30438fe6dc9ec1154b92bedc8a561130c9c50920"),
 };
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
