@@ -26,7 +26,7 @@ EXTRA_LIBRARIES += \
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc test-btcdeb
+bin_PROGRAMS = btcdeb btcc ecide test-btcdeb
 noinst_PROGRAMS =
 
 # debugger #
@@ -125,6 +125,20 @@ btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
+	$(LIBBITCOIN_DEB) \
+	$(LIBBITCOIN) \
+	$(LIBSECP256K1) \
+	$(LIBKERL)
+
+# ecide binary #
+ecide_SOURCES = \
+	ecide.cpp \
+	cliargs.h
+ecide_CPPFLAGS = $(AM_CPPFLAGS)
+ecide_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+ecide_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
+
+ecide_LDADD = \
 	$(LIBBITCOIN_DEB) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \

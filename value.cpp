@@ -12,6 +12,12 @@ void ECC_Start();
 
 #define abort(msg...) do { fprintf(stderr, msg); return; } while (0)
 
+Value Value::prepare_extraction(const Value& a, const Value& b) {
+    CScript s;
+    s << a.data_value() << b.data_value();
+    return Value(s);
+}
+
 bool Value::extract_values(std::vector<std::vector<uint8_t>>& values) {
     values.clear();
     CScript s(data.begin(), data.end());
@@ -91,6 +97,26 @@ void Value::do_tweak_pubkey() {
     data.resize(33);
     size_t publen = 33;
     secp256k1_ec_pubkey_serialize(secp256k1_context_sign, data.data(), &publen, &pk1, SECP256K1_EC_COMPRESSED);
+}
+
+void Value::do_negate_pubkey() {
+    if (!secp256k1_context_sign) ECC_Start();
+
+    if (type != T_DATA) abort("invalid type (must be data)\n");
+    CPubKey pubkey(data);
+    if (!pubkey.IsValid()) abort("invalid pubkey");
+    secp256k1_pubkey pk;
+    if (!secp256k1_ec_pubkey_parse(secp256k1_context_sign, &pk, &pubkey[0], pubkey.size())) {
+        abort("failed to parse pubkey\n");
+    }
+
+    if (!secp256k1_ec_pubkey_negate(secp256k1_context_sign, &pk)) {
+        abort("failed to negate pubkey");
+    }
+
+    data.resize(33);
+    size_t publen = 33;
+    secp256k1_ec_pubkey_serialize(secp256k1_context_sign, data.data(), &publen, &pk, SECP256K1_EC_COMPRESSED);
 }
 
 Value Value::from_secp256k1_pubkey(const void* secp256k1_pubkey_ptr) {
@@ -211,6 +237,16 @@ void Value::do_multiply_privkeys() {
     }
 
     data = args[0];
+}
+
+void Value::do_negate_privkey() {
+    if (!secp256k1_context_sign) ECC_Start();
+
+    if (type != T_DATA) abort("invalid type (must be data)\n");
+
+    if (!secp256k1_ec_privkey_negate(secp256k1_context_sign, &data[0])) {
+        abort("failed to negate privkey");
+    }
 }
 
 void Value::do_get_pubkey() {

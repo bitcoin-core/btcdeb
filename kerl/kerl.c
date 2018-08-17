@@ -44,10 +44,12 @@ char comment_char = 0;
 COMMAND *commands = NULL;
 int execute_line(char *line);
 char *history_file = NULL;
+kerl_bindable fallback = NULL;
 
 /* sensitivity */
 int skip_history = 0;
 int may_skip_history = 0;
+int whitespace_to_skip_history = 0;
 
 void kerl_set_sensitive(int do_not_store_history) {
     skip_history = do_not_store_history;
@@ -55,6 +57,11 @@ void kerl_set_sensitive(int do_not_store_history) {
 
 void kerl_set_enable_sensitivity() {
     may_skip_history = 1;
+}
+
+void kerl_set_enable_whitespaced_sensitivity() {
+    kerl_set_enable_sensitivity();
+    whitespace_to_skip_history = 1;
 }
 
 /* Forward declarations. */
@@ -73,6 +80,11 @@ void kerl_register(const char *name, kerl_bindable func, const char *doc)
     commands = realloc(commands, sizeof(COMMAND) * command_cap);
   }
   commands[command_count++] = (COMMAND) {strdup(name), func, strdup(doc), NULL};
+}
+
+void kerl_register_fallback(kerl_bindable func)
+{
+  fallback = func;
 }
 
 void kerl_set_completor(const char *name, kerl_completor completor)
@@ -147,6 +159,7 @@ void kerl_run(const char *prompt)
        Then, if there is anything left, add it to the history list
        and execute it. */
     s = stripwhite(line);
+    if (s > line && whitespace_to_skip_history) skip_history = 1;
 
     if (*s) {
       if (repeat_empty) {
@@ -226,6 +239,10 @@ int execute_line(char *line)
   command = find_command(word);
 
   if (!command) {
+    if (fallback) {
+      if (i > 0 && !line[i-1]) line[i-1] = ' ';
+      return fallback(line);
+    }
     fprintf (stderr, "%s: No such command.\n", word);
     return (-1);
   }

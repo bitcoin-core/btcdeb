@@ -60,6 +60,7 @@ void kerl_run(const char *prompt);
 void kerl_set_history_file(const char *path);
 void kerl_set_repeat_on_empty(int flag);
 void kerl_set_comment_char(char commentchar);
+void kerl_register_fallback(kerl_bindable func);
 int kerl_make_argcv(const char *argstring, size_t *argcOut, char ***argvOut);
 int kerl_make_argcv_escape(const char *argstring, size_t *argcOut, char ***argvOut, char escape);
 void kerl_free_argcv(size_t argc, char **argv);
@@ -69,5 +70,6 @@ void kerl_free_argcv(size_t argc, char **argv);
    performance loss due to extra copying of strings */
 void kerl_set_sensitive(int do_not_store_history);
 void kerl_set_enable_sensitivity();
+void kerl_set_enable_whitespaced_sensitivity();
 
 #endif // included_kerl_h_

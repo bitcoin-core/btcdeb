@@ -459,9 +459,11 @@ struct Value {
     void do_tweak_pubkey();
     void do_add();
     void do_sub();
+    void do_negate_pubkey();
 #ifdef ENABLE_DANGEROUS
     void do_combine_privkeys();
     void do_multiply_privkeys();
+    void do_negate_privkey();
     void do_encode_wif() {
         data_value();
         data.insert(data.begin(), 0x80);    // main net
@@ -518,6 +520,7 @@ struct Value {
     void println() const {
         print(); fputc('\n', stdout);
     }
+    static Value prepare_extraction(const Value& a, const Value& b);
 private:
     bool extract_values(std::vector<std::vector<uint8_t>>& values);
 };
