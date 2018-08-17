@@ -4,6 +4,8 @@
 
 #include <support/allocators/secure.h>
 
+#include <arith_uint256.h>
+
 static secp256k1_context* secp256k1_context_sign = nullptr;
 
 void ECC_Start();
@@ -67,6 +69,30 @@ void Value::do_combine_pubkeys() {
     secp256k1_ec_pubkey_serialize(secp256k1_context_sign, data.data(), &publen, &result, SECP256K1_EC_COMPRESSED);
 }
 
+void Value::do_tweak_pubkey() {
+    if (!secp256k1_context_sign) ECC_Start();
+
+    if (type != T_DATA) abort("invalid type (must be data)\n");
+    std::vector<std::vector<uint8_t>> args;
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs a 32 byte value and a public key)\n");
+    auto tweak = args[0];
+    CPubKey pubkey1(args[1]);
+    if (tweak.size() != 32) abort("invalid tweak value (32 byte value required)");
+    if (!pubkey1.IsValid()) abort("invalid pubkey");
+    secp256k1_pubkey pk1;
+    if (!secp256k1_ec_pubkey_parse(secp256k1_context_sign, &pk1, &pubkey1[0], pubkey1.size())) {
+        abort("failed to parse pubkey\n");
+    }
+
+    if (!secp256k1_ec_pubkey_tweak_mul(secp256k1_context_sign, &pk1, tweak.data())) {
+        abort("tweak was out of range (chance of around 1 in 2^128 for uniformly random 32-byte arrays, or equal to zero");
+    }
+
+    data.resize(33);
+    size_t publen = 33;
+    secp256k1_ec_pubkey_serialize(secp256k1_context_sign, data.data(), &publen, &pk1, SECP256K1_EC_COMPRESSED);
+}
+
 Value Value::from_secp256k1_pubkey(const void* secp256k1_pubkey_ptr) {
     if (!secp256k1_context_sign) ECC_Start();
 
@@ -76,6 +102,65 @@ Value Value::from_secp256k1_pubkey(const void* secp256k1_pubkey_ptr) {
     assert(result.size() == clen);
     assert(result.IsValid());
     return Value(std::vector<uint8_t>(result.begin(), result.end()));
+}
+
+inline bool get_arith_uint256(const Value& v, arith_uint256& a) {
+    switch (v.type) {
+    case Value::T_INT:
+        a = arith_uint256(v.int64);
+        return true;
+    case Value::T_DATA:
+        {
+            uint256 tmp;
+            memcpy(tmp.begin(), v.data.data(), std::min<size_t>(32, v.data.size()));
+            a = UintToArith256(tmp);
+        }
+        return true;
+    case Value::T_OPCODE:
+        fprintf(stderr, "invalid type: opcode\n");
+        return false;
+    case Value::T_STRING:
+        fprintf(stderr, "invalid type: string\n");
+    }
+    return false;
+}
+
+inline void add(std::vector<uint8_t>& data, arith_uint256 a, arith_uint256 b, arith_uint256 g) {
+    arith_uint256 c = a + b;
+    if (!g.EqualTo(0) && (c >= g || c < a)) {
+        // left case is trivial. right case:
+        // g = 0xffe
+        // a = 0xffd
+        // b = 0x005
+        // c  = a + b = 0x002
+        // c' = a + b modulo g = 0xffd + 0x005 mod 0xffe = 0x004
+        // c - g = 0x002 - 0xffe = -0xffc = 0x004
+        c -= g;
+    }
+    uint256 r = ArithToUint256(c);
+    data.resize(32);
+    memcpy(data.data(), r.begin(), 32);
+}
+
+void Value::do_add() {
+    std::vector<std::vector<uint8_t>> args;
+    if (!extract_values(args) || args.size() < 2 || args.size() > 3) abort("invalid input (needs two values, with optional group as third)");
+    arith_uint256 a, b, g;
+    if (!get_arith_uint256(Value(args[0]), a)) return;
+    if (!get_arith_uint256(Value(args[1]), b)) return;
+    if (args.size() == 3 && !get_arith_uint256(Value(args[2]), g)) return;
+    add(data, a, b, g);
+}
+
+void Value::do_sub() {
+    std::vector<std::vector<uint8_t>> args;
+    if (!extract_values(args) || args.size() < 2 || args.size() > 3) abort("invalid input (needs two values, with optional group as third)");
+    arith_uint256 a, b, g;
+    if (!get_arith_uint256(Value(args[0]), a)) return;
+    if (!get_arith_uint256(Value(args[1]), b)) return;
+    if (args.size() == 3 && !get_arith_uint256(Value(args[2]), g)) return;
+    b = -b;
+    add(data, a, b, g);
 }
 
 #ifdef ENABLE_DANGEROUS
@@ -98,6 +183,30 @@ void Value::do_combine_privkeys() {
     }
 
     if (!secp256k1_ec_privkey_tweak_add(secp256k1_context_sign, args[0].data(), args[1].data())) {
+        abort("failed call to secp256k1_ec_privkey_tweak_add\n");
+    }
+
+    data = args[0];
+}
+
+void Value::do_multiply_privkeys() {
+    if (!secp256k1_context_sign) ECC_Start();
+
+    if (type != T_DATA) abort("invalid type (must be data)\n");
+    std::vector<std::vector<uint8_t>> args;
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two privkeys)\n");
+    for (int i = 0; i < 2; i++) {
+        if (args[i].size() != 32) {
+            // it is probably a WIF encoded key
+            Value wif(args[i]);
+            wif.str_value();
+            if (wif.str.length() != args[i].size()) abort("invalid input (private key %d must be 32 byte data or a WIF encoded privkey)\n", i);
+            wif.do_decode_wif();
+            args[i] = wif.data;
+        }
+    }
+
+    if (!secp256k1_ec_privkey_tweak_mul(secp256k1_context_sign, args[0].data(), args[1].data())) {
         abort("failed call to secp256k1_ec_privkey_tweak_add\n");
     }
 
@@ -174,7 +283,7 @@ void GetRandBytes(unsigned char* buf, int num)
 void ECC_Start() {
     assert(secp256k1_context_sign == nullptr);
 
-    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
     assert(ctx != nullptr);
 
     {

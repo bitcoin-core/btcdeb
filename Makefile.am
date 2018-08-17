@@ -39,6 +39,7 @@ LIBBITCOIN_DEB_H = \
 BITCOIN_CORE_H = \
 	$(LIBBITCOIN_DEB_H) \
 	amount.h \
+	arith_uint256.h \
 	base58.h \
 	bech32.h \
 	compat.h \
@@ -86,6 +87,7 @@ libbitcoin_a_LIBADD = $(LIBSECP256K1)
 libbitcoin_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_a_CXXFLAGS = $(AM_CXXFLAGS)
 libbitcoin_a_SOURCES = \
+	arith_uint256.cpp \
 	base58.cpp \
 	bech32.cpp \
 	crypto/hmac_sha512.cpp \
