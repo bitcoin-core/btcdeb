@@ -160,6 +160,7 @@ static const auto MinimalDataExceptTX = std::set<uint256>{
 static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("825baed503ce5d28bf7332b6dac4751aaceea5cf2df9148b90cbc61894b65261"),
     uint256S("320a5c8eb5e8e0d4fc2ae48fc6f2d1c86ebe637193a61fcc9a13925d9cf96b1b"),
+    uint256S("8e8b01b99048ee68bfe378dd7eb7fc8c1d5b1864aa74a76f4dc97ed38fbfe15e"),
 };
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
