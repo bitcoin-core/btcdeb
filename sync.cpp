@@ -161,6 +161,8 @@ static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("825baed503ce5d28bf7332b6dac4751aaceea5cf2df9148b90cbc61894b65261"),
     uint256S("320a5c8eb5e8e0d4fc2ae48fc6f2d1c86ebe637193a61fcc9a13925d9cf96b1b"),
     uint256S("8e8b01b99048ee68bfe378dd7eb7fc8c1d5b1864aa74a76f4dc97ed38fbfe15e"),
+    uint256S("15bb08318335f94a8de154dc39b03db2cdebcc7a96ab6cec0379978676d00301"),
+    uint256S("f0ac94fc28d011b6145a69d0790e30669bb9148b2bd02a9e11a728d75ad2bb08"),
 };
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
