@@ -626,7 +626,9 @@ int fn_tf(const char* arg) {
         puts(tfsh[i]);
         return 0;
     }
-    return tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1), true));
+    int rv = tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1), true));
+    kerl_free_argcv(argc, argv);
+    return rv;
 }
 
 char* compl_tf(const char* text, int continued) {
@@ -663,10 +665,12 @@ int fn_exec(const char* arg) {
     if (argc < 1) {
         printf("syntax: exec <op> [<op2> [...]]\n");
         printf("to push to stack, simply execute the numeric or hexadecimal value\n");
+        kerl_free_argcv(argc, argv);
         return 0;
     }
     instance.eval(argc, argv);
     print_dualstack();
+    kerl_free_argcv(argc, argv);
     return 0;
 }
 
