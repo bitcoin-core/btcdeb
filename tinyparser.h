@@ -21,6 +21,9 @@ enum token_type {
     tok_div,
     tok_concat,
     tok_comma,
+    tok_lcurly,
+    tok_rcurly,
+    tok_semicolon,
     tok_hex,
     tok_bin,
     tok_consumable, // consumed by fulfilled token sequences
@@ -35,12 +38,15 @@ static const char* token_type_str[] = {
     "lparen",
     "rparen",
     "string",
-    "mul",
-    "plus",
-    "minus",
-    "div",
-    "concat",
-    "comma",
+    "*",
+    "+",
+    "-",
+    "/",
+    "||",
+    ",",
+    "lcurly",
+    "rcurly",
+    "semicolon",
     "hex",
     "bin",
     "consumable",
@@ -70,6 +76,8 @@ inline token_type determine_token(const char c, const char p, token_type restric
     if (c == ',') return tok_comma;
     if (c == '=') return tok_equal;
     if (c == ')') return tok_rparen;
+    if (c == '}') return tok_rcurly;
+    if (c == ';') return tok_semicolon;
     if (c == ' ' || c == '\t' || c == '\n') return tok_ws;
     if (restrict_type != tok_undef) {
         switch (restrict_type) {
@@ -97,6 +105,7 @@ inline token_type determine_token(const char c, const char p, token_type restric
         c == '_') return tok_symbol;
     if (c == '"') return tok_string;
     if (c == '(') return tok_lparen;
+    if (c == '{') return tok_lcurly;
     return tok_undef;
 }
 
@@ -168,14 +177,18 @@ token_t* tokenize(const char* s) {
             case tok_minus:
             case tok_concat:
             case tok_comma:
+            case tok_lcurly:
+            case tok_rcurly:
+            case tok_semicolon:
             case tok_div:
             case tok_hex:
             case tok_bin:
-                if (tail->token == tok_consumable) {
+                if (tail && tail->token == tok_consumable) {
                     delete tail;
                     if (head == tail) head = prev;
                     tail = prev;
                 }
+                prev = tail;
                 tail = new token_t(token, tail);
                 tail->value = strndup(&s[i], 1 /* misses 1 char for concat/hex/bin, but irrelevant */);
                 if (!head) head = tail;
@@ -200,12 +213,16 @@ token_t* tokenize(const char* s) {
 typedef size_t ref;
 static const ref nullref = 0;
 
+class program_t;
+
 struct st_callback_table {
     virtual ref  load(const std::string& variable) = 0;
     virtual void save(const std::string& variable, ref value) = 0;
     virtual ref  bin(token_type op, ref lhs, ref rhs) = 0;
     virtual ref  unary(token_type op, ref val) = 0;
     virtual ref  fcall(const std::string& fname, int argc, ref* argv) = 0;
+    virtual ref  pcall(ref program, int argc, ref* argv) = 0;
+    virtual ref  preg(program_t* program) = 0;
     virtual ref  convert(const std::string& value, token_type type, token_type restriction) = 0;
 };
 
@@ -215,6 +232,54 @@ struct st_t {
     }
     virtual ref eval(st_callback_table* ct) {
         return nullref;
+    }
+};
+
+struct st_c {
+    st_t* r;
+    size_t* refcnt;
+    // void alive() { printf("made st_c with ptr %p ref %zu (%p)\n", r, refcnt ? *refcnt : 0, refcnt); }
+    // void dead() { printf("deleting st_c with ptr %p ref %zu (%p)\n", r, refcnt ? *refcnt : 0, refcnt); }
+    st_c(st_t* r_in) {
+        r = r_in;
+        refcnt = (size_t*)malloc(sizeof(size_t));
+        *refcnt = 1;
+        // alive();
+    }
+    st_c(const st_c& o) {
+        r = o.r;
+        refcnt = o.refcnt;
+        (*refcnt)++;
+        // alive();
+    }
+    st_c(st_c&& o) {
+        r = o.r;
+        refcnt = o.refcnt;
+        o.r = nullptr;
+        o.refcnt = nullptr;
+        // alive();
+    }
+    st_c& operator=(const st_c& o) {
+        if (refcnt) {
+            if (!--(*refcnt)) {
+                // dead();
+                delete r;
+                delete refcnt;
+            }
+        }
+        r = o.r;
+        refcnt = o.refcnt;
+        (*refcnt)++;
+        // alive();
+        return *this;
+    }
+    ~st_c() {
+        // dead();
+        if (!refcnt) return;
+        if (!--(*refcnt)) {
+            delete r;
+            delete refcnt;
+        }
     }
 };
 
@@ -249,22 +314,22 @@ struct value_t: public st_t {
 
 struct set_t: public st_t {
     std::string varname;
-    st_t* value;
-    set_t(const std::string& varname_in, st_t* value_in) : varname(varname_in), value(value_in) {}
+    st_c value;
+    set_t(const std::string& varname_in, st_c value_in) : varname(varname_in), value(value_in) {}
     void print() override {
         printf("%s = ", varname.c_str());
-        value->print();
+        value.r->print();
     }
     virtual ref eval(st_callback_table* ct) override {
-        ct->save(varname, value->eval(ct));
+        ct->save(varname, value.r->eval(ct));
         return nullref;
     }
 };
 
 struct list_t: public st_t {
     ref* listref;
-    std::vector<st_t*> values;
-    list_t(const std::vector<st_t*>& values_in) : values(values_in) {
+    std::vector<st_c> values;
+    list_t(const std::vector<st_c>& values_in) : values(values_in) {
         listref = (ref*)malloc(sizeof(ref) * values.size());
     }
     ~list_t() {
@@ -274,7 +339,7 @@ struct list_t: public st_t {
         printf("[");
         for (size_t i = 0; i < values.size(); ++i) {
             printf("%s", i ? ", " : "");
-            values[i]->print();
+            values[i].r->print();
         }
         printf("]");
     }
@@ -283,7 +348,7 @@ struct list_t: public st_t {
     }
     ref* list_eval(st_callback_table* ct) {
         for (size_t i = 0; i < values.size(); ++i) {
-            listref[i] = values[i]->eval(ct);
+            listref[i] = values[i].r->eval(ct);
         }
         return listref;
     }
@@ -293,6 +358,9 @@ struct call_t: public st_t {
     std::string fname;
     list_t* args;
     call_t(const std::string& fname_in, list_t* args_in) : fname(fname_in), args(args_in) {}
+    ~call_t() {
+        delete args;
+    }
     void print() override {
         printf("%s(", fname.c_str());
         args->print();
@@ -306,6 +374,82 @@ struct call_t: public st_t {
     }
 };
 
+struct pcall_t: public st_t {
+    st_c pref;
+    list_t* args;
+    pcall_t(st_t* pref_in, list_t* args_in) : pref(pref_in), args(args_in) {}
+    ~pcall_t() {
+        delete args;
+    }
+    void print() override {
+        printf("@");
+        pref.r->print();
+        printf("(");
+        args->print();
+        printf(")");
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        ref prog = pref.r->eval(ct);
+        ref* list = (ref*)args->list_eval(ct);
+        return ct->pcall(prog, args->values.size(), list);
+    }
+};
+
+struct sequence_t: public st_t {
+    std::vector<st_c> sequence;
+    sequence_t(const std::vector<st_c>& sequence_in) : sequence(sequence_in) {}
+    void print() override {
+        printf("{\n");
+        for (const auto& x : sequence) {
+            printf("\t"); x.r->print(); printf(";\n");
+        }
+        printf("}");
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        ref rv = 0;
+        for (const auto& x : sequence) {
+            rv = x.r->eval(ct);
+        }
+        return rv;
+    }
+};
+
+class program_t {
+private:
+    st_c prog;
+public:
+    std::vector<std::string> argnames;
+    program_t(const std::vector<std::string>& argnames_in, const st_c& prog_in) : argnames(argnames_in), prog(prog_in) {}
+    ref run(st_callback_table* ct) {
+        return prog.r->eval(ct);
+    }
+    void print() {
+        printf("[func](");
+        for (const auto& s : argnames) printf("%s%s", s == argnames[0] ? "" : ", ", s.c_str());
+        printf(") ");
+        prog.r->print();
+    }
+};
+
+struct func_t: public st_t {
+    std::vector<std::string> argnames;
+    st_c sequence;
+    func_t(const std::vector<std::string>& argnames_in, sequence_t* sequence_in)
+    : argnames(argnames_in)
+    , sequence(sequence_in)
+    {}
+    void print() override {
+        printf("[func](");
+        for (const auto& s : argnames) printf("%s%s", s == argnames[0] ? "" : ", ", s.c_str());
+        printf(") ");
+        sequence.r->print();
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        program_t* program = new program_t(argnames, sequence);
+        return ct->preg(program);
+    }
+};
+
 struct bin_t: public st_t {
     token_type op_token;
     st_t* lhs;
@@ -316,9 +460,9 @@ struct bin_t: public st_t {
         delete rhs;
     }
     void print() override {
-        printf("(tok_bin %s ", token_type_str[op_token]);
+        printf("(");
         lhs->print();
-        printf(" ");
+        printf(" %s ", token_type_str[op_token]);
         rhs->print();
         printf(")");
     }
@@ -367,7 +511,7 @@ st_t* parse_restricted(token_t** s) {
     return nullptr;
 }
 
-st_t* parse_expr(token_t** s, bool allow_tok_binary = true, bool allow_set = false);
+st_t* parse_expr(token_t** s, bool allow_tok_binary = true, bool allow_set = false, bool allow_pcall = true);
 
 st_t* parse_set(token_t** s) {
     // tok_symbol tok_equal [expr]
@@ -396,12 +540,16 @@ st_t* parse_parenthesized(token_t** s) {
     return v;
 }
 
+st_t* parse_pcall(token_t** s);
+st_t* parse_preg(token_t** s);
 st_t* parse_fcall(token_t** s);
 st_t* parse_tok_binary_expr(token_t** s);
 
-st_t* parse_expr(token_t** s, bool allow_tok_binary, bool allow_set) {
+st_t* parse_expr(token_t** s, bool allow_tok_binary, bool allow_set, bool allow_pcall) {
     if (allow_tok_binary) { try(parse_tok_binary_expr); }
     if (allow_set) { try(parse_set); }
+    if (allow_pcall) { try(parse_pcall); }
+    try(parse_preg);
     try(parse_fcall);
     try(parse_parenthesized);
     try(parse_variable);
@@ -444,15 +592,20 @@ st_t* parse_tok_binary_expr(token_t** s) {
     return res;
 }
 
-st_t* parse_csv(token_t** s) {
+st_t* parse_csv(token_t** s, token_type restricted_type = tok_undef) {
     // [expr] [tok_comma [expr] [tok_comma [expr] [...]]
-    std::vector<st_t*> values;
+    std::vector<st_c> values;
     token_t* r = *s;
 
     while (r) {
-        st_t* next = parse_expr(&r);
+        st_t* next;
+        switch (restricted_type) {
+        case tok_undef:  next = parse_expr(&r); break;
+        case tok_symbol: next = parse_variable(&r); break;
+        default: throw std::runtime_error(strprintf("unsupported restriction type %s", token_type_str[restricted_type]));
+        }
         if (!next) break;
-        values.push_back(next);
+        values.emplace_back(next);
         if (!r || r->token != tok_comma) {
             break;
         } else {
@@ -464,6 +617,20 @@ st_t* parse_csv(token_t** s) {
     *s = r;
 
     return new list_t(values);
+}
+
+st_t* parse_pcall(token_t** s) {
+    // [expr] tok_lparen [arg1 [tok_comma arg2 [...]]] tok_rparen
+    token_t* r = *s;
+    st_t* pref = parse_expr(&r, false, false, false);
+    if (!pref) return nullptr;
+    if (!r || !r->next || r->token != tok_lparen) { delete pref; return nullptr; }
+    r = r->next;
+    list_t* args = (list_t*)parse_csv(&r); // may be null, for case function() (0 args)
+    if (!r) { if (args) delete args; delete pref; return nullptr; }
+    if (!r || r->token != tok_rparen) { delete args; delete pref; return nullptr; }
+    *s = r->next;
+    return new pcall_t(pref, args);
 }
 
 st_t* parse_fcall(token_t** s) {
@@ -479,6 +646,49 @@ st_t* parse_fcall(token_t** s) {
     if (!r || r->token != tok_rparen) { delete args; return nullptr; }
     *s = r->next;
     return new call_t(fname, args);
+}
+
+st_t* parse_sequence(token_t** s) {
+    // lcurly [expr] [semicolon [expr] [...]] rcurly
+    token_t* r = *s;
+    if (!r->next || r->token != tok_lcurly) return nullptr;
+    r = r->next;
+    std::vector<st_c> sequence_list;
+    while (r && r->token != tok_rcurly) {
+        st_t* e = parse_expr(&r, true, true, true);
+        sequence_list.emplace_back(e);
+        if (r && r->token == tok_semicolon) {
+            r = r->next;
+        } else break;
+    }
+    if (!r || r->token != tok_rcurly) return nullptr;
+    r = r->next;
+    *s = r;
+    return new sequence_t(sequence_list);
+}
+
+st_t* parse_preg(token_t** s) {
+    // lparen symbol [comma symbol [...]] rparen [sequence]
+    token_t* r = *s;
+    if (!r->next || r->token != tok_lparen) return nullptr;
+    r = r->next;
+    list_t* argnames = (list_t*)parse_csv(&r, tok_symbol);
+    if (!r || r->token != tok_rparen) {
+        if (argnames) delete argnames;
+        return nullptr;
+    }
+    r = r->next;
+    sequence_t* prog = (sequence_t*)parse_sequence(&r);
+    if (!prog) {
+        if (argnames) delete argnames;
+        return nullptr;
+    }
+    std::vector<std::string> an;
+    for (const auto& c : argnames->values) {
+        an.push_back(((var_t*)c.r)->varname);
+    }
+    *s = r;
+    return new func_t(an, prog);
 }
 
 st_t* treeify(token_t* tokens) {
