@@ -341,3 +341,30 @@ void ECC_Stop() {
         secp256k1_context_destroy(ctx);
     }
 }
+
+void DeserializeBool(const char* bv, std::vector<uint8_t>& output) {
+    // big endian, abbreviated downwards, i.e.
+    // 0b11 -> 0b00000011 = 3, as opposed to
+    // 0b11 -> 0b11000000 = 192
+    size_t len = strlen(bv);
+    size_t padding = (8 - (len % 8)) % 8;
+    size_t shifts = 0;
+    uint8_t r = 0;
+    for (size_t i = 0; i < len; ++i) {
+        bool bit;
+        if (padding) {
+            bit = false;
+            --i;
+            --padding;
+        } else if (bv[i] == '0') bit = false;
+        else if (bv[i] == '1') bit = true;
+        else throw std::runtime_error(strprintf("the character '%c' is not allowed in boolean expressions", bv[i]));
+        r = (r << 1) | bit;
+        shifts++;
+        if (shifts > 7) {
+            shifts = 0;
+            output.push_back(r);
+            r = 0;
+        }
+    }
+}
