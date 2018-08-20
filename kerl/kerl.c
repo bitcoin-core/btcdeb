@@ -404,6 +404,42 @@ void kerl_free_argcv(size_t argc, char **argv)
   free(argv);
 }
 
+int kerl_process_citation(const char* argstring, size_t* bytesOut, char** argsOut) {
+    register int i, j = 0;
+    char *line = NULL, ch, *buf, quot = 0;
+    size_t bufcap = strlen(argstring) + 1;
+    buf = malloc(bufcap);
+    while (1) {
+        if (bufcap >= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
+        for (i = 0; argstring[i]; i++) {
+            ch = argstring[i];
+            if (quot) {
+                if (ch == quot) quot = 0;
+            } else if (ch == '\'' || ch == '"') {
+                quot = ch;
+            }
+            buf[j++] = ch;
+        }
+        if (line) free(line);
+#ifdef HAVE_LIBREADLINE
+        if (quot) {
+            buf[j++] = '\n';
+            line = readline(quot == '"' ? "dquote> " : quot == '\'' ? "quote> " : "> ");
+            if (!line) { printf("\n"); free(buf); *bytesOut = 0; *argsOut = NULL; return -1; }
+            argstring = line; // preserve whitespace as we are quoting
+        } else break;
+#else
+        break;
+#endif // HAVE_LIBREADLINE
+    }
+
+    buf[j] = 0;
+    *bytesOut = j;
+    *argsOut = buf;
+
+    return 0;
+}
+
 /* **************************************************************** */
 /*                                                                  */
 /*                  Interface to Readline Completion                */

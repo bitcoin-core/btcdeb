@@ -61,9 +61,10 @@ void kerl_set_history_file(const char *path);
 void kerl_set_repeat_on_empty(int flag);
 void kerl_set_comment_char(char commentchar);
 void kerl_register_fallback(kerl_bindable func);
-int kerl_make_argcv(const char *argstring, size_t *argcOut, char ***argvOut);
-int kerl_make_argcv_escape(const char *argstring, size_t *argcOut, char ***argvOut, char escape);
+int kerl_make_argcv(const char* argstring, size_t *argcOut, char*** argvOut);
+int kerl_make_argcv_escape(const char* argstring, size_t *argcOut, char*** argvOut, char escape);
 void kerl_free_argcv(size_t argc, char **argv);
+int kerl_process_citation(const char* argstring, size_t* bytesOut, char** argsOut);
 
 /* sensitivity is used to skip certain inputs as sensitive, such as
    password data or similar. enabling sensitivity incurs a slight
