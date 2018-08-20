@@ -440,6 +440,45 @@ int kerl_process_citation(const char* argstring, size_t* bytesOut, char** argsOu
     return 0;
 }
 
+int kerl_more(size_t* capacity, size_t* position, char** argsOut, const char terminator) {
+    size_t i, j = *position;
+    char *argstring, *line = NULL, ch, *buf, quot = 0;
+    int running = 1;
+    size_t bufcap = *capacity;
+    buf = *argsOut;
+    buf[j++] = '\n'; // we assume a newline triggered the request for more
+
+    while (running) {
+        if (line) free(line);
+#ifdef HAVE_LIBREADLINE
+        buf[j++] = '\n';
+        line = readline(quot == '"' ? "dquote: " : quot == '\'' ? "quote: " : ":  ");
+        if (!line) { printf("\n"); free(buf); *position = 0; *argsOut = NULL; return -1; }
+        argstring = line; // preserve whitespace as we are quoting
+#else
+        break;
+#endif // HAVE_LIBREADLINE
+        if (bufcap >= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
+        for (i = 0; argstring[i]; i++) {
+            ch = argstring[i];
+            running &= (ch != terminator);
+            if (quot) {
+                if (ch == quot) quot = 0;
+            } else if (ch == '\'' || ch == '"') {
+                quot = ch;
+            }
+            buf[j++] = ch;
+        }
+    }
+
+    buf[j] = 0;
+    *capacity = bufcap;
+    *position = j;
+    *argsOut = buf;
+
+    return 0;
+}
+
 /* **************************************************************** */
 /*                                                                  */
 /*                  Interface to Readline Completion                */

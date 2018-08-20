@@ -393,6 +393,20 @@ int parse(const char* args_in)
         printf("user abort\n");
         return -1;
     }
+    size_t capacity = len;
+    size_t curlies = 0;
+    size_t i = 0;
+    while (1) {
+        for (; i < len; ++i) {
+            curlies += (args[i] == '{') - (args[i] == '}');
+        }
+        if (curlies > 0) {
+            if (kerl_more(&capacity, &len, &args, '}')) {
+                printf("user abort\n");
+                return -1;
+            }
+        } else break;
+    }
 
     tiny::token_t* tokens = nullptr;
     tiny::st_t* tree = nullptr;
