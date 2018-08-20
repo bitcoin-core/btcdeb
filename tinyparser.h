@@ -140,6 +140,7 @@ token_t* tokenize(const char* s) {
                 if (token == tok_hex || token == tok_bin) {
                     restrict_type = token;
                     delete tail;
+                    if (head == tail) head = prev;
                     tail = prev;
                 }
             } else if (!finalized) {
@@ -170,6 +171,11 @@ token_t* tokenize(const char* s) {
             case tok_div:
             case tok_hex:
             case tok_bin:
+                if (tail->token == tok_consumable) {
+                    delete tail;
+                    if (head == tail) head = prev;
+                    tail = prev;
+                }
                 tail = new token_t(token, tail);
                 tail->value = strndup(&s[i], 1 /* misses 1 char for concat/hex/bin, but irrelevant */);
                 if (!head) head = tail;
