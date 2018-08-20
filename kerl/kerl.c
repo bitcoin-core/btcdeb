@@ -482,7 +482,6 @@ char **kerl_completion(char *text, int start, int end)
        of a file in the current directory. */
     int spaces = 0;
     for (register int i = 0; spaces < 2 && i < rl_point; i++) spaces += rl_line_buffer[i] == ' ';
-    if (spaces > 1) printf("spaces = %d in '%s', no completion for yoooou\n", spaces, rl_line_buffer);
     if (spaces < 2) {
       char *strcom = strdup_command(rl_line_buffer);
       COMMAND *com = find_command(strcom);
