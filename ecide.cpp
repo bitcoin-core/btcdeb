@@ -148,8 +148,10 @@ struct env_t: public tiny::st_callback_table {
             a.push_back(pull(argv[i]));
         }
         auto tmp = fmap[fname](a);
-        temps.push_back(tmp);
-        return &temps.back();
+        if (tmp.get()) {
+            temps.push_back(tmp);
+            return &temps.back();
+        } else return nullptr;
     }
     void* convert(const std::string& value, tiny::token_type type, tiny::token_type restriction) override {
         Value v((uint64_t)0);
@@ -369,7 +371,8 @@ std::shared_ptr<var> e_type(std::vector<std::shared_ptr<var>> args) {
     case Value::T_DATA: w.str = "data"; break;
     case Value::T_OPCODE: w.str = "opcode"; break;
     }
-    return std::make_shared<var>(w);
+    printf("%s\n", w.str.c_str());
+    return std::shared_ptr<var>(nullptr); //std::make_shared<var>(w);
 }
 
 std::shared_ptr<var> e_int(std::vector<std::shared_ptr<var>> args) {
