@@ -13,11 +13,14 @@
 #include <bech32.h>
 
 static bool VALUE_WARN = true;
+static bool VALUE_EXTENDED = false; // 0bNNNN, etc
 
 template<typename T1, typename T2>
 inline void insert(T1& a, T2&& b) {
     a.insert(a.end(), b.begin(), b.end());
 }
+
+void DeserializeBool(const char* bv, std::vector<uint8_t>& output);
 
 struct Value {
     enum {
@@ -145,6 +148,11 @@ struct Value {
             }
             insert(data, s);
             type = T_DATA;
+            return;
+        }
+        if (VALUE_EXTENDED && vlen > 1 && v[0] == '0' && v[1] == 'b') {
+            type = T_DATA;
+            DeserializeBool(&v[2], data);
             return;
         }
         int64 = non_numeric ? 0 : atoll(v);
@@ -514,7 +522,7 @@ struct Value {
             for (auto it : data) printf("%02x", it);
             return;
         case T_STRING:
-            printf("%s", str.c_str());
+            printf("\"%s\"", str.c_str());
         }
     }
     void println() const {
@@ -524,5 +532,32 @@ struct Value {
 private:
     bool extract_values(std::vector<std::vector<uint8_t>>& values);
 };
+
+void DeserializeBool(const char* bv, std::vector<uint8_t>& output) {
+    // big endian, abbreviated downwards, i.e.
+    // 0b11 -> 0b00000011 = 3, as opposed to
+    // 0b11 -> 0b11000000 = 192
+    size_t len = strlen(bv);
+    size_t padding = (8 - (len % 8)) % 8;
+    size_t shifts = 0;
+    uint8_t r = 0;
+    for (size_t i = 0; i < len; ++i) {
+        bool bit;
+        if (padding) {
+            bit = false;
+            --i;
+            --padding;
+        } else if (bv[i] == '0') bit = false;
+        else if (bv[i] == '1') bit = true;
+        else throw std::runtime_error(strprintf("the character '%c' is not allowed in boolean expressions", bv[i]));
+        r = (r << 1) | bit;
+        shifts++;
+        if (shifts > 7) {
+            shifts = 0;
+            output.push_back(r);
+            r = 0;
+        }
+    }
+}
 
 #endif // included_value_h_
