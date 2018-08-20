@@ -149,8 +149,11 @@ struct txout {
         CScriptIter it = s.begin();
         opcodetype opcode;
         std::vector<unsigned char> vchPushValue;
+        int conds = 0;
         while (s.GetOp(it, opcode, vchPushValue)) {
-            if (opcode == OP_RETURN) return true;
+            if (opcode == OP_IF) conds++;
+            if (opcode == OP_ENDIF) conds--;
+            if (opcode == OP_RETURN && conds == 0) return true;
         }
         return false;
     }
