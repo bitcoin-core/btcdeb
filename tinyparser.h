@@ -60,6 +60,14 @@ struct token_t {
 };
 
 inline token_type determine_token(const char c, const char p, token_type restrict_type, token_type current) {
+    if (c == '|') return p == '|' ? concat : consumable;
+    if (c == '+') return plus;
+    if (c == '-') return minus;
+    if (c == '*') return mul;
+    if (c == '/') return div;
+    if (c == '=') return equal;
+    if (c == ')') return rparen;
+    if (c == ' ' || c == '\t' || c == '\n') return ws;
     if (restrict_type != undef) {
         switch (restrict_type) {
         case hex:
@@ -72,13 +80,11 @@ inline token_type determine_token(const char c, const char p, token_type restric
             break;
         default: break;
         }
-        if (c == ' ' || c == '\t' || c == '\n') return ws;
         return undef;
     }
 
     if (c == 'x' && p == '0' && current == number) return hex;
     if (c == 'b' && p == '0' && current == number) return bin;
-    if (c == '|') return p == '|' ? concat : consumable;
     if (c >= '0' && c <= '9') return current == symbol ? symbol : number;
     if (current == number && 
         ((c >= 'a' && c <= 'f') ||
@@ -87,14 +93,7 @@ inline token_type determine_token(const char c, const char p, token_type restric
         (c >= 'A' && c <= 'Z') ||
         c == '_') return symbol;
     if (c == '"') return string;
-    if (c == '+') return plus;
-    if (c == '-') return minus;
-    if (c == '*') return mul;
-    if (c == '/') return div;
-    if (c == '=') return equal;
     if (c == '(') return lparen;
-    if (c == ')') return rparen;
-    if (c == ' ' || c == '\t' || c == '\n') return ws;
     return undef;
 }
 
@@ -117,6 +116,7 @@ token_t* tokenize(const char* s) {
             continue; // we move one extra step, or "foo" will be read in as "foo
         }
         auto token = determine_token(s[i], i ? s[i-1] : 0, restrict_type, tail ? tail->token : undef);
+        // printf("token = %s\n", token_type_str[token]);
         if (token == consumable && tail->token == consumable) {
             throw std::runtime_error(strprintf("tokenization failure at character '%c'", s[i]));
             delete head;
@@ -178,6 +178,7 @@ token_t* tokenize(const char* s) {
                 return nullptr;
             }
         }
+        // for (auto x = head; x; x = x->next) printf(" %s", token_type_str[x->token]); printf("\n");
     }
     if (!finalized) {
         tail->value = strndup(&s[token_start], i-token_start);

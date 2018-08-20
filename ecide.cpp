@@ -93,6 +93,14 @@ struct env_t: public tiny::st_callback_table {
 
     void* load(const std::string& variable) override {
         if (vars.count(variable) == 0) {
+            // may be an opcode or something
+            Value v(variable.c_str(), variable.length());
+            if (v.type != Value::T_STRING) {
+                printf("warning: ambiguous token '%s' is treated as a value, but could be a variable\n", variable.c_str());
+                std::shared_ptr<var> tmp = std::make_shared<var>(v);
+                temps.push_back(tmp);
+                return &temps.back();
+            }
             throw std::runtime_error(strprintf("undefined variable: %s", variable.c_str()));
         }
         return &vars.at(variable);
@@ -201,6 +209,8 @@ int main(int argc, char* const* argv)
     efun(bech32enc);
     efun(bech32dec);
     efun(sign);
+    efun(type);
+    efun(int);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -347,4 +357,24 @@ std::shared_ptr<var> e_bech32dec(std::vector<std::shared_ptr<var>> args) {
 }
 std::shared_ptr<var> e_sign(std::vector<std::shared_ptr<var>> args) {
     throw std::runtime_error("not implemented");
+}
+
+std::shared_ptr<var> e_type(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    Value w("string placeholder");
+    switch (v->data.type) {
+    case Value::T_STRING: w.str = "string"; break;
+    case Value::T_INT: w.str = "int"; break;
+    case Value::T_DATA: w.str = "data"; break;
+    case Value::T_OPCODE: w.str = "opcode"; break;
+    }
+    return std::make_shared<var>(w);
+}
+
+std::shared_ptr<var> e_int(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    Value w(v->data.int_value());
+    return std::make_shared<var>(w);
 }
