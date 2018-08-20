@@ -8,22 +8,23 @@
 namespace tiny {
 
 enum token_type {
-    undef,
-    symbol,    // variable, function name, ...
-    number,
-    equal,
-    lparen,
-    rparen,
-    string,
-    mul,
-    plus,
-    minus,
-    div,
-    concat,
-    hex,
-    bin,
-    consumable, // consumed by fulfilled token sequences
-    ws,
+    tok_undef,
+    tok_symbol,    // variable, function name, ...
+    tok_number,
+    tok_equal,
+    tok_lparen,
+    tok_rparen,
+    tok_string,
+    tok_mul,
+    tok_plus,
+    tok_minus,
+    tok_div,
+    tok_concat,
+    tok_comma,
+    tok_hex,
+    tok_bin,
+    tok_consumable, // consumed by fulfilled token sequences
+    tok_ws,
 };
 
 static const char* token_type_str[] = {
@@ -39,6 +40,7 @@ static const char* token_type_str[] = {
     "minus",
     "div",
     "concat",
+    "comma",
     "hex",
     "bin",
     "consumable",
@@ -46,7 +48,7 @@ static const char* token_type_str[] = {
 };
 
 struct token_t {
-    token_type token = undef;
+    token_type token = tok_undef;
     char* value = nullptr;
     token_t* next = nullptr;
     token_t(token_type token_in, token_t* prev) : token(token_in) {
@@ -60,41 +62,42 @@ struct token_t {
 };
 
 inline token_type determine_token(const char c, const char p, token_type restrict_type, token_type current) {
-    if (c == '|') return p == '|' ? concat : consumable;
-    if (c == '+') return plus;
-    if (c == '-') return minus;
-    if (c == '*') return mul;
-    if (c == '/') return div;
-    if (c == '=') return equal;
-    if (c == ')') return rparen;
-    if (c == ' ' || c == '\t' || c == '\n') return ws;
-    if (restrict_type != undef) {
+    if (c == '|') return p == '|' ? tok_concat : tok_consumable;
+    if (c == '+') return tok_plus;
+    if (c == '-') return tok_minus;
+    if (c == '*') return tok_mul;
+    if (c == '/') return tok_div;
+    if (c == ',') return tok_comma;
+    if (c == '=') return tok_equal;
+    if (c == ')') return tok_rparen;
+    if (c == ' ' || c == '\t' || c == '\n') return tok_ws;
+    if (restrict_type != tok_undef) {
         switch (restrict_type) {
-        case hex:
+        case tok_hex:
             if ((c >= '0' && c <= '9') ||
                 (c >= 'a' && c <= 'f') ||
-                (c >= 'A' && c <= 'F')) return number;
+                (c >= 'A' && c <= 'F')) return tok_number;
             break;
-        case bin:
-            if (c == '0' || c == '1') return number;
+        case tok_bin:
+            if (c == '0' || c == '1') return tok_number;
             break;
         default: break;
         }
-        return undef;
+        return tok_undef;
     }
 
-    if (c == 'x' && p == '0' && current == number) return hex;
-    if (c == 'b' && p == '0' && current == number) return bin;
-    if (c >= '0' && c <= '9') return current == symbol ? symbol : number;
-    if (current == number && 
+    if (c == 'x' && p == '0' && current == tok_number) return tok_hex;
+    if (c == 'b' && p == '0' && current == tok_number) return tok_bin;
+    if (c >= '0' && c <= '9') return current == tok_symbol ? tok_symbol : tok_number;
+    if (current == tok_number &&
         ((c >= 'a' && c <= 'f') ||
-         (c >= 'A' && c <= 'F'))) return number; // hexadecimal
+         (c >= 'A' && c <= 'F'))) return tok_number; // hexadecimal
     if ((c >= 'a' && c <= 'z') ||
         (c >= 'A' && c <= 'Z') ||
-        c == '_') return symbol;
-    if (c == '"') return string;
-    if (c == '(') return lparen;
-    return undef;
+        c == '_') return tok_symbol;
+    if (c == '"') return tok_string;
+    if (c == '(') return tok_lparen;
+    return tok_undef;
 }
 
 token_t* tokenize(const char* s) {
@@ -104,7 +107,7 @@ token_t* tokenize(const char* s) {
     bool open = false;
     bool finalized = true;
     char finding = 0;
-    token_type restrict_type = undef;
+    token_type restrict_type = tok_undef;
     size_t token_start = 0;
     size_t i;
     for (i = 0; s[i]; ++i) {
@@ -115,26 +118,26 @@ token_t* tokenize(const char* s) {
             open = false;
             continue; // we move one extra step, or "foo" will be read in as "foo
         }
-        auto token = determine_token(s[i], i ? s[i-1] : 0, restrict_type, tail ? tail->token : undef);
+        auto token = determine_token(s[i], i ? s[i-1] : 0, restrict_type, tail ? tail->token : tok_undef);
         // printf("token = %s\n", token_type_str[token]);
-        if (token == consumable && tail->token == consumable) {
+        if (token == tok_consumable && tail->token == tok_consumable) {
             throw std::runtime_error(strprintf("tokenization failure at character '%c'", s[i]));
             delete head;
             return nullptr;
         }
-        if ((token == hex || token == bin) && tail->token == number) tail->token = consumable;
+        if ((token == tok_hex || token == tok_bin) && tail->token == tok_number) tail->token = tok_consumable;
         // if whitespace, close
-        if (token == ws) {
+        if (token == tok_ws) {
             open = false;
-            restrict_type = undef;
+            restrict_type = tok_undef;
         }
         // if open, see if it stays open
         if (open) {
             open = token == tail->token;
         }
         if (!open) {
-            if (tail && tail->token == consumable) {
-                if (token == hex || token == bin) {
+            if (tail && tail->token == tok_consumable) {
+                if (token == tok_hex || token == tok_bin) {
                     restrict_type = token;
                     delete tail;
                     tail = prev;
@@ -144,11 +147,11 @@ token_t* tokenize(const char* s) {
                 finalized = true;
             }
             switch (token) {
-            case string:
+            case tok_string:
                 finding = '"';
-            case symbol:
-            case number:
-            case consumable:
+            case tok_symbol:
+            case tok_number:
+            case tok_consumable:
                 prev = tail;
                 finalized = false;
                 token_start = i;
@@ -156,23 +159,24 @@ token_t* tokenize(const char* s) {
                 if (!head) head = tail;
                 open = true;
                 break;
-            case equal:
-            case lparen:
-            case rparen:
-            case mul:
-            case plus:
-            case minus:
-            case concat:
-            case div:
-            case hex:
-            case bin:
+            case tok_equal:
+            case tok_lparen:
+            case tok_rparen:
+            case tok_mul:
+            case tok_plus:
+            case tok_minus:
+            case tok_concat:
+            case tok_comma:
+            case tok_div:
+            case tok_hex:
+            case tok_bin:
                 tail = new token_t(token, tail);
                 tail->value = strndup(&s[i], 1 /* misses 1 char for concat/hex/bin, but irrelevant */);
                 if (!head) head = tail;
                 break;
-            case ws:
+            case tok_ws:
                 break;
-            case undef:
+            case tok_undef:
                 throw std::runtime_error(strprintf("tokenization failure at character '%c'", s[i]));
                 delete head;
                 return nullptr;
@@ -187,21 +191,24 @@ token_t* tokenize(const char* s) {
     return head;
 }
 
+typedef size_t ref;
+static const ref nullref = 0;
+
 struct st_callback_table {
-    virtual void* load(const std::string& variable) = 0;
-    virtual void  save(const std::string& variable, void* value) = 0;
-    virtual void* bin(token_type op, void* lhs, void* rhs) = 0;
-    virtual void* unary(token_type op, void* val) = 0;
-    virtual void* fcall(const std::string& fname, int argc, void** argv) = 0;
-    virtual void* convert(const std::string& value, token_type type, token_type restriction) = 0;
+    virtual ref  load(const std::string& variable) = 0;
+    virtual void save(const std::string& variable, ref value) = 0;
+    virtual ref  bin(token_type op, ref lhs, ref rhs) = 0;
+    virtual ref  unary(token_type op, ref val) = 0;
+    virtual ref  fcall(const std::string& fname, int argc, ref* argv) = 0;
+    virtual ref  convert(const std::string& value, token_type type, token_type restriction) = 0;
 };
 
 struct st_t {
     virtual void print() {
         printf("????");
     }
-    virtual void* eval(st_callback_table* ct) {
-        return nullptr;
+    virtual ref eval(st_callback_table* ct) {
+        return nullref;
     }
 };
 
@@ -211,17 +218,17 @@ struct var_t: public st_t {
     void print() override {
         printf("%s", varname.c_str());
     }
-    virtual void* eval(st_callback_table* ct) override {
+    virtual ref eval(st_callback_table* ct) override {
         return ct->load(varname);
     }
 };
 
 struct value_t: public st_t {
-    token_type type; // number, string, symbol
-    token_type restriction; // hex, bin, undef
+    token_type type; // tok_number, tok_string, tok_symbol
+    token_type restriction; // tok_hex, tok_bin, tok_undef
     std::string value;
     value_t(token_type type_in, const std::string& value_in, token_type restriction_in) : type(type_in), restriction(restriction_in), value(value_in) {
-        if (type == string) {
+        if (type == tok_string) {
             // get rid of quotes
             value = value.substr(1, value.length() - 2);
         }
@@ -229,7 +236,7 @@ struct value_t: public st_t {
     void print() override {
         printf("%s:%s", token_type_str[type], value.c_str());
     }
-    virtual void* eval(st_callback_table* ct) override {
+    virtual ref eval(st_callback_table* ct) override {
         return ct->convert(value, type, restriction);
     }
 };
@@ -242,25 +249,54 @@ struct set_t: public st_t {
         printf("%s = ", varname.c_str());
         value->print();
     }
-    virtual void* eval(st_callback_table* ct) override {
+    virtual ref eval(st_callback_table* ct) override {
         ct->save(varname, value->eval(ct));
-        return nullptr;
+        return nullref;
+    }
+};
+
+struct list_t: public st_t {
+    ref* listref;
+    std::vector<st_t*> values;
+    list_t(const std::vector<st_t*>& values_in) : values(values_in) {
+        listref = (ref*)malloc(sizeof(ref) * values.size());
+    }
+    ~list_t() {
+        free(listref);
+    }
+    void print() override {
+        printf("[");
+        for (size_t i = 0; i < values.size(); ++i) {
+            printf("%s", i ? ", " : "");
+            values[i]->print();
+        }
+        printf("]");
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        throw std::runtime_error("list_t cannot be evaluated directly; use the list_eval method");
+    }
+    ref* list_eval(st_callback_table* ct) {
+        for (size_t i = 0; i < values.size(); ++i) {
+            listref[i] = values[i]->eval(ct);
+        }
+        return listref;
     }
 };
 
 struct call_t: public st_t {
     std::string fname;
-    st_t* args;
-    call_t(const std::string& fname_in, st_t* args_in) : fname(fname_in), args(args_in) {}
+    list_t* args;
+    call_t(const std::string& fname_in, list_t* args_in) : fname(fname_in), args(args_in) {}
     void print() override {
         printf("%s(", fname.c_str());
         args->print();
         printf(")");
     }
-    virtual void* eval(st_callback_table* ct) override {
-        void* ca[1];
-        ca[0] = args->eval(ct);
-        return ct->fcall(fname, 1, ca);
+    virtual ref eval(st_callback_table* ct) override {
+        ref* list = (ref*)args->list_eval(ct);
+        // ref ca[1];
+        // ca[0] = args->eval(ct);
+        return ct->fcall(fname, args->values.size(), list);
     }
 };
 
@@ -274,13 +310,13 @@ struct bin_t: public st_t {
         delete rhs;
     }
     void print() override {
-        printf("(BIN %s ", token_type_str[op_token]);
+        printf("(tok_bin %s ", token_type_str[op_token]);
         lhs->print();
         printf(" ");
         rhs->print();
         printf(")");
     }
-    virtual void* eval(st_callback_table* ct) override {
+    virtual ref eval(st_callback_table* ct) override {
         return ct->bin(op_token, lhs->eval(ct), rhs->eval(ct));
     }
 };
@@ -289,7 +325,7 @@ st_t* x;
 #define try(parser) x = parser(s); if (x) return x
 
 st_t* parse_variable(token_t** s) {
-    if ((*s)->token == symbol) {
+    if ((*s)->token == tok_symbol) {
         var_t* t = new var_t((*s)->value);
         *s = (*s)->next;
         return t;
@@ -297,8 +333,8 @@ st_t* parse_variable(token_t** s) {
     return nullptr;
 }
 
-st_t* parse_value(token_t** s, token_type restriction = undef) {
-    if ((*s)->token == symbol || (*s)->token == number || (*s)->token == string) {
+st_t* parse_value(token_t** s, token_type restriction = tok_undef) {
+    if ((*s)->token == tok_symbol || (*s)->token == tok_number || (*s)->token == tok_string) {
         value_t* t = new value_t((*s)->token, (*s)->value, restriction);
         *s = (*s)->next;
         return t;
@@ -307,13 +343,13 @@ st_t* parse_value(token_t** s, token_type restriction = undef) {
 }
 
 st_t* parse_restricted(token_t** s) {
-    if (((*s)->token == hex || (*s)->token == bin)) {
+    if (((*s)->token == tok_hex || (*s)->token == tok_bin)) {
         token_t* r = (*s)->next;
         st_t* t = r ? parse_value(&r, (*s)->token) : nullptr;
         if (!t) {
-            if ((*s)->token == hex) {
+            if ((*s)->token == tok_hex) {
                 // we allow '0x'(null)
-                t = new value_t(number, "", (*s)->token);
+                t = new value_t(tok_number, "", (*s)->token);
             } else {
                 // we do not allow '0b'(null)
                 return nullptr;
@@ -325,14 +361,14 @@ st_t* parse_restricted(token_t** s) {
     return nullptr;
 }
 
-st_t* parse_expr(token_t** s, bool allow_binary = true, bool allow_set = false);
+st_t* parse_expr(token_t** s, bool allow_tok_binary = true, bool allow_set = false);
 
 st_t* parse_set(token_t** s) {
-    // symbol equal [expr]
+    // tok_symbol tok_equal [expr]
     token_t* r = *s;
     var_t* var = (var_t*)parse_variable(&r);
     if (!var) return nullptr;
-    if (!r || !r->next || r->token != equal) { delete var; return nullptr; }
+    if (!r || !r->next || r->token != tok_equal) { delete var; return nullptr; }
     r = r->next;
     st_t* val = parse_expr(&r);
     if (!val) { delete var; return nullptr; }
@@ -343,22 +379,22 @@ st_t* parse_set(token_t** s) {
 }
 
 st_t* parse_parenthesized(token_t** s) {
-    // lparen expr rparen
+    // tok_lparen expr tok_rparen
     token_t* r = *s;
-    if (r->token != lparen || !r->next) return nullptr;
+    if (r->token != tok_lparen || !r->next) return nullptr;
     r = r->next;
     st_t* v = parse_expr(&r);
     if (!v) return nullptr;
-    if (!r || r->token != rparen) { delete v; return nullptr; }
+    if (!r || r->token != tok_rparen) { delete v; return nullptr; }
     *s = r->next;
     return v;
 }
 
 st_t* parse_fcall(token_t** s);
-st_t* parse_binary_expr(token_t** s);
+st_t* parse_tok_binary_expr(token_t** s);
 
-st_t* parse_expr(token_t** s, bool allow_binary, bool allow_set) {
-    if (allow_binary) { try(parse_binary_expr); }
+st_t* parse_expr(token_t** s, bool allow_tok_binary, bool allow_set) {
+    if (allow_tok_binary) { try(parse_tok_binary_expr); }
     if (allow_set) { try(parse_set); }
     try(parse_fcall);
     try(parse_parenthesized);
@@ -368,15 +404,15 @@ st_t* parse_expr(token_t** s, bool allow_binary, bool allow_set) {
     return nullptr;
 }
 
-st_t* parse_binary_expr_post_lhs(token_t** s, st_t* lhs) {
-    // plus|minus|mul|div [expr]
+st_t* parse_tok_binary_expr_post_lhs(token_t** s, st_t* lhs) {
+    // tok_plus|tok_minus|tok_mul|tok_div [expr]
     token_t* r = *s;
     switch (r->token) {
-    case plus:
-    case minus:
-    case mul:
-    case div:
-    case concat:
+    case tok_plus:
+    case tok_minus:
+    case tok_mul:
+    case tok_div:
+    case tok_concat:
         break;
     default:
         return nullptr;
@@ -390,30 +426,51 @@ st_t* parse_binary_expr_post_lhs(token_t** s, st_t* lhs) {
     return new bin_t(op_token, lhs, rhs);
 }
 
-st_t* parse_binary_expr(token_t** s) {
-    // [expr] plus|minus|mul|div [expr]
+st_t* parse_tok_binary_expr(token_t** s) {
+    // [expr] tok_plus|tok_minus|tok_mul|tok_div [expr]
     token_t* r = *s;
     st_t* lhs = parse_expr(&r, false);
     if (!lhs) return nullptr;
     if (!r) { delete lhs; return nullptr; }
-    st_t* res = parse_binary_expr_post_lhs(&r, lhs);
+    st_t* res = parse_tok_binary_expr_post_lhs(&r, lhs);
     if (!res) return nullptr;
     *s = r;
     return res;
 }
 
-st_t* parse_fcall(token_t** s) {
-    // symbol lparen arg rparen
+st_t* parse_csv(token_t** s) {
+    // [expr] [tok_comma [expr] [tok_comma [expr] [...]]
+    std::vector<st_t*> values;
     token_t* r = *s;
-    if (r->token != symbol) return nullptr;
+
+    while (r) {
+        st_t* next = parse_expr(&r);
+        if (!next) break;
+        values.push_back(next);
+        if (!r || r->token != tok_comma) {
+            break;
+        } else {
+            r = r->next;
+        }
+    }
+
+    if (values.size() == 0) return nullptr;
+    *s = r;
+
+    return new list_t(values);
+}
+
+st_t* parse_fcall(token_t** s) {
+    // tok_symbol tok_lparen [arg1 [tok_comma arg2 [tok_comma arg3 [...]]] tok_rparen
+    token_t* r = *s;
+    if (r->token != tok_symbol) return nullptr;
     std::string fname = r->value;
     r = r->next;
-    if (!r || !r->next || r->token != lparen) return nullptr;
+    if (!r || !r->next || r->token != tok_lparen) return nullptr;
     r = r->next;
-    st_t* args = parse_expr(&r);
-    if (!args) return nullptr;
-    // TODO: allow multiple arguments comma separated
-    if (!r || r->token != rparen) { delete args; return nullptr; }
+    list_t* args = (list_t*)parse_csv(&r); // may be null, for case function() (0 args)
+    if (!r) { if (args) delete args; return nullptr; }
+    if (!r || r->token != tok_rparen) { delete args; return nullptr; }
     *s = r->next;
     return new call_t(fname, args);
 }

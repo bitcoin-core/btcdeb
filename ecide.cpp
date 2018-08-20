@@ -91,55 +91,67 @@ struct env_t: public tiny::st_callback_table {
     std::vector<std::shared_ptr<var>> temps;
     std::string last_saved;
 
-    void* load(const std::string& variable) override {
+    env_t() {
+        temps.push_back(std::shared_ptr<var>(nullptr));
+    }
+
+    tiny::ref load(const std::string& variable) override {
         if (vars.count(variable) == 0) {
             // may be an opcode or something
             Value v(variable.c_str(), variable.length());
             if (v.type != Value::T_STRING) {
-                printf("warning: ambiguous token '%s' is treated as a value, but could be a variable\n", variable.c_str());
+                if (v.type != Value::T_OPCODE) {
+                    printf("warning: ambiguous token '%s' is treated as a value, but could be a variable\n", variable.c_str());
+                }
                 std::shared_ptr<var> tmp = std::make_shared<var>(v);
                 temps.push_back(tmp);
-                return &temps.back();
+                return temps.size() - 1;
             }
             throw std::runtime_error(strprintf("undefined variable: %s", variable.c_str()));
         }
-        return &vars.at(variable);
+        temps.push_back(vars.at(variable));
+        return temps.size() - 1;
     }
-    #define pull(vptr) *(std::shared_ptr<var>*)vptr
-    void  save(const std::string& variable, void* value) override {
+    #define pull(r) temps[r]
+    void  save(const std::string& variable, tiny::ref value) override {
+        // ensure the variable is not also an opcode
+        Value v(variable.c_str());
+        if (v.type == Value::T_OPCODE) {
+            throw std::runtime_error(strprintf("immutable opcode %s cannot be modified", variable));
+        }
         last_saved = variable;
         vars[variable] = pull(value);
     }
-    void* bin(tiny::token_type op, void* lhs, void* rhs) override {
+    tiny::ref bin(tiny::token_type op, tiny::ref lhs, tiny::ref rhs) override {
         auto l = pull(lhs);
         auto r = pull(rhs);
         std::shared_ptr<var> tmp;
         switch (op) {
-        case tiny::plus:
+        case tiny::tok_plus:
             tmp = l->add(*r);
             break;
-        case tiny::minus:
+        case tiny::tok_minus:
             tmp = l->sub(*r);
             break;
-        case tiny::mul:
+        case tiny::tok_mul:
             tmp = l->mul(*r);
             break;
-        case tiny::div:
+        case tiny::tok_div:
             tmp = l->div(*r);
             break;
-        case tiny::concat:
+        case tiny::tok_concat:
             tmp = l->concat(*r);
             break;
         default:
             throw std::runtime_error(strprintf("invalid binary operation (%s)", tiny::token_type_str[op]));
         }
         temps.push_back(tmp);
-        return &temps.back();
+        return temps.size() - 1;
     }
-    void* unary(tiny::token_type op, void* val) override {
+    tiny::ref unary(tiny::token_type op, tiny::ref val) override {
         throw std::runtime_error("not implemented");
     }
-    void* fcall(const std::string& fname, int argc, void** argv) override {
+    tiny::ref fcall(const std::string& fname, int argc, tiny::ref* argv) override {
         if (fmap.count(fname) == 0) {
             throw std::runtime_error(strprintf("unknown function %s", fname));
         }
@@ -150,19 +162,19 @@ struct env_t: public tiny::st_callback_table {
         auto tmp = fmap[fname](a);
         if (tmp.get()) {
             temps.push_back(tmp);
-            return &temps.back();
-        } else return nullptr;
+            return temps.size() - 1;
+        } else return 0;
     }
-    void* convert(const std::string& value, tiny::token_type type, tiny::token_type restriction) override {
+    tiny::ref convert(const std::string& value, tiny::token_type type, tiny::token_type restriction) override {
         Value v((int64_t)0);
         switch (restriction) {
-        case tiny::undef:
+        case tiny::tok_undef:
             v = Value(value.c_str());
             break;
-        case tiny::hex:
+        case tiny::tok_hex:
             v = Value(("0x" + value).c_str());
             break;
-        case tiny::bin:
+        case tiny::tok_bin:
             v = Value(("0b" + value).c_str());
             break;
         default:
@@ -170,7 +182,7 @@ struct env_t: public tiny::st_callback_table {
         }
         auto tmp = std::make_shared<var>(v);
         temps.push_back(tmp);
-        return &temps.back();
+        return temps.size() - 1;
     }
     #undef pull
 };
@@ -280,7 +292,7 @@ int parse(const char* args_in)
     tiny::token_t* tokens = nullptr;
     tiny::st_t* tree = nullptr;
 
-    void* result;
+    tiny::ref result;
     try {
         env.last_saved = "";
         /*
@@ -305,7 +317,7 @@ int parse(const char* args_in)
         return -1;
     }
     if (result) {
-        std::shared_ptr<var> v = *(std::shared_ptr<var>*)result;
+        std::shared_ptr<var> v = env.temps[result];
         v->data.println();
     } else if (env.last_saved != "") {
         env.vars[env.last_saved]->data.println();
@@ -363,16 +375,16 @@ std::shared_ptr<var> e_sign(std::vector<std::shared_ptr<var>> args) {
 }
 
 std::shared_ptr<var> e_type(std::vector<std::shared_ptr<var>> args) {
-    ARG_CHK(1);
-    auto v = args[0];
     Value w("string placeholder");
-    switch (v->data.type) {
-    case Value::T_STRING: w.str = "string"; break;
-    case Value::T_INT: w.str = "int"; break;
-    case Value::T_DATA: w.str = "data"; break;
-    case Value::T_OPCODE: w.str = "opcode"; break;
+    for (auto v : args) {
+        switch (v->data.type) {
+        case Value::T_STRING: w.str = "string"; break;
+        case Value::T_INT: w.str = "int"; break;
+        case Value::T_DATA: w.str = "data"; break;
+        case Value::T_OPCODE: w.str = "opcode"; break;
+        }
+        printf("%s\n", w.str.c_str());
     }
-    printf("%s\n", w.str.c_str());
     return std::shared_ptr<var>(nullptr); //std::make_shared<var>(w);
 }
 
