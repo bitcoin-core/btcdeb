@@ -143,8 +143,22 @@ struct env_t: public tiny::st_callback_table {
         temps.push_back(tmp);
         return &temps.back();
     }
-    void* convert(const std::string& value, tiny::token_type type) override {
-        auto tmp = std::make_shared<var>(Value(value.c_str()));
+    void* convert(const std::string& value, tiny::token_type type, tiny::token_type restriction) override {
+        Value v((uint64_t)0);
+        switch (restriction) {
+        case tiny::undef:
+            v = Value(value.c_str());
+            break;
+        case tiny::hex:
+            v = Value(("0x" + value).c_str());
+            break;
+        case tiny::bin:
+            v = Value(("0b" + value).c_str());
+            break;
+        default:
+            throw std::runtime_error(strprintf("unknown restriction token %s", tiny::token_type_str[restriction]));
+        }
+        auto tmp = std::make_shared<var>(v);
         temps.push_back(tmp);
         return &temps.back();
     }
@@ -166,6 +180,8 @@ int main(int argc, char* const* argv)
     }
 
     fprintf(stderr, "\n*** NEVER enter private keys which contain real bitcoin ***\n\nECIDE stores history for all commands to the file .ecide_history in plain text.\nTo omit saving to the history file, prepend the command with a space (' ').\n\n");
+
+    VALUE_EXTENDED = true;
 
     // Set G
     env.vars["G"] = std::make_shared<var>(Value("ffffffffddddddddffffffffddddddde445123192e953da2402da1730da79c9b"), true);
@@ -239,22 +255,39 @@ int fn_funs(const char* args)
     return 0;
 }
 
-int parse(const char* args)
+int parse(const char* args_in)
 {
+    size_t len;
+    char* args;
+    if (kerl_process_citation(args_in, &len, &args)) {
+        printf("user abort\n");
+        return -1;
+    }
+
+    tiny::token_t* tokens = nullptr;
+    tiny::st_t* tree = nullptr;
+
     void* result;
     try {
         env.last_saved = "";
         /*
         printf("***** TOKENIZE\n"); */
-        tiny::token_t* tokens = tiny::tokenize(args);
+        tokens = tiny::tokenize(args);
+        free(args);
+        args = nullptr;
         /*tokens->print();
         printf("***** PARSE\n"); */
-        tiny::st_t* tree = tiny::treeify(tokens);
+        tree = tiny::treeify(tokens);
         /*tree->print();
         printf("\n");
         printf("***** EXEC\n");*/
         result = tree->eval(&env);
+        delete tree;
+        delete tokens;
     } catch (std::exception const& ex) {
+        if (tree) delete tree;
+        if (tokens) delete tokens;
+        if (args) free(args);
         fprintf(stderr, "error: %s\n", ex.what());
         return -1;
     }
