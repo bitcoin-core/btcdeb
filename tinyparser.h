@@ -20,6 +20,9 @@ enum token_type {
     minus,
     div,
     concat,
+    hex,
+    bin,
+    consumable, // consumed by fulfilled token sequences
     ws,
 };
 
@@ -36,6 +39,9 @@ static const char* token_type_str[] = {
     "minus",
     "div",
     "concat",
+    "hex",
+    "bin",
+    "consumable",
     "ws",
 };
 
@@ -53,7 +59,26 @@ struct token_t {
     }
 };
 
-inline token_type determine_token(const char c, token_type current) {
+inline token_type determine_token(const char c, const char p, token_type restrict_type, token_type current) {
+    if (restrict_type != undef) {
+        switch (restrict_type) {
+        case hex:
+            if ((c >= '0' && c <= '9') ||
+                (c >= 'a' && c <= 'f') ||
+                (c >= 'A' && c <= 'F')) return number;
+            break;
+        case bin:
+            if (c == '0' || c == '1') return number;
+            break;
+        default: break;
+        }
+        if (c == ' ' || c == '\t' || c == '\n') return ws;
+        return undef;
+    }
+
+    if (c == 'x' && p == '0' && current == number) return hex;
+    if (c == 'b' && p == '0' && current == number) return bin;
+    if (c == '|') return p == '|' ? concat : consumable;
     if (c >= '0' && c <= '9') return current == symbol ? symbol : number;
     if (current == number && 
         ((c >= 'a' && c <= 'f') ||
@@ -63,7 +88,6 @@ inline token_type determine_token(const char c, token_type current) {
         c == '_') return symbol;
     if (c == '"') return string;
     if (c == '+') return plus;
-    if (c == '|') return concat;
     if (c == '-') return minus;
     if (c == '*') return mul;
     if (c == '/') return div;
@@ -77,9 +101,11 @@ inline token_type determine_token(const char c, token_type current) {
 token_t* tokenize(const char* s) {
     token_t* head = nullptr;
     token_t* tail = nullptr;
+    token_t* prev = nullptr;
     bool open = false;
     bool finalized = true;
     char finding = 0;
+    token_type restrict_type = undef;
     size_t token_start = 0;
     size_t i;
     for (i = 0; s[i]; ++i) {
@@ -90,15 +116,30 @@ token_t* tokenize(const char* s) {
             open = false;
             continue; // we move one extra step, or "foo" will be read in as "foo
         }
-        auto token = determine_token(s[i], tail ? tail->token : undef);
+        auto token = determine_token(s[i], i ? s[i-1] : 0, restrict_type, tail ? tail->token : undef);
+        if (token == consumable && tail->token == consumable) {
+            throw std::runtime_error(strprintf("tokenization failure at character '%c'", s[i]));
+            delete head;
+            return nullptr;
+        }
+        if ((token == hex || token == bin) && tail->token == number) tail->token = consumable;
         // if whitespace, close
-        open &= (s[i] != ' ' && s[i] != '\t');
+        if (token == ws) {
+            open = false;
+            restrict_type = undef;
+        }
         // if open, see if it stays open
         if (open) {
             open = token == tail->token;
         }
         if (!open) {
-            if (!finalized) {
+            if (tail && tail->token == consumable) {
+                if (token == hex || token == bin) {
+                    restrict_type = token;
+                    delete tail;
+                    tail = prev;
+                }
+            } else if (!finalized) {
                 tail->value = strndup(&s[token_start], i-token_start);
                 finalized = true;
             }
@@ -107,6 +148,8 @@ token_t* tokenize(const char* s) {
                 finding = '"';
             case symbol:
             case number:
+            case consumable:
+                prev = tail;
                 finalized = false;
                 token_start = i;
                 tail = new token_t(token, tail);
@@ -121,8 +164,10 @@ token_t* tokenize(const char* s) {
             case minus:
             case concat:
             case div:
+            case hex:
+            case bin:
                 tail = new token_t(token, tail);
-                tail->value = strndup(&s[i], 1);
+                tail->value = strndup(&s[i], 1 /* misses 1 char for concat/hex/bin, but irrelevant */);
                 if (!head) head = tail;
                 break;
             case ws:
@@ -147,7 +192,7 @@ struct st_callback_table {
     virtual void* bin(token_type op, void* lhs, void* rhs) = 0;
     virtual void* unary(token_type op, void* val) = 0;
     virtual void* fcall(const std::string& fname, int argc, void** argv) = 0;
-    virtual void* convert(const std::string& value, token_type type) = 0;
+    virtual void* convert(const std::string& value, token_type type, token_type restriction) = 0;
 };
 
 struct st_t {
@@ -172,8 +217,9 @@ struct var_t: public st_t {
 
 struct value_t: public st_t {
     token_type type; // number, string, symbol
+    token_type restriction; // hex, bin, undef
     std::string value;
-    value_t(token_type type_in, const std::string& value_in) : type(type_in), value(value_in) {
+    value_t(token_type type_in, const std::string& value_in, token_type restriction_in) : type(type_in), restriction(restriction_in), value(value_in) {
         if (type == string) {
             // get rid of quotes
             value = value.substr(1, value.length() - 2);
@@ -183,7 +229,7 @@ struct value_t: public st_t {
         printf("%s:%s", token_type_str[type], value.c_str());
     }
     virtual void* eval(st_callback_table* ct) override {
-        return ct->convert(value, type);
+        return ct->convert(value, type, restriction);
     }
 };
 
@@ -250,10 +296,29 @@ st_t* parse_variable(token_t** s) {
     return nullptr;
 }
 
-st_t* parse_value(token_t** s) {
+st_t* parse_value(token_t** s, token_type restriction = undef) {
     if ((*s)->token == symbol || (*s)->token == number || (*s)->token == string) {
-        value_t* t = new value_t((*s)->token, (*s)->value);
+        value_t* t = new value_t((*s)->token, (*s)->value, restriction);
         *s = (*s)->next;
+        return t;
+    }
+    return nullptr;
+}
+
+st_t* parse_restricted(token_t** s) {
+    if (((*s)->token == hex || (*s)->token == bin)) {
+        token_t* r = (*s)->next;
+        st_t* t = r ? parse_value(&r, (*s)->token) : nullptr;
+        if (!t) {
+            if ((*s)->token == hex) {
+                // we allow '0x'(null)
+                t = new value_t(number, "", (*s)->token);
+            } else {
+                // we do not allow '0b'(null)
+                return nullptr;
+            }
+        }
+        *s = r;
         return t;
     }
     return nullptr;
@@ -297,6 +362,7 @@ st_t* parse_expr(token_t** s, bool allow_binary, bool allow_set) {
     try(parse_fcall);
     try(parse_parenthesized);
     try(parse_variable);
+    try(parse_restricted);
     try(parse_value);
     return nullptr;
 }
