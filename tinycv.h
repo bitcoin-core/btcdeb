@@ -5,6 +5,13 @@
 #ifndef BITCOIN_TINYCV_H
 #define BITCOIN_TINYCV_H
 
+// #define debug_txid uint256S("928ed84cd4c48beb0d3494ccc17cc1e06b1473f9dc118db9bb56972395ede461")
+#ifdef debug_txid
+#   define txidpf(txid, args...) if (txid == debug_txid) printf("[txid] " args)
+#else
+#   define txidpf(txid, args...)
+#endif
+
 #include <uint256.h>
 #include <tinytx.h>
 #include <tinyblock.h>
@@ -75,6 +82,7 @@ struct coin {
     coin() {}
     coin(std::shared_ptr<tx> x_in) {
         x = x_in;
+        txidpf(x->hash, "created coin object\n");
         spent.resize(x->vout.size());
         // bool necessary = false;
         for (size_t i = 0; i < x->vout.size(); ++i) {
@@ -85,6 +93,7 @@ struct coin {
         // if (!necessary) spendable = 0;
     }
     bool spend_exhausts(int n) {
+        txidpf(x->hash, "spending #%d (%u spendable remain)\n", n, spendable - 1);
         assert(!spent[n]);
         spent[n] = true;
         return !--spendable;
@@ -101,10 +110,6 @@ struct coin {
         } else {
             READWRITE(*x.get());
             SerializeBoolVector(s, spent);
-        }
-        if (coin_view_version == 1) {
-            uint8_t u;
-            READWRITE(u);
         }
     }
 };
@@ -138,12 +143,14 @@ public:
         return equal;
     }
     void insert(std::shared_ptr<tx> x) {
+        txidpf(x->hash, "inserting into coin view\n");
         if (!x->IsCoinBase()) {
             // spend inputs
             for (const auto& in : x->vin) {
                 auto& c = coin_map.at(in.prevout.hash);
                 if (c.spend_exhausts(in.prevout.n)) {
                     // tx can be thrown out as all its outputs were spent
+                    txidpf(in.prevout.hash, "removing exhausted tx\n");
                     coin_map.erase(in.prevout.hash);
                 }
             }
@@ -152,12 +159,14 @@ public:
         coin c(x);
         if (!c.spendable) {
             // no spendable outputs so.. bye
+            txidpf(x->hash, "NOT including in coin view as it has no spendable outputs\n");
             return;
         }
         assert(dupe_coinbase_tx(x->hash) || coin_map.count(x->hash) == 0);
         coin_map[x->hash] = c;
     }
     tx* get(const uint256& txid) const {
+        txidpf(txid, "get from coin view\n");
         if (coin_map.count(txid) == 0) {
             printf("MISSING TXID %s\n", txid.ToString().c_str());
         }
