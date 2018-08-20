@@ -154,7 +154,7 @@ struct env_t: public tiny::st_callback_table {
         } else return nullptr;
     }
     void* convert(const std::string& value, tiny::token_type type, tiny::token_type restriction) override {
-        Value v((uint64_t)0);
+        Value v((int64_t)0);
         switch (restriction) {
         case tiny::undef:
             v = Value(value.c_str());
