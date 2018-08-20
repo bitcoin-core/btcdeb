@@ -26,8 +26,12 @@ EXTRA_LIBRARIES += \
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc ecide test-btcdeb
+bin_PROGRAMS = btcdeb btcc test-btcdeb
 noinst_PROGRAMS =
+
+if ENABLE_DANGEROUS
+bin_PROGRAMS += ecide
+endif
 
 # debugger #
 LIBBITCOIN_DEB_H = \
@@ -130,6 +134,8 @@ btcdeb_LDADD = \
 	$(LIBSECP256K1) \
 	$(LIBKERL)
 
+if ENABLE_DANGEROUS
+
 # ecide binary #
 ecide_SOURCES = \
 	ecide.cpp \
@@ -143,6 +149,8 @@ ecide_LDADD = \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
 	$(LIBKERL)
+
+endif
 
 # btcc binary #
 btcc_SOURCES = \
