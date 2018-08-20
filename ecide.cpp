@@ -213,6 +213,7 @@ int main(int argc, char* const* argv)
     efun(sign);
     efun(type);
     efun(int);
+    efun(hex);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -379,5 +380,14 @@ std::shared_ptr<var> e_int(std::vector<std::shared_ptr<var>> args) {
     ARG_CHK(1);
     auto v = args[0];
     Value w(v->data.int_value());
+    return std::make_shared<var>(w);
+}
+
+std::shared_ptr<var> e_hex(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    Value w(v->data);
+    w.data_value();
+    w.type = Value::T_DATA;
     return std::make_shared<var>(w);
 }
