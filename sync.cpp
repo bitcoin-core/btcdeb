@@ -153,9 +153,16 @@ static const auto BIP16Exception = uint256S("0x00000000000002dc756eebf4f49723ed8
 #define BIP34Hash   uint256S("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8")
 #define BIP65Height 388381 // 000000000000000004c2b624ed5d7756c508d90fd0da2c7c679febfa6c4735f0
 #define BIP66Height 363725 // 00000000000000000379eaa19dce8c9b722d46ae6a57c2f1a988119488b50931
+
+// Exceptions
 static const auto MinimalDataExceptTX = std::set<uint256>{
     uint256S("0f24294a1d23efbb49c1765cf443fba7930702752aba6d765870082fe4f13cae"),
     uint256S("7caed7650c392c24e44a093f30438fe6dc9ec1154b92bedc8a561130c9c50920"),
+    uint256S("cd874fa8cb0e2ec2d385735d5e1fd482c4fe648533efb4c50ee53bda58e15ae2"),
+    uint256S("567a53d1ce19ce3d07711885168484439965501536d0d0294c5d46d46c10e53b"),
+    uint256S("59ac3eccee265d31bee3264cf77a4e9b7703d6ad0cf97eadcdb4439c22725db2"),
+    uint256S("ad1209c76f94e2eb80b9929021161adce12498ce919333e50fa1fd4e5f6dead2"),
+    uint256S("e57364803169c23c245a643301097682036be61918eee362334d9d710c74dbd4"),
 };
 static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("825baed503ce5d28bf7332b6dac4751aaceea5cf2df9148b90cbc61894b65261"),
@@ -163,6 +170,9 @@ static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("8e8b01b99048ee68bfe378dd7eb7fc8c1d5b1864aa74a76f4dc97ed38fbfe15e"),
     uint256S("15bb08318335f94a8de154dc39b03db2cdebcc7a96ab6cec0379978676d00301"),
     uint256S("f0ac94fc28d011b6145a69d0790e30669bb9148b2bd02a9e11a728d75ad2bb08"),
+    uint256S("cd874fa8cb0e2ec2d385735d5e1fd482c4fe648533efb4c50ee53bda58e15ae2"),
+    uint256S("b16bf8cfca4c2bfaa250c378e4f73662c1ef99a1794a127d4d57321ddd73d367"),
+    uint256S("61e26d407c17e8ee33a8b166c78f78c53cdcdc0078ae1f9405e6583cfb90eaf4"),
 };
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
