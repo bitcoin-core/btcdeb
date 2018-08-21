@@ -43,7 +43,9 @@ int repeat_empty;      /* Blank lines are interpreted as "repeat previous comman
 char comment_char = 0;
 COMMAND *commands = NULL;
 int execute_line(char *line);
-char *history_file = NULL;
+char* more_final = NULL;
+size_t more_final_cap = 0, more_final_pos = 0, more_final_lines = 0;
+char* history_file = NULL;
 kerl_bindable fallback = NULL;
 
 /* sensitivity */
@@ -171,7 +173,7 @@ void kerl_run(const char *prompt)
           sensitive_s = strdup(s);
           execute_line(s);
           if (!skip_history) {
-              kerl_add_history(sensitive_s);
+              kerl_add_history(more_final_lines ? more_final : sensitive_s);
           }
           skip_history = 0;
           free(sensitive_s);
@@ -190,15 +192,78 @@ void kerl_run(const char *prompt)
   }
 }
 
+// Returns NULL if no escape was necessary
+char* escape(const char* input)
+{
+    size_t len;
+    int escapes = 0;
+    for (len = 0; input[len]; ++len) {
+        switch (input[len]) {
+        case '\n': case '\t': case '\r': case '\b': case '\\': case '"': escapes++;
+        default: break;
+        }
+    }
+    if (!escapes) return NULL;
+    char* rv = (char*)malloc(len + escapes + 1);
+    char* ptr = rv;
+    for (size_t i = 0; i < len; ++i) {
+        switch (input[i]) {
+        case '\n': *(ptr++) = '\\'; *(ptr++) = 'n'; break;
+        case '\t': *(ptr++) = '\\'; *(ptr++) = 't'; break;
+        case '\r': *(ptr++) = '\\'; *(ptr++) = 'r'; break;
+        case '\b': *(ptr++) = '\\'; *(ptr++) = 'b'; break;
+        case '\\': *(ptr++) = '\\'; *(ptr++) = '\\'; break;
+        case '"': *(ptr++) = '\\'; *(ptr++) = '"'; break;
+        default: *(ptr++) = input[i];
+        }
+    }
+    *ptr = 0;
+    return rv;
+}
+
+// Returns NULL if no escaped sequence was encountered, except if reuse is set,
+// in which case the input is returned as is
+char* unescape(const char* input, int reuse)
+{
+    size_t len;
+    int escapes = 0;
+    int escaped = 0;
+    for (len = 0; input[len]; ++len) {
+        escapes += input[len] == '\\' && !escaped;
+        escaped = !escaped && input[len] == '\\';
+    }
+    if (!escapes) return reuse ? (char*)input : NULL;
+    char* rv = reuse ? (char*)input : (char*)malloc(len - escapes + 1);
+    char* ptr = rv;
+    for (size_t i = 0; i < len; ++i) {
+        if (i + 1 < len && input[i] == '\\') {
+            i++;
+            switch (input[i]) {
+            case 'n': *(ptr++) = '\n'; break;
+            case 't': *(ptr++) = '\t'; break;
+            case 'r': *(ptr++) = '\r'; break;
+            case 'b': *(ptr++) = '\b'; break;
+            case '\\': *(ptr++) = '\\'; break;
+            case '"': *(ptr++) = '"'; break;
+            default: *(ptr++) = '\\'; *(ptr++) = input[i];
+            }
+        } else *(ptr++) = input[i];
+    }
+    *ptr = 0;
+    return rv;
+}
+
 void kerl_add_history(const char *s)
 {
 #ifdef HAVE_READLINE_HISTORY
   add_history(s);
 #endif // HAVE_READLINE_HISTORY
   if (history_file) {
+    char* escaped = escape(s);
     FILE *fp = fopen(history_file, "a");
-    fprintf(fp, "%s\n", s);
+    fprintf(fp, "%s\n", escaped ?: s);
     fclose(fp);
+    if (escaped) free(escaped);
   }
 }
 
@@ -212,6 +277,8 @@ void kerl_set_history_file(const char *path)
   if (file) {
     while (NULL != (fgets(buf, 1024, file))) {
       buf[strlen(buf)-1] = 0; // get rid of \n
+      // unescape
+      unescape(buf, 1);
       add_history(buf);
     }
   }
@@ -331,20 +398,36 @@ int kerl_make_argcv(const char *argstring, size_t *argcOut, char ***argvOut)
   return kerl_make_argcv_escape(argstring, argcOut, argvOut, 0);
 }
 
+inline void _more_final_init(const char* argstring)
+{
+    more_final_lines = 0;
+    more_final_pos = strlen(argstring) + 1;
+    if (more_final == NULL) { more_final_cap = more_final_pos; more_final = (char*)malloc(more_final_cap); }
+    else if (more_final_cap < more_final_pos) { more_final_cap = more_final_pos; more_final = (char*)realloc(more_final, more_final_cap); }
+    sprintf(more_final, "%s", argstring);
+}
+
+inline void _more_final_append(const char* line, int add_newline)
+{
+    ++more_final_lines;
+    size_t req = more_final_pos + strlen(line) + 1 + add_newline;
+    if (more_final_cap < req) { more_final_cap = req; more_final = (char*)realloc(more_final, more_final_cap); }
+    more_final_pos += sprintf(&more_final[more_final_pos], "%s%s", add_newline ? "\n" : "", line);
+}
+
 int kerl_make_argcv_escape(const char *argstring, size_t *argcOut, char ***argvOut, char escape)
 {
-  register int i, j;
+  register int i, j = 0;
   size_t argc = 0, cap = 2;
   char **argv = malloc(sizeof(char*) * cap);
-  char *line, ch, *buf, quot = 0, esc = 0;
-  line = NULL;
-  j = 0;
+  char *line = NULL, ch, *buf, quot = 0, esc = 0;
   size_t bufcap = 1024;
   buf = malloc(bufcap);
 #define bufiter() { \
-  if (ch == escape) buf[j++] = '\\'; \
-  buf[j++] = ch; \
-}
+      if (ch == escape) buf[j++] = '\\'; \
+        buf[j++] = ch; \
+    }
+  _more_final_init(argstring);
   while (1) {
     if (bufcap >= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
     for (i = 0; argstring[i]; i++) {
@@ -371,9 +454,11 @@ int kerl_make_argcv_escape(const char *argstring, size_t *argcOut, char ***argvO
     if (line) free(line);
 #ifdef HAVE_LIBREADLINE
     if (quot || esc) {
-      if (quot) buf[j++] = '\n';
+      int add_newline = quot && (j == 0 || buf[j-1] != '\n');
+      if (add_newline) buf[j++] = '\n';
       line = readline(quot == '"' ? "dquote> " : quot == '\'' ? "quote> " : "> ");
       if (!line) { printf("\n"); free(buf); *argcOut = 0; *argvOut = NULL; return -1; }
+      _more_final_append(line, add_newline);
       argstring = line; // preserve whitespace as we are quoting
     } else break;
 #else
@@ -409,6 +494,7 @@ int kerl_process_citation(const char* argstring, size_t* bytesOut, char** argsOu
     char *line = NULL, ch, *buf, quot = 0;
     size_t bufcap = strlen(argstring) + 1;
     buf = malloc(bufcap);
+    _more_final_init(argstring);
     while (1) {
         if (bufcap >= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
         for (i = 0; argstring[i]; i++) {
@@ -423,9 +509,11 @@ int kerl_process_citation(const char* argstring, size_t* bytesOut, char** argsOu
         if (line) free(line);
 #ifdef HAVE_LIBREADLINE
         if (quot) {
-            buf[j++] = '\n';
+            int add_newline = (j == 0 || buf[j-1] != '\n');
+            if (add_newline) buf[j++] = '\n';
             line = readline(quot == '"' ? "dquote> " : quot == '\'' ? "quote> " : "> ");
             if (!line) { printf("\n"); free(buf); *bytesOut = 0; *argsOut = NULL; return -1; }
+            _more_final_append(line, add_newline);
             argstring = line; // preserve whitespace as we are quoting
         } else break;
 #else
@@ -446,11 +534,12 @@ int kerl_more(size_t* capacity, size_t* position, char** argsOut, const char ter
     int running = 1;
     size_t bufcap = *capacity;
     buf = *argsOut;
-    buf[j++] = '\n'; // we assume a newline triggered the request for more
 
     while (running) {
         if (line) free(line);
 #ifdef HAVE_LIBREADLINE
+        buf[j] = 0;
+        printf("appending to \"%s\" (adding newline + readling more)\n", buf);
         buf[j++] = '\n';
         line = readline(quot == '"' ? "dquote: " : quot == '\'' ? "quote: " : ":  ");
         if (!line) { printf("\n"); free(buf); *position = 0; *argsOut = NULL; return -1; }
@@ -470,6 +559,10 @@ int kerl_more(size_t* capacity, size_t* position, char** argsOut, const char ter
             buf[j++] = ch;
         }
     }
+
+    // we increment the lines or the system will think we have no more_final and save only the first line of history
+    _more_final_init(buf);
+    ++more_final_lines;
 
     buf[j] = 0;
     *capacity = bufcap;
