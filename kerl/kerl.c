@@ -539,7 +539,6 @@ int kerl_more(size_t* capacity, size_t* position, char** argsOut, const char ter
         if (line) free(line);
 #ifdef HAVE_LIBREADLINE
         buf[j] = 0;
-        printf("appending to \"%s\" (adding newline + readling more)\n", buf);
         buf[j++] = '\n';
         line = readline(quot == '"' ? "dquote: " : quot == '\'' ? "quote: " : ":  ");
         if (!line) { printf("\n"); free(buf); *position = 0; *argsOut = NULL; return -1; }
