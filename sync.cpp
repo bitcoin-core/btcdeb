@@ -290,6 +290,15 @@ int main(int argc, const char** argv)
 
                     auto& env = instance.env;
 
+                    bool result = false;
+                    try {
+                        result = ContinueScript(*env);
+                    } catch (std::exception const& ex) {
+                        fprintf(stderr, "block %s, index %zu tx %s raised an exception on validating input %d=%s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str());
+                        fprintf(stderr, "error: %s\n", ex.what());
+                        exit(1);
+                    }
+
                     if (!ContinueScript(*env)) {
                         fprintf(stderr, "block %s, index %zu tx %s failed to validate input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string());
                         fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
