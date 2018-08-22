@@ -332,6 +332,17 @@ struct env_t: public tiny::st_callback_table {
         }
         return push_arr(arr);
     }
+    tiny::ref at(tiny::ref arrayref, tiny::ref indexref) override {
+        if (ctx->arrays.count(arrayref) == 0) throw std::runtime_error("object is not an array");
+        auto arr = ctx->arrays.at(arrayref);
+        auto index = pull(indexref);
+        if (index->data.type != Value::T_INT) throw std::runtime_error(strprintf("invalid index %s", index->data.to_string()));
+        int64_t i = index->data.int64;
+        if (i < -(int64_t)arr.size()) throw std::runtime_error(strprintf("index out of bounds (%ld < %ld)", (long)i, (long)-(int64_t)arr.size()));
+        if (i >= arr.size()) throw std::runtime_error(strprintf("index out of bounds (%ld > %ld)", (long)i, (long)arr.size() - 1));
+        if (i < 0) i = arr.size() - i;
+        return refer(arr[i]);
+    }
     tiny::ref preg(tiny::program_t* program) override {
         auto pref = std::make_shared<var>((tiny::ref)ctx->temps.size());
         ctx->temps.push_back(pref);

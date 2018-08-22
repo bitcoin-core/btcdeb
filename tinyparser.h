@@ -5,6 +5,8 @@
 #ifndef included_tiny_parser_h_
 #define included_tiny_parser_h_
 
+#include <tinyformat.h>
+
 namespace tiny {
 
 enum token_type {
@@ -65,6 +67,10 @@ struct token_t {
     token_t* next = nullptr;
     token_t(token_type token_in, token_t* prev) : token(token_in) {
         if (prev) prev->next = this;
+    }
+    token_t(token_type token_in, const char* value_in, token_t* prev) :
+    token_t(token_in, prev) {
+        value = strdup(value_in);
     }
     ~token_t() { if (value) free(value); if (next) delete next; }
     void print() {
@@ -238,6 +244,7 @@ struct st_callback_table {
     virtual ref  preg(program_t* program) = 0;
     virtual ref  convert(const std::string& value, token_type type, token_type restriction) = 0;
     virtual ref  to_array(size_t count, ref* refs) = 0;
+    virtual ref  at(ref arrayref, ref indexref) = 0;
     virtual ref  compare(ref a, ref b, bool invert) = 0;
 };
 
@@ -364,6 +371,25 @@ struct list_t: public st_t {
             listref[i] = values[i].r->eval(ct);
         }
         return ct->to_array(values.size(), listref);
+    }
+};
+
+struct at_t: public st_t {
+    st_t* array;
+    st_t* index;
+    at_t(st_t* array_in, st_t* index_in) : array(array_in), index(index_in) {}
+    ~at_t() {
+        delete array;
+        delete index;
+    }
+    void print() override {
+        array->print();
+        printf("[");
+        index->print();
+        printf("]");
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        return ct->at(array->eval(ct), index->eval(ct));
     }
 };
 
@@ -504,6 +530,7 @@ const uint64_t PWS_BIN = 1 << 0;
 const uint64_t PWS_SET = 1 << 1;
 const uint64_t PWS_PCALL = 1 << 2;
 const uint64_t PWS_COMP = 1 << 3;
+const uint64_t PWS_AT = 1 << 4;
 
 struct pws {
     uint64_t& flags;
@@ -571,6 +598,7 @@ st_t* parse_preg(pws& ws, token_t** s);
 st_t* parse_fcall(pws& ws, token_t** s);
 st_t* parse_tok_binary_expr(pws& ws, token_t** s);
 st_t* parse_array(pws& ws, token_t** s);
+st_t* parse_at(pws& ws, token_t** s);
 st_t* parse_comp(pws& ws, token_t** s);
 
 st_t* parse_expr(pws& ws_, token_t** s) {
@@ -586,6 +614,7 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     }
     if (ws.avail(PWS_COMP)) { try(parse_comp); }
     if (ws.avail(PWS_PCALL)) { try(parse_pcall); }
+    if (ws.avail(PWS_AT)) { try(parse_at); }
     try(parse_preg);
     try(parse_fcall);
     try(parse_parenthesized);
@@ -793,6 +822,25 @@ st_t* parse_csv(pws& ws, token_t** s, token_type restricted_type = tok_undef) { 
     *s = r;
 
     return new list_t(values);
+}
+
+st_t* parse_at(pws& ws, token_t** s) {
+    // [expr] lbracket [expr] rbracket
+    DEBUG_PARSER("at");
+    token_t* r = *s;
+    st_t* array;
+    {
+        CLAIM(PWS_AT);
+        array = parse_expr(ws, &r);
+    }
+    if (!array) return nullptr;
+    if (!r || !r->next || r->token != tok_lbracket) { delete array; return nullptr; }
+    r = r->next;
+    st_t* index = parse_expr(ws, &r);
+    if (!index) { delete array; return nullptr; }
+    if (!r || r->token != tok_rbracket) { delete array; delete index; return nullptr; }
+    *s = r->next;
+    return new at_t(array, index);
 }
 
 st_t* parse_array(pws& ws, token_t** s) { DEBUG_PARSER("array");
