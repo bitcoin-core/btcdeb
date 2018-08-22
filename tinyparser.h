@@ -316,7 +316,7 @@ struct pcall_t: public st_t {
         return std::string("@") + pref.r->to_string() + "(" + args->to_string() + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
-        return ct->pcall(pref.r->eval(ct), args->eval(ct));
+        return ct->pcall(pref.r->eval(ct), args ? args->eval(ct) : nullref);
     }
 };
 

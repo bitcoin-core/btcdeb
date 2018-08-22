@@ -420,6 +420,10 @@ struct env_t: public tiny::st_callback_table {
             printf("]");
             return;
         }
+        if (!ctx->temps[vref]) {
+            printf("nil");
+            return;
+        }
         ctx->temps[vref]->data.print();
     }
     void printvar(tiny::ref vref) {
