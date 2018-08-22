@@ -16,6 +16,8 @@ enum token_type {
     tok_symbol,    // variable, function name, ...
     tok_number,
     tok_equal,
+    tok_lt,
+    tok_gt,
     tok_exclaim,
     tok_lparen,
     tok_rparen,
@@ -42,6 +44,8 @@ static const char* token_type_str[] = {
     "symbol",
     "number",
     "equal",
+    "<",
+    ">",
     "exclaim",
     "lparen",
     "rparen",
@@ -89,6 +93,8 @@ inline token_type determine_token(const char c, const char p, token_type restric
     if (c == '/') return tok_div;
     if (c == ',') return tok_comma;
     if (c == '=') return tok_equal;
+    if (c == '<') return tok_lt;
+    if (c == '>') return tok_gt;
     if (c == '!') return tok_exclaim;
     if (c == ')') return tok_rparen;
     if (c == '}') return tok_rcurly;
@@ -131,6 +137,23 @@ token_t* tokenize(const char* s);
 typedef size_t ref;
 static const ref nullref = 0;
 
+enum cmp_op {
+    cmp_eq,
+    cmp_ne,
+    cmp_lt,
+    cmp_gt,
+    cmp_le,
+    cmp_ge,
+};
+static const char* cmp_op_str[] = {
+    "==",
+    "!=",
+    "<",
+    ">",
+    "<=",
+    ">=",
+};
+
 class program_t;
 
 struct st_callback_table {
@@ -144,7 +167,7 @@ struct st_callback_table {
     virtual ref  convert(const std::string& value, token_type type, token_type restriction) = 0;
     virtual ref  to_array(size_t count, ref* refs) = 0;
     virtual ref  at(ref arrayref, ref indexref) = 0;
-    virtual ref  compare(ref a, ref b, bool invert) = 0;
+    virtual ref  compare(ref a, ref b, cmp_op op) = 0;
 };
 
 struct st_t {
@@ -376,19 +399,19 @@ struct func_t: public st_t {
 };
 
 struct cmp_t: public st_t {
-    bool invert; // !=
+    cmp_op op;
     st_t* lhs;
     st_t* rhs;
-    cmp_t(bool invert_in, st_t* lhs_in, st_t* rhs_in) : invert(invert_in), lhs(lhs_in), rhs(rhs_in) {}
+    cmp_t(cmp_op op_in, st_t* lhs_in, st_t* rhs_in) : op(op_in), lhs(lhs_in), rhs(rhs_in) {}
     ~cmp_t() {
         delete lhs;
         delete rhs;
     }
     virtual std::string to_string() override {
-        return "(" + lhs->to_string() + (invert ? " != " : " == ") + rhs->to_string() + ")";
+        return "(" + lhs->to_string() + " " + cmp_op_str[op] + " " + rhs->to_string() + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
-        return ct->compare(lhs->eval(ct), rhs->eval(ct), invert);
+        return ct->compare(lhs->eval(ct), rhs->eval(ct), op);
     }
 };
 

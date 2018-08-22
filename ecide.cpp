@@ -262,26 +262,41 @@ struct env_t: public tiny::st_callback_table {
         }
         return bin(op, pull(lhs), pull(rhs));
     }
-    tiny::ref compare(std::shared_ptr<var>& a, std::shared_ptr<var>& b, bool invert) {
-        auto F = invert ? _true : _false;
-        auto T = invert ? _false : _true;
-        if (a->pref) return a->pref == b->pref ? T : F;
-        return a->data.to_string() == b->data.to_string() ? T : F;
+    bool compare(std::shared_ptr<var>& a, std::shared_ptr<var>& b, tiny::cmp_op op) {
+        if (a->pref) {
+            if (op != tiny::cmp_eq && op != tiny::cmp_ne) throw std::runtime_error("invalid comparison type for program comparison (only allows == and !=)");
+            return op == tiny::cmp_eq ? a->pref == b->pref : a->pref != b->pref;
+        }
+        int64_t c = 0;
+        if (op == tiny::cmp_eq) return a->data.to_string() == b->data.to_string();
+        if (op == tiny::cmp_ne) return a->data.to_string() != b->data.to_string();
+        if (a->data.type == Value::T_STRING) throw std::runtime_error("cannot compare strings in that fashion");
+        if (a->data.type != b->data.type) {
+            a->data.data_value();
+            b->data.data_value();
+        }
+        if (a->data.type == Value::T_INT) c = a->data.int64 - b->data.int64;
+        else c = memcmp(a->data.data.data(), b->data.data.data(), std::min<size_t>(a->data.data.size(), b->data.data.size()));
+        switch (op) {
+        case tiny::cmp_lt: return c < 0;
+        case tiny::cmp_gt: return c > 0;
+        case tiny::cmp_le: return c <= 0;
+        case tiny::cmp_ge: return c >= 0;
+        default: return false;
+        }
     }
-    tiny::ref compare(tiny::ref a, tiny::ref b, bool invert) override {
-        auto F = invert ? _true : _false;
-        auto T = invert ? _false : _true;
+    tiny::ref compare(tiny::ref a, tiny::ref b, tiny::cmp_op op) override {
         if (ctx->arrays.count(a)) {
-            if (ctx->arrays.count(b) == 0) return F;
+            if (ctx->arrays.count(b) == 0) throw std::runtime_error("cannot mix arrays and non-arrays in comparison operator");
             auto aarr = ctx->arrays[a];
             auto barr = ctx->arrays[b];
-            if (aarr.size() != barr.size()) return F;
+            if (aarr.size() != barr.size()) throw std::runtime_error(strprintf("cannot compare arrays of different lengths (%zu vs %zu)", aarr.size(), barr.size()));
             for (size_t i = 0; i < aarr.size(); ++i) {
-                if (_false == compare(aarr[i], barr[i], false)) return F;
+                if (!compare(aarr[i], barr[i], op)) return _false;
             }
-            return T;
+            return _true;
         }
-        return compare(pull(a), pull(b), invert);
+        return compare(pull(a), pull(b), op) ? _true : _false;
     }
     tiny::ref unary(tiny::token_type op, tiny::ref val) override {
         throw std::runtime_error("not implemented");

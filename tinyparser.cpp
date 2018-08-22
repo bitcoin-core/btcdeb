@@ -68,6 +68,8 @@ token_t* tokenize(const char* s) {
                 open = true;
                 break;
             case tok_equal:
+            case tok_lt:
+            case tok_gt:
             case tok_exclaim:
             case tok_lparen:
             case tok_rparen:
@@ -237,7 +239,7 @@ st_t* parse_binset(pws& ws, token_t** s) {
 }
 
 st_t* parse_comp(pws& ws, token_t** s) {
-    // tok_symbol tok_equal [expr]
+    // tok_symbol tok_equal|tok_exclaim|tok_lt|tok_gt [tok_equal] [expr]
     DEBUG_PARSER("comp_eq");
     token_t* r = *s;
     st_t* a;
@@ -246,15 +248,31 @@ st_t* parse_comp(pws& ws, token_t** s) {
         a = parse_expr(ws, &r);
     }
     if (!a) return nullptr;
-    if (!r || !r->next || (r->token != tok_equal && r->token != tok_exclaim)) { delete a; return nullptr; }
-    bool invert = r->token == tok_exclaim;
+    if (!r || !r->next) { delete a; return nullptr; }
+    cmp_op op;
+    switch (r->token) {
+    case tok_equal: op = cmp_eq; break;
+    case tok_exclaim: op = cmp_ne; break;
+    case tok_lt: op = cmp_lt; break;
+    case tok_gt: op = cmp_gt; break;
+    default: delete a; return nullptr;
+    }
     r = r->next;
-    if (!r || !r->next || r->token != tok_equal) { delete a; return nullptr; }
-    r = r->next;
+    // if operator is eq or ne, next must be eq
+    if ((op == cmp_eq || op == cmp_ne) && r->token != tok_equal) { delete a; return nullptr; }
+    if (r->token == tok_equal) {
+        r = r->next;
+        if (!r) { delete a; return nullptr; }
+        switch (op) {
+        case cmp_lt: op = cmp_le; break;
+        case cmp_gt: op = cmp_ge; break;
+        default: break;
+        }
+    }
     st_t* b = parse_expr(ws, &r);
     if (!b) { delete a; return nullptr; }
     *s = r;
-    st_t* rv = new cmp_t(invert, a, b);
+    st_t* rv = new cmp_t(op, a, b);
     return rv;
 }
 

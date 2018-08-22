@@ -8,6 +8,12 @@ inline tiny::token_t* T_2(tiny::token_type t1, tiny::token_type t2) {
     return v1;
 }
 
+inline size_t token_count(tiny::token_t* head) {
+    size_t z = 0;
+    for (tiny::token_t* curr = head; curr; curr = curr->next) z++;
+    return z;
+}
+
 TEST_CASE("Simple Tokenize", "[tokenize-simple]") {
     SECTION("1 token") {
         #define T(t) tiny::token_t(t, nullptr)
@@ -44,7 +50,7 @@ TEST_CASE("Simple Tokenize", "[tokenize-simple]") {
         for (size_t i = 0; inputs[i]; ++i) {
             GIVEN(inputs[i]) {
                 tiny::token_t* t = tiny::tokenize(inputs[i]);
-                REQUIRE(t->next == nullptr);
+                REQUIRE(token_count(t) == 1);
                 REQUIRE(t->token == expected[i].token);
                 if (expected[i].value) REQUIRE(std::string(t->value) == expected[i].value);
                 delete t;
@@ -78,9 +84,8 @@ TEST_CASE("Simple Tokenize", "[tokenize-simple]") {
         for (size_t i = 0; inputs[i]; ++i) {
             GIVEN(inputs[i]) {
                 tiny::token_t* t = tiny::tokenize(inputs[i]);
-                REQUIRE(t->next != nullptr);
+                REQUIRE(token_count(t) == 2);
                 REQUIRE(t->token == expected[i]->token);
-                REQUIRE(t->next->next == nullptr);
                 REQUIRE(t->next->token == expected[i]->next->token);
                 delete t;
                 delete expected[i];
