@@ -211,7 +211,7 @@ struct var_t: public st_t {
     std::string varname;
     var_t(const std::string& varname_in) : varname(varname_in) {}
     virtual std::string to_string() override {
-        return strprintf("%s", varname);
+        return strprintf("'%s", varname);
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->load(varname);
@@ -241,7 +241,7 @@ struct set_t: public st_t {
     st_c value;
     set_t(const std::string& varname_in, st_c value_in) : varname(varname_in), value(value_in) {}
     virtual std::string to_string() override {
-        return varname + " = " + value.r->to_string();
+        return "'" + varname + " = " + value.r->to_string();
     }
     virtual ref eval(st_callback_table* ct) override {
         ref result = value.r->eval(ct);

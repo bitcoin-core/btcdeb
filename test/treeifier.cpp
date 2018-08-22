@@ -112,11 +112,35 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
         tiny::st_t* expected[] = {
             BIN(tiny::tok_plus, VAL("1"), VAL("1")),
             BIN(tiny::tok_minus, VAL("1"), VAL("1")),
-            BIN(tiny::tok_mul, VAL("a"), VAL("a")),
+            BIN(tiny::tok_mul, VAR("a"), VAR("a")),
             BIN(tiny::tok_div, VAL("10"), VAL("5")),
             BIN(tiny::tok_concat, VAL("hello"), VAL("world")),
             BIN(tiny::tok_concat, RVAL("ab", tiny::tok_hex), RVAL("cd", tiny::tok_hex)),
             new tiny::call_t("function", nullptr),
+        };
+        for (size_t i = 0; inputs[i]; ++i) {
+            GIVEN(inputs[i]) {
+                tiny::token_t* t = tiny::tokenize(inputs[i]);
+                tiny::st_t* tree = tiny::treeify(t);
+                REQUIRE(tree->to_string() == expected[i]->to_string());
+                delete t;
+                delete tree;
+                delete expected[i];
+            }
+        }
+    }
+
+    SECTION("4 tokens") {
+        const char* inputs[] = {
+            "a *= 5",
+            "() {}",
+            "a ||= 11",
+            nullptr,
+        };
+        tiny::st_t* expected[] = {
+            SET("a", BIN(tiny::tok_mul, VAR("a"), VAL("5"))),
+            PREG(std::vector<std::string>(), SEQ(nullptr)),
+            SET("a", BIN(tiny::tok_concat, VAR("a"), VAL("11"))),
         };
         for (size_t i = 0; inputs[i]; ++i) {
             GIVEN(inputs[i]) {

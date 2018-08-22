@@ -93,6 +93,7 @@ struct var {
         throw std::runtime_error("division not implemented");
     }
     std::shared_ptr<var> concat(const var& other) const {
+        if (data.type == Value::T_STRING && other.data.type == Value::T_STRING) return add(other);
         Value v(data), v2(other.data);
         v.data_value();
         v2.data_value();
@@ -590,7 +591,7 @@ int parse(const char* args_in)
         /*tokens->print();
         printf("***** PARSE\n"); */
         tree = tiny::treeify(tokens);
-        // tree->print();
+        // printf("T: "); tree->print();
         // printf("\n");
         // printf("***** EXEC\n");
         result = tree->eval(&env);
