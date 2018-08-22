@@ -211,7 +211,8 @@ btcc_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 btcc_LDADD = \
 	$(LIBBITCOIN_DEB) \
-	$(LIBBITCOIN)
+	$(LIBBITCOIN) \
+	$(LIBSECP256K1)
 
 # test-btcdeb binary #
 test_btcdeb_SOURCES = \
