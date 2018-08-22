@@ -39,7 +39,7 @@ static const amount COIN = 100000000;
 
 inline std::string coin_str(amount sat) {
     char buf[128];
-    char* pbuf = buf + sprintf(buf, "%ld.%08ld", sat / COIN, sat % COIN);
+    char* pbuf = buf + sprintf(buf, "%ld.%08ld", (long)(sat / COIN), (long)(sat % COIN));
     return std::string(buf, pbuf);
 }
 
