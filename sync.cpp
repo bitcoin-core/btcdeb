@@ -180,6 +180,19 @@ static const auto DummyMultisigExceptTX = std::set<uint256>{
 static const auto NullFailExceptTX = std::set<uint256>{
     uint256S("be774942fc7f8ed3e89ec8c750e6b4f52983b758f869e7249dad0c3f7d57a294"),
 };
+/*
+mindata.txt
+f10f94e9305abf3dc90f1c3e965574a208c92a7fd71f6fb8f948abb455bba506
+87ef8c3ce56e1cb99a1be9c70fea6645d5e3668eab081857d8ccee09d1802c12
+158c4311575a869cda8c965c64f702571182083a68d21876ca19c499cf58031f
+5d6947307cf6d0be19078c2995542814f6cd2cf63e39a78789471bc034ad5e38
+99898f1e9835d12216deeadf9a83394e460863dfb597351a61266a69829df56e
+dadfc42bc0e0c0d8b00a9d574adb0bb623bc7195a84a37b9823e8638782517af
+2a56b65eea3e60d5df2347fae1c82ce49a70e143ce392a1e46838c57f051b3b5
+nulldummy.txt
+nullfail.txt
+fd9b541d23f6e9bddb34ede15c7684eeec36231118796b691ae525f95578acf1
+*/
 std::set<uint256> mindata;
 std::set<uint256> nullfail;
 std::set<uint256> nulldummy;
