@@ -307,7 +307,7 @@ int main(int argc, const char** argv)
                             continue;
                         }
                         if (*env->serror == SCRIPT_ERR_SIG_NULLDUMMY) {
-                            nullfail.insert(x.hash);
+                            nulldummy.insert(x.hash);
                             FILE* fp = fopen("nulldummy.txt", "w");
                             printf("nulldummy: {\n");
                             for (auto d : nulldummy) {
