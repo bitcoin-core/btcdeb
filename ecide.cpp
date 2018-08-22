@@ -586,7 +586,7 @@ int parse(const char* args_in)
         /*tokens->print();
         printf("***** PARSE\n"); */
         tree = tiny::treeify(tokens);
-        tree->print();
+        // tree->print();
         // printf("\n");
         // printf("***** EXEC\n");
         result = tree->eval(&env);
