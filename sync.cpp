@@ -164,6 +164,7 @@ static const auto MinimalDataExceptTX = std::set<uint256>{
     uint256S("ad1209c76f94e2eb80b9929021161adce12498ce919333e50fa1fd4e5f6dead2"),
     uint256S("e57364803169c23c245a643301097682036be61918eee362334d9d710c74dbd4"),
     uint256S("a9b61a5aa4e406b0c9fb5ed9007bd87b6273117f502fa9e100ec08fb347d08db"),
+    uint256S("059787f0673ab2c00b8f2f9810fdd14b0cd6a3034cc44dc30de124f606d3670a"),
 };
 static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("825baed503ce5d28bf7332b6dac4751aaceea5cf2df9148b90cbc61894b65261"),
@@ -179,6 +180,9 @@ static const auto DummyMultisigExceptTX = std::set<uint256>{
 static const auto NullFailExceptTX = std::set<uint256>{
     uint256S("be774942fc7f8ed3e89ec8c750e6b4f52983b758f869e7249dad0c3f7d57a294"),
 };
+std::set<uint256> mindata;
+std::set<uint256> nullfail;
+std::set<uint256> nulldummy;
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
 unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid) {
@@ -187,9 +191,9 @@ unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid
     if (height < BIP65Height) flags ^= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
     if (height < UpgradableNops) flags ^= SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS;
     if (blockhash == BIP16Exception) flags ^= SCRIPT_VERIFY_P2SH;
-    if (MinimalDataExceptTX.count(txid)) flags ^= SCRIPT_VERIFY_MINIMALDATA;
-    if (DummyMultisigExceptTX.count(txid)) flags ^= SCRIPT_VERIFY_NULLDUMMY;
-    if (NullFailExceptTX.count(txid)) flags ^= SCRIPT_VERIFY_NULLFAIL;
+    if (MinimalDataExceptTX.count(txid) || mindata.count(txid)) flags ^= SCRIPT_VERIFY_MINIMALDATA;
+    if (DummyMultisigExceptTX.count(txid) || nulldummy.count(txid)) flags ^= SCRIPT_VERIFY_NULLDUMMY;
+    if (NullFailExceptTX.count(txid) || nullfail.count(txid)) flags ^= SCRIPT_VERIFY_NULLFAIL;
     return flags;
 }
 
@@ -276,6 +280,45 @@ int main(int argc, const char** argv)
                     if (!ContinueScript(*env)) {
                         fprintf(stderr, "block %s, index %zu tx %s failed to validate input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string());
                         fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
+                        if (*env->serror == SCRIPT_ERR_MINIMALDATA) {
+                            mindata.insert(x.hash);
+                            FILE* fp = fopen("mindata.txt", "w");
+                            printf("mindata: {\n");
+                            for (auto d : mindata) {
+                                fprintf(fp, "%s\n", d.ToString().c_str());
+                                printf("\t%s\n", d.ToString().c_str());
+                            }
+                            fclose(fp);
+                            printf("}\n");
+                            selected--;
+                            continue;
+                        }
+                        if (*env->serror == SCRIPT_ERR_SIG_NULLFAIL) {
+                            nullfail.insert(x.hash);
+                            FILE* fp = fopen("nullfail.txt", "w");
+                            printf("nullfail: {\n");
+                            for (auto d : nullfail) {
+                                fprintf(fp, "%s\n", d.ToString().c_str());
+                                printf("\t%s\n", d.ToString().c_str());
+                            }
+                            fclose(fp);
+                            printf("}\n");
+                            selected--;
+                            continue;
+                        }
+                        if (*env->serror == SCRIPT_ERR_SIG_NULLDUMMY) {
+                            nullfail.insert(x.hash);
+                            FILE* fp = fopen("nulldummy.txt", "w");
+                            printf("nulldummy: {\n");
+                            for (auto d : nulldummy) {
+                                fprintf(fp, "%s\n", d.ToString().c_str());
+                                printf("\t%s\n", d.ToString().c_str());
+                            }
+                            fclose(fp);
+                            printf("}\n");
+                            selected--;
+                            continue;
+                        }
                         return 1;
                     }
 
