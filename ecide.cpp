@@ -293,10 +293,13 @@ struct env_t: public tiny::st_callback_table {
             }
             throw std::runtime_error(strprintf("unknown function %s", fname));
         }
-        if (ctx->arrays.count(args) == 0) {
-            throw std::runtime_error(strprintf("fcall() with non-array argument (internal error) - input ref=%zu", args));
+        std::vector<std::shared_ptr<var>> a;
+        if (args) {
+            if (ctx->arrays.count(args) == 0) {
+                throw std::runtime_error(strprintf("fcall() with non-array argument (internal error) - input ref=%zu", args));
+            }
+            a = ctx->arrays.at(args);
         }
-        std::vector<std::shared_ptr<var>> a = ctx->arrays.at(args);
         auto tmp = ctx->fmap[fname](a);
         if (tmp.get()) {
             ctx->temps.push_back(tmp);
@@ -374,10 +377,13 @@ struct env_t: public tiny::st_callback_table {
         if (ctx->programs.count(program) == 0) {
             throw std::runtime_error(strprintf("uncallable target %s", pname));
         }
-        if (ctx->arrays.count(args) == 0) {
-            throw std::runtime_error(strprintf("pcall() with non-array argument (internal error) - input ref=%zu", args));
+        std::vector<std::shared_ptr<var>> a;
+        if (args) {
+            if (ctx->arrays.count(args) == 0) {
+                throw std::runtime_error(strprintf("pcall() with non-array argument (internal error) - input ref=%zu", args));
+            }
+            a = ctx->arrays.at(args);
         }
-        std::vector<std::shared_ptr<var>> a = ctx->arrays.at(args);
         auto p = ctx->programs[program];
         if (p->argnames.size() != a.size()) {
             throw std::runtime_error(strprintf("invalid number of arguments in call to %s: got %d, expected %zu", pname, a.size(), p->argnames.size()));
@@ -398,7 +404,7 @@ struct env_t: public tiny::st_callback_table {
     }
     void printvar_(tiny::ref vref) {
         if (ctx->programs.count(vref)) {
-            ctx->programs.at(vref)->print();
+            printf("%s", ctx->programs.at(vref)->to_string().c_str());
             return;
         }
         if (ctx->arrays.count(vref)) {
@@ -580,9 +586,9 @@ int parse(const char* args_in)
         /*tokens->print();
         printf("***** PARSE\n"); */
         tree = tiny::treeify(tokens);
-        /*tree->print();
-        printf("\n");
-        printf("***** EXEC\n");*/
+        tree->print();
+        // printf("\n");
+        // printf("***** EXEC\n");
         result = tree->eval(&env);
         delete tree;
         delete tokens;

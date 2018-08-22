@@ -139,7 +139,9 @@ if ENABLE_DANGEROUS
 # ecide binary #
 ecide_SOURCES = \
 	ecide.cpp \
-	cliargs.h
+	cliargs.h \
+	tinyparser.cpp \
+	tinyparser.h
 ecide_CPPFLAGS = $(AM_CPPFLAGS)
 ecide_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 ecide_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
@@ -154,7 +156,10 @@ ecide_LDADD = \
 test_ecide_SOURCES = \
 	test/catch.hpp \
 	test/test-ecide.cpp \
-	test/tokenizer.cpp
+	test/tokenizer.cpp \
+	test/treeifier.cpp \
+	tinyparser.h \
+	tinyparser.cpp
 test_ecide_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 test_ecide_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_ecide_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
