@@ -638,15 +638,25 @@ std::shared_ptr<var> e_bech32enc(std::vector<std::shared_ptr<var>> args) {
 std::shared_ptr<var> e_bech32dec(std::vector<std::shared_ptr<var>> args) {
     ARG1_NO_CURVE(do_bech32dec);
 }
-std::shared_ptr<var> e_echo(std::vector<std::shared_ptr<var>> args) {
+
+void echo(std::vector<std::shared_ptr<var>>& args, bool& need_nl) {
     for (auto& v : args) {
-        if (v->pref) e_echo(env.ctx->arrays[v->pref]);
-        else if (v->data.type == Value::T_STRING) printf("%s", v->data.str.c_str());
-        else v->data.print();
+        if (v->pref) echo(env.ctx->arrays[v->pref], need_nl);
+        else if (v->data.type == Value::T_STRING) { need_nl = true; printf("%s", v->data.str.c_str()); }
+        else { need_nl = true; v->data.print(); }
     }
-    printf("\n");
+    if (need_nl) {
+        printf("\n");
+        need_nl = false;
+    }
+}
+
+std::shared_ptr<var> e_echo(std::vector<std::shared_ptr<var>> args) {
+    bool need_nl = false;
+    echo(args, need_nl);
     return std::shared_ptr<var>(nullptr);
 }
+
 std::shared_ptr<var> e_sign(std::vector<std::shared_ptr<var>> args) {
     throw std::runtime_error("not implemented");
 }
