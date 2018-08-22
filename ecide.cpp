@@ -108,6 +108,7 @@ struct context {
     std::map<std::string, env_func> fmap;
     std::map<std::string, std::shared_ptr<var>> vars;
     std::vector<std::shared_ptr<var>> temps;
+    std::map<tiny::ref, std::vector<std::shared_ptr<var>>> arrays;
     std::string last_saved;
     std::vector<tiny::program_t*> owned_programs;
     context() {}
@@ -116,6 +117,7 @@ struct context {
     , fmap(pre.fmap)
     , vars(pre.vars)
     , temps(pre.temps)
+    , arrays(pre.arrays)
     , last_saved("")
     {}
     void teardown() {
@@ -124,14 +126,21 @@ struct context {
     }
 };
 
+std::shared_ptr<var> env_true = std::make_shared<var>(Value((int64_t)1));
+std::shared_ptr<var> env_false = std::make_shared<var>(Value((int64_t)0));
 struct env_t: public tiny::st_callback_table {
     context* ctx;
     std::vector<context> contexts;
+    tiny::ref _true, _false;
 
     env_t() {
         contexts.resize(1);
         ctx = &contexts[0];
         ctx->temps.push_back(std::shared_ptr<var>(nullptr));
+        _true = ctx->temps.size();
+        ctx->temps.push_back(env_true);
+        _false = ctx->temps.size();
+        ctx->temps.push_back(env_false);
     }
 
     tiny::ref load(const std::string& variable) override {
@@ -153,23 +162,37 @@ struct env_t: public tiny::st_callback_table {
         ctx->temps.push_back(v);
         return ctx->temps.size() - 1;
     }
-    #define pull(r) ctx->temps[r]
-    void  save(const std::string& variable, tiny::ref value) override {
+    inline std::shared_ptr<var>& pull(tiny::ref r) { return ctx->temps[r]; }
+    tiny::ref refer(std::shared_ptr<var>& v) {
+        for (tiny::ref i = 0; i < ctx->temps.size(); ++i) {
+            if (ctx->temps[i] == v) return i;
+        }
+        throw std::runtime_error(strprintf("reference not found (%s)", v->data.to_string()));
+        return tiny::nullref;
+    }
+    void save(const std::string& variable, const std::shared_ptr<var>& value) {
         // do not allow built-ins
         if (ctx->fmap.count(variable)) {
             throw std::runtime_error(strprintf("reserved keyword %s cannot be modified", variable));
         }
+        ctx->last_saved = variable;
+        ctx->vars[variable] = value;
+    }
+    void save(const std::string& variable, tiny::ref value) override {
         // ensure the variable is not also an opcode
         Value v(variable.c_str());
         if (v.type == Value::T_OPCODE) {
             throw std::runtime_error(strprintf("immutable opcode %s cannot be modified", variable));
         }
-        ctx->last_saved = variable;
-        ctx->vars[variable] = pull(value);
+        save(variable, pull(value));
     }
-    tiny::ref bin(tiny::token_type op, tiny::ref lhs, tiny::ref rhs) override {
-        auto l = pull(lhs);
-        auto r = pull(rhs);
+    tiny::ref push_arr(std::vector<std::shared_ptr<var>>& arr) {
+        tiny::ref pos = ctx->temps.size();
+        ctx->temps.push_back(std::make_shared<var>(pos));
+        ctx->arrays[pos] = arr;
+        return pos;
+    }
+    tiny::ref bin(tiny::token_type op, std::shared_ptr<var>& l, std::shared_ptr<var>& r) {
         std::shared_ptr<var> tmp;
         switch (op) {
         case tiny::tok_plus:
@@ -193,21 +216,87 @@ struct env_t: public tiny::st_callback_table {
         ctx->temps.push_back(tmp);
         return ctx->temps.size() - 1;
     }
+    tiny::ref bin(tiny::token_type op, std::shared_ptr<var>& l, tiny::ref rhs) {
+        if (ctx->arrays.count(rhs)) {
+            auto& arr = ctx->arrays.at(rhs);
+            std::vector<std::shared_ptr<var>> res;
+            for (auto& v : arr) {
+                res.push_back(pull(bin(op, l, v)));
+            }
+            return push_arr(res);
+        }
+        auto r = pull(rhs);
+        if (!r) throw std::runtime_error(strprintf("undefined reference %zu (RHS)", rhs));
+        return bin(op, l, r);
+    }
+    tiny::ref bin(tiny::token_type op, tiny::ref lhs, std::shared_ptr<var>& r) {
+        if (ctx->arrays.count(lhs)) {
+            auto& arr = ctx->arrays.at(lhs);
+            std::vector<std::shared_ptr<var>> res;
+            for (auto& v : arr) {
+                res.push_back(pull(bin(op, v, r)));
+            }
+            return push_arr(res);
+        }
+        auto l = pull(lhs);
+        if (!l) throw std::runtime_error(strprintf("undefined reference %zu (LHS)", lhs));
+        return bin(op, l, r);
+    }
+    tiny::ref bin(tiny::token_type op, tiny::ref lhs, tiny::ref rhs) override {
+        if (ctx->arrays.count(lhs)) {
+            auto& arr = ctx->arrays.at(lhs);
+            std::vector<std::shared_ptr<var>> res;
+            for (auto& v : arr) {
+                res.push_back(pull(bin(op, v, rhs)));
+            }
+            return push_arr(res);
+        }
+        if (ctx->arrays.count(rhs)) {
+            auto& arr = ctx->arrays.at(rhs);
+            std::vector<std::shared_ptr<var>> res;
+            for (auto& v : arr) {
+                res.push_back(pull(bin(op, lhs, v)));
+            }
+            return push_arr(res);
+        }
+        return bin(op, pull(lhs), pull(rhs));
+    }
+    tiny::ref compare(std::shared_ptr<var>& a, std::shared_ptr<var>& b, bool invert) {
+        auto F = invert ? _true : _false;
+        auto T = invert ? _false : _true;
+        if (a->pref) return a->pref == b->pref ? T : F;
+        return a->data.to_string() == b->data.to_string() ? T : F;
+    }
+    tiny::ref compare(tiny::ref a, tiny::ref b, bool invert) override {
+        auto F = invert ? _true : _false;
+        auto T = invert ? _false : _true;
+        if (ctx->arrays.count(a)) {
+            if (ctx->arrays.count(b) == 0) return F;
+            auto aarr = ctx->arrays[a];
+            auto barr = ctx->arrays[b];
+            if (aarr.size() != barr.size()) return F;
+            for (size_t i = 0; i < aarr.size(); ++i) {
+                if (_false == compare(aarr[i], barr[i], false)) return F;
+            }
+            return T;
+        }
+        return compare(pull(a), pull(b), invert);
+    }
     tiny::ref unary(tiny::token_type op, tiny::ref val) override {
         throw std::runtime_error("not implemented");
     }
-    tiny::ref fcall(const std::string& fname, int argc, tiny::ref* argv) override {
+    tiny::ref fcall(const std::string& fname, tiny::ref args) override {
         if (ctx->fmap.count(fname) == 0) {
             if (ctx->vars.count(fname)) {
                 auto& v = ctx->vars.at(fname);
-                if (v->pref) return pcall(v->pref, argc, argv);
+                if (v->pref) return pcall(v->pref, args);
             }
             throw std::runtime_error(strprintf("unknown function %s", fname));
         }
-        std::vector<std::shared_ptr<var>> a;
-        for (int i = 0; i < argc; i++) {
-            a.push_back(pull(argv[i]));
+        if (ctx->arrays.count(args) == 0) {
+            throw std::runtime_error(strprintf("fcall() with non-array argument (internal error) - input ref=%zu", args));
         }
+        std::vector<std::shared_ptr<var>> a = ctx->arrays.at(args);
         auto tmp = ctx->fmap[fname](a);
         if (tmp.get()) {
             ctx->temps.push_back(tmp);
@@ -233,6 +322,16 @@ struct env_t: public tiny::st_callback_table {
         ctx->temps.push_back(tmp);
         return ctx->temps.size() - 1;
     }
+    tiny::ref to_array(size_t count, tiny::ref* refs) override {
+        std::vector<std::shared_ptr<var>> arr;
+        for (size_t i = 0; i < count; ++i) {
+            if (refs[i] == 0) throw std::runtime_error(strprintf("nullref exception for reference at index %zu in to_array call", i));
+            if (!ctx->temps[refs[i]]) throw std::runtime_error(strprintf("ref #%zu not in temps", refs[i]));
+            arr.push_back(pull(refs[i]));
+            if (!arr.back()) throw std::runtime_error(strprintf("internal error (null push) for to_array() at index %zu", i));
+        }
+        return push_arr(arr);
+    }
     tiny::ref preg(tiny::program_t* program) override {
         auto pref = std::make_shared<var>((tiny::ref)ctx->temps.size());
         ctx->temps.push_back(pref);
@@ -241,7 +340,18 @@ struct env_t: public tiny::st_callback_table {
         ctx->owned_programs.push_back(program);
         return ref;
     }
-    tiny::ref pcall(tiny::ref program, int argc, tiny::ref* argv) override {
+    tiny::ref pcall(tiny::ref program, tiny::ref args) override {
+        if (ctx->arrays.count(program)) {
+            // calling an array of programs, presumably
+            std::vector<std::shared_ptr<var>> res;
+            // note that ctx will jump around for each pcall so we cannot rely on iterators
+            for (size_t i = 0; i < ctx->arrays[program].size(); ++i) {
+                auto v = ctx->arrays[program][i];
+                if (!v->pref) throw std::runtime_error("item in array is not a program");
+                res.push_back(pull(pcall(v->pref, args)));
+            }
+            return push_arr(res);
+        }
         std::string pname = "<anonymous function>";
         auto& pref = ctx->temps.at(program);
         for (auto& x : ctx->vars) {
@@ -253,15 +363,19 @@ struct env_t: public tiny::st_callback_table {
         if (ctx->programs.count(program) == 0) {
             throw std::runtime_error(strprintf("uncallable target %s", pname));
         }
+        if (ctx->arrays.count(args) == 0) {
+            throw std::runtime_error(strprintf("pcall() with non-array argument (internal error) - input ref=%zu", args));
+        }
+        std::vector<std::shared_ptr<var>> a = ctx->arrays.at(args);
         auto p = ctx->programs[program];
-        if (p->argnames.size() != (size_t)argc) {
-            throw std::runtime_error(strprintf("invalid number of arguments in call to %s: got %d, expected %zu", pname, argc, p->argnames.size()));
+        if (p->argnames.size() != a.size()) {
+            throw std::runtime_error(strprintf("invalid number of arguments in call to %s: got %d, expected %zu", pname, a.size(), p->argnames.size()));
         }
         contexts.emplace_back(*ctx);
         ctx = &contexts.back();
         // pair args with values
-        for (int i = 0; i < argc; ++i) {
-            save(p->argnames[i], argv[i]);
+        for (int i = 0; i < a.size(); ++i) {
+            save(p->argnames[i], a[i]);
         }
         tiny::ref rv = p->run(this);
         std::shared_ptr<var> rvp = pull(rv);
@@ -271,13 +385,44 @@ struct env_t: public tiny::st_callback_table {
         ctx->temps.push_back(rvp);
         return ctx->temps.size() - 1;
     }
-    void printvar(tiny::ref vref) {
+    void printvar_(tiny::ref vref) {
         if (ctx->programs.count(vref)) {
             ctx->programs.at(vref)->print();
-            printf("\n");
             return;
         }
-        ctx->temps[vref]->data.println();
+        if (ctx->arrays.count(vref)) {
+            printf("[");
+            for (auto& x : ctx->arrays.at(vref)) {
+                printf("%s", x == ctx->arrays.at(vref)[0] ? "" : ", ");
+                if (x->pref) {
+                    printvar_(x->pref);
+                } else {
+                    x->data.print();
+                }
+            }
+            printf("]");
+            return;
+        }
+        ctx->temps[vref]->data.print();
+    }
+    void printvar(tiny::ref vref) {
+        printvar_(vref);
+        printf("\n");
+        // if (ctx->programs.count(vref)) {
+        //     ctx->programs.at(vref)->print();
+        //     printf("\n");
+        //     return;
+        // }
+        // if (ctx->arrays.count(vref)) {
+        //     printf("[");
+        //     for (auto& x : ctx->arrays.at(vref)) {
+        //         printf("%s", x == ctx->arrays.at(vref)[0] ? "" : ", ");
+        //         x->data.print();
+        //     }
+        //     printf("]\n");
+        //     return;
+        // }
+        // ctx->temps[vref]->data.println();
     }
     void printvar(const std::string& varname) {
         if (ctx->vars.count(varname) == 0) return;
@@ -331,6 +476,7 @@ int main(int argc, char* const* argv)
     efun(type);
     efun(int);
     efun(hex);
+    efun(echo);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -451,6 +597,7 @@ int parse(const char* args_in)
 #define ARG1_NO_CURVE(vfun)             \
     ARG_CHK(1);                         \
     std::shared_ptr<var> v = args[0];   \
+    if (v->pref) throw std::runtime_error("complex argument not allowed"); \
     NO_CURVE_CHK(v);                    \
     Value v2(v->data);                  \
     v2.vfun();                          \
@@ -490,6 +637,15 @@ std::shared_ptr<var> e_bech32enc(std::vector<std::shared_ptr<var>> args) {
 }
 std::shared_ptr<var> e_bech32dec(std::vector<std::shared_ptr<var>> args) {
     ARG1_NO_CURVE(do_bech32dec);
+}
+std::shared_ptr<var> e_echo(std::vector<std::shared_ptr<var>> args) {
+    for (auto& v : args) {
+        if (v->pref) e_echo(env.ctx->arrays[v->pref]);
+        else if (v->data.type == Value::T_STRING) printf("%s", v->data.str.c_str());
+        else v->data.print();
+    }
+    printf("\n");
+    return std::shared_ptr<var>(nullptr);
 }
 std::shared_ptr<var> e_sign(std::vector<std::shared_ptr<var>> args) {
     throw std::runtime_error("not implemented");

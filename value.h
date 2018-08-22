@@ -528,6 +528,21 @@ struct Value {
     void println() const {
         print(); fputc('\n', stdout);
     }
+    std::string to_string() const {
+        std::string s = "";
+        switch (type) {
+        case T_INT:
+            return strprintf("%" PRId64, int64);
+        case T_OPCODE:
+            return strprintf("%s (%02x)", GetOpName(opcode), opcode);
+        case T_DATA:
+            for (auto it : data) s = s + strprintf("%02x", it);
+            return s;
+        case T_STRING:
+            return strprintf("\"%s\"", str.c_str());
+        }
+        return "???";
+    }
     static Value prepare_extraction(const Value& a, const Value& b);
 private:
     bool extract_values(std::vector<std::vector<uint8_t>>& values);

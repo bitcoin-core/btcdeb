@@ -398,7 +398,7 @@ int kerl_make_argcv(const char *argstring, size_t *argcOut, char ***argvOut)
   return kerl_make_argcv_escape(argstring, argcOut, argvOut, 0);
 }
 
-inline void _more_final_init(const char* argstring)
+void _more_final_init(const char* argstring)
 {
     more_final_lines = 0;
     more_final_pos = strlen(argstring) + 1;
@@ -407,7 +407,7 @@ inline void _more_final_init(const char* argstring)
     sprintf(more_final, "%s", argstring);
 }
 
-inline void _more_final_append(const char* line, int add_newline)
+void _more_final_append(const char* line, int add_newline)
 {
     ++more_final_lines;
     size_t req = more_final_pos + strlen(line) + 1 + add_newline;
