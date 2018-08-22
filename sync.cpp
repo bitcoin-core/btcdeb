@@ -282,20 +282,24 @@ int main(int argc, const char** argv)
                         fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
                         if (*env->serror == SCRIPT_ERR_MINIMALDATA) {
                             mindata.insert(x.hash);
-                            FILE* fp = fopen("mindata.txt", "w");
+                            FILE* fp = fopen("mindata.txt", "a+");
+                            if (!fp) fp = fopen("mindata.txt", "w");
+                            fprintf(fp, "%s\n", x.hash.ToString().c_str());
+                            fclose(fp);
                             printf("mindata: {\n");
                             for (auto d : mindata) {
-                                fprintf(fp, "%s\n", d.ToString().c_str());
                                 printf("\t%s\n", d.ToString().c_str());
                             }
-                            fclose(fp);
                             printf("}\n");
                             selected--;
                             continue;
                         }
                         if (*env->serror == SCRIPT_ERR_SIG_NULLFAIL) {
                             nullfail.insert(x.hash);
-                            FILE* fp = fopen("nullfail.txt", "w");
+                            FILE* fp = fopen("nullfail.txt", "a+");
+                            if (!fp) fp = fopen("nullfail.txt", "w");
+                            fprintf(fp, "%s\n", x.ToString().c_str());
+                            fclose(fp);
                             printf("nullfail: {\n");
                             for (auto d : nullfail) {
                                 fprintf(fp, "%s\n", d.ToString().c_str());
@@ -308,7 +312,10 @@ int main(int argc, const char** argv)
                         }
                         if (*env->serror == SCRIPT_ERR_SIG_NULLDUMMY) {
                             nulldummy.insert(x.hash);
-                            FILE* fp = fopen("nulldummy.txt", "w");
+                            FILE* fp = fopen("nulldummy.txt", "a+");
+                            if (!fp) fp = fopen("nulldummy.txt", "w");
+                            fprintf(fp, "%s\n", x.hash.ToString().c_str());
+                            fclose(fp);
                             printf("nulldummy: {\n");
                             for (auto d : nulldummy) {
                                 fprintf(fp, "%s\n", d.ToString().c_str());
