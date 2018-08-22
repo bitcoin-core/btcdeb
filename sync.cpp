@@ -315,7 +315,6 @@ int main(int argc, const char** argv)
                             fclose(fp);
                             printf("nullfail: {\n");
                             for (auto d : nullfail) {
-                                fprintf(fp, "%s\n", d.ToString().c_str());
                                 printf("\t%s\n", d.ToString().c_str());
                             }
                             printf("}\n");
@@ -330,7 +329,6 @@ int main(int argc, const char** argv)
                             fclose(fp);
                             printf("nulldummy: {\n");
                             for (auto d : nulldummy) {
-                                fprintf(fp, "%s\n", d.ToString().c_str());
                                 printf("\t%s\n", d.ToString().c_str());
                             }
                             printf("}\n");
