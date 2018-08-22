@@ -54,7 +54,7 @@ const char* ScriptErrorString(const ScriptError serror)
         case SCRIPT_ERR_SIG_HASHTYPE:
             return "Signature hash type missing or not understood (is this transaction pre-BIP66? Try with --modify-flags=-STRICTENC)";
         case SCRIPT_ERR_SIG_DER:
-            return "Non-canonical DER signature (is this transaction pre-BIP66? Try with --modify-flags=-DERSIG)";
+            return "Non-canonical DER signature (is this transaction pre-BIP66? Try with --modify-flags=-DERSIG and/or -LOW_S and/or -STRICTENC)";
         case SCRIPT_ERR_MINIMALDATA:
             return "Data push larger than necessary";
         case SCRIPT_ERR_SIG_PUSHONLY:
@@ -62,7 +62,7 @@ const char* ScriptErrorString(const ScriptError serror)
         case SCRIPT_ERR_SIG_HIGH_S:
             return "Non-canonical signature: S value is unnecessarily high (is this a historical transaction from before LOW_S enforcement? Try with --modify-flags=-LOW_S)";
         case SCRIPT_ERR_SIG_NULLDUMMY:
-            return "Dummy CHECKMULTISIG argument must be zero";
+            return "Dummy CHECKMULTISIG argument must be zero (is this transcation pre-BIP66? Try with --modify-flags=-NULLDUMMY)";
         case SCRIPT_ERR_MINIMALIF:
             return "OP_IF/NOTIF argument must be minimal";
         case SCRIPT_ERR_SIG_NULLFAIL:
