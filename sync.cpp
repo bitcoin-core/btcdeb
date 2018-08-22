@@ -318,7 +318,6 @@ int main(int argc, const char** argv)
                                 fprintf(fp, "%s\n", d.ToString().c_str());
                                 printf("\t%s\n", d.ToString().c_str());
                             }
-                            fclose(fp);
                             printf("}\n");
                             selected--;
                             continue;
@@ -334,7 +333,6 @@ int main(int argc, const char** argv)
                                 fprintf(fp, "%s\n", d.ToString().c_str());
                                 printf("\t%s\n", d.ToString().c_str());
                             }
-                            fclose(fp);
                             printf("}\n");
                             selected--;
                             continue;
