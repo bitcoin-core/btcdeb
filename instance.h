@@ -24,6 +24,7 @@ public:
     std::vector<valtype> stack;
     BaseSignatureChecker* checker;
     ScriptError error;
+    std::string exception_string = "";
 
     Instance()
     : env(nullptr)
