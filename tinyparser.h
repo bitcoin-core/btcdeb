@@ -336,8 +336,9 @@ struct set_t: public st_t {
         value.r->print();
     }
     virtual ref eval(st_callback_table* ct) override {
-        ct->save(varname, value.r->eval(ct));
-        return nullref;
+        ref result = value.r->eval(ct);
+        ct->save(varname, result);
+        return result;
     }
 };
 
@@ -563,6 +564,7 @@ st_t* parse_restricted(pws& ws, token_t** s) {
 }
 
 st_t* parse_set(pws& ws, token_t** s);
+st_t* parse_binset(pws& ws, token_t** s);
 st_t* parse_parenthesized(pws& ws, token_t** s);
 st_t* parse_pcall(pws& ws, token_t** s);
 st_t* parse_preg(pws& ws, token_t** s);
@@ -578,7 +580,10 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     clean.mark = *s;
     pws& ws = ws_.mark == *s ? ws_ : clean;
     if (ws.avail(PWS_BIN)) { try(parse_tok_binary_expr); }
-    if (ws.avail(PWS_SET)) { try(parse_set); }
+    if (ws.avail(PWS_SET)) {
+        try(parse_set);
+        try(parse_binset);
+    }
     if (ws.avail(PWS_COMP)) { try(parse_comp); }
     if (ws.avail(PWS_PCALL)) { try(parse_pcall); }
     try(parse_preg);
@@ -608,6 +613,40 @@ st_t* parse_set(pws& ws, token_t** s) {
     *s = r;
     st_t* rv = new set_t(var->varname, val);
     delete var;
+    return rv;
+}
+
+st_t* parse_binset(pws& ws, token_t** s) {
+    // tok_symbol tok_plus|tok_minus|tok_mul|tok_div|tok_concat tok_equal [expr]
+    DEBUG_PARSER("binset");
+    token_t* r = *s;
+    var_t* var;
+    {
+        CLAIM(PWS_SET);
+        var = (var_t*)parse_variable(ws, &r);
+    }
+    if (!var) return nullptr;
+    if (!r) { delete var; return nullptr; }
+    switch (r->token) {
+    case tok_plus:
+    case tok_minus:
+    case tok_mul:
+    case tok_div:
+    case tok_concat:
+        break;
+    default:
+        delete var;
+        return nullptr;
+    }
+    token_type op_token = r->token;
+    r = r->next;
+    if (!r || !r->next || r->token != tok_equal) { delete var; return nullptr; }
+    r = r->next;
+    st_t* val = parse_expr(ws, &r);
+    if (!val) { delete var; return nullptr; }
+    *s = r;
+    st_t* bin = new bin_t(op_token, var, val);
+    st_t* rv = new set_t(var->varname, bin);
     return rv;
 }
 

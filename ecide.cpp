@@ -477,6 +477,7 @@ int main(int argc, char* const* argv)
     efun(int);
     efun(hex);
     efun(echo);
+    efun(random);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -688,5 +689,20 @@ std::shared_ptr<var> e_hex(std::vector<std::shared_ptr<var>> args) {
     Value w(v->data);
     w.data_value();
     w.type = Value::T_DATA;
+    return std::make_shared<var>(w);
+}
+
+void GetRandBytes(unsigned char* buf, int num); // in value.cpp
+
+std::shared_ptr<var> e_random(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    int num = v->data.int_value();
+    if (num < 1 || num > 10 * 1024 * 1024) throw std::runtime_error("out of bounds random() count (allowed: 1..10M)");
+    Value w((int64_t)0);
+    w.type = Value::T_DATA;
+    w.data.resize(num);
+    unsigned char* buf = w.data.data();
+    GetRandBytes(buf, num);
     return std::make_shared<var>(w);
 }
