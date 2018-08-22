@@ -174,6 +174,7 @@ static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("cd874fa8cb0e2ec2d385735d5e1fd482c4fe648533efb4c50ee53bda58e15ae2"),
     uint256S("b16bf8cfca4c2bfaa250c378e4f73662c1ef99a1794a127d4d57321ddd73d367"),
     uint256S("61e26d407c17e8ee33a8b166c78f78c53cdcdc0078ae1f9405e6583cfb90eaf4"),
+    uint256S("e60547f1fea31e2104301cfac210402205151fb09816ede05858806662416bd8"),
 };
 static const auto NullFailExceptTX = std::set<uint256>{
     uint256S("be774942fc7f8ed3e89ec8c750e6b4f52983b758f869e7249dad0c3f7d57a294"),
