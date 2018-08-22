@@ -175,6 +175,9 @@ static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("b16bf8cfca4c2bfaa250c378e4f73662c1ef99a1794a127d4d57321ddd73d367"),
     uint256S("61e26d407c17e8ee33a8b166c78f78c53cdcdc0078ae1f9405e6583cfb90eaf4"),
 };
+static const auto NullFailExceptTX = std::set<uint256>{
+    uint256S("be774942fc7f8ed3e89ec8c750e6b4f52983b758f869e7249dad0c3f7d57a294"),
+};
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
 unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid) {
@@ -185,6 +188,7 @@ unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid
     if (blockhash == BIP16Exception) flags ^= SCRIPT_VERIFY_P2SH;
     if (MinimalDataExceptTX.count(txid)) flags ^= SCRIPT_VERIFY_MINIMALDATA;
     if (DummyMultisigExceptTX.count(txid)) flags ^= SCRIPT_VERIFY_NULLDUMMY;
+    if (NullFailExceptTX.count(txid)) flags ^= SCRIPT_VERIFY_NULLFAIL;
     return flags;
 }
 
