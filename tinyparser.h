@@ -6,6 +6,7 @@
 #define included_tiny_parser_h_
 
 #include <tinyformat.h>
+#include <string.h>
 
 namespace tiny {
 
