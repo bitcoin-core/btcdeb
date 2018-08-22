@@ -163,6 +163,7 @@ static const auto MinimalDataExceptTX = std::set<uint256>{
     uint256S("59ac3eccee265d31bee3264cf77a4e9b7703d6ad0cf97eadcdb4439c22725db2"),
     uint256S("ad1209c76f94e2eb80b9929021161adce12498ce919333e50fa1fd4e5f6dead2"),
     uint256S("e57364803169c23c245a643301097682036be61918eee362334d9d710c74dbd4"),
+    uint256S("a9b61a5aa4e406b0c9fb5ed9007bd87b6273117f502fa9e100ec08fb347d08db"),
 };
 static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("825baed503ce5d28bf7332b6dac4751aaceea5cf2df9148b90cbc61894b65261"),
