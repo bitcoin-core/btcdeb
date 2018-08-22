@@ -30,7 +30,7 @@ bin_PROGRAMS = btcdeb btcc test-btcdeb
 noinst_PROGRAMS =
 
 if ENABLE_DANGEROUS
-bin_PROGRAMS += ecide
+bin_PROGRAMS += ecide test-ecide
 endif
 
 # debugger #
@@ -149,6 +149,21 @@ ecide_LDADD = \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
 	$(LIBKERL)
+
+# test-ecide binary #
+test_ecide_SOURCES = \
+	test/catch.hpp \
+	test/test-ecide.cpp \
+	test/tokenizer.cpp
+test_ecide_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+test_ecide_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+test_ecide_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
+
+test_ecide_LDADD = \
+	$(LIBBITCOIN_DEB) \
+	$(LIBBITCOIN) \
+	$(LIBKERL) \
+	$(LIBSECP256K1)
 
 endif
 
