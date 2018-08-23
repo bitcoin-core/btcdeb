@@ -17,6 +17,7 @@ static const ref nullref = 0;
 class program_t;
 
 struct st_callback_table {
+    bool ret = false;
     virtual ref  load(const std::string& variable) = 0;
     virtual void save(const std::string& variable, ref value) = 0;
     virtual ref  bin(token_type op, ref lhs, ref rhs) = 0;
@@ -129,6 +130,22 @@ struct value_t: public st_t {
     }
     virtual st_t* clone() override {
         return new value_t(type, value, restriction);
+    }
+};
+
+struct ret_t: public st_t {
+    st_c value;
+    ret_t(st_c value_in) : value(value_in) {}
+    virtual std::string to_string() override {
+        return "return " + value.r->to_string();
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        ref result = value.r->eval(ct);
+        ct->ret = true;
+        return result;
+    }
+    virtual st_t* clone() override {
+        return new ret_t(value.clone());
     }
 };
 
@@ -268,8 +285,10 @@ struct sequence_t: public st_t {
     }
     virtual ref eval(st_callback_table* ct) override {
         ref rv = 0;
+        ct->ret = false;
         for (const auto& x : sequence) {
             rv = x.r->eval(ct);
+            if (ct->ret) return rv;
         }
         return rv;
     }

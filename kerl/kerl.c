@@ -429,8 +429,8 @@ int kerl_make_argcv_escape(const char *argstring, size_t *argcOut, char ***argvO
     }
   _more_final_init(argstring);
   while (1) {
-    if (bufcap >= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
     for (i = 0; argstring[i]; i++) {
+      if (bufcap <= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
       ch = argstring[i];
       if (esc) { bufiter(); esc = 0; continue; }
       if (ch == '\\') esc = 1;
@@ -496,8 +496,8 @@ int kerl_process_citation(const char* argstring, size_t* bytesOut, char** argsOu
     buf = malloc(bufcap);
     _more_final_init(argstring);
     while (1) {
-        if (bufcap >= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
         for (i = 0; argstring[i]; i++) {
+            if (bufcap <= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
             ch = argstring[i];
             if (quot) {
                 if (ch == quot) quot = 0;
@@ -546,8 +546,8 @@ int kerl_more(size_t* capacity, size_t* position, char** argsOut, const char ter
 #else
         break;
 #endif // HAVE_LIBREADLINE
-        if (bufcap >= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
         for (i = 0; argstring[i]; i++) {
+            if (bufcap <= j - 2) { bufcap *= 2; buf = realloc(buf, bufcap); }
             ch = argstring[i];
             running &= (ch != terminator);
             if (quot) {

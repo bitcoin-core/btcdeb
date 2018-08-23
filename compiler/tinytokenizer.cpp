@@ -12,6 +12,7 @@ token_t* tokenize(const char* s) {
     token_t* prev = nullptr;
     bool open = false;
     bool finalized = true;
+    bool spaced = false;
     char finding = 0;
     token_type restrict_type = tok_undef;
     size_t token_start = 0;
@@ -25,7 +26,7 @@ token_t* tokenize(const char* s) {
             open = false;
             continue; // we move one extra step, or "foo" will be read in as "foo
         }
-        auto token = determine_token(s[i], i ? s[i-1] : 0, restrict_type, tail ? tail->token : tok_undef, consumes);
+        auto token = determine_token(s[i], i ? s[i-1] : 0, restrict_type, spaced ? tok_ws : tail ? tail->token : tok_undef, consumes);
         if (consumes) {
             // we only support 1 token consumption at this point
             tail->token = tok_consumable;
@@ -41,6 +42,9 @@ token_t* tokenize(const char* s) {
         if (token == tok_ws) {
             open = false;
             restrict_type = tok_undef;
+            spaced = true;
+        } else {
+            spaced = false;
         }
         // if open, see if it stays open
         if (open) {

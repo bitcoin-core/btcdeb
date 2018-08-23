@@ -192,6 +192,7 @@ int parse(const char* args_in)
             curlies += (args[i] == '{') - (args[i] == '}');
         }
         if (curlies > 0) {
+            printf("[%zu curlies]\n", curlies);
             if (kerl_more(&capacity, &len, &args, '}')) {
                 printf("user abort\n");
                 return -1;

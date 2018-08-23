@@ -53,6 +53,7 @@ st_t* parse_value(pws& ws, token_t** s, token_type restriction = tok_undef);
 st_t* parse_restricted(pws& ws, token_t** s);
 st_t* parse_expr(pws& ws_, token_t** s);
 st_t* parse_set(pws& ws, token_t** s);
+st_t* parse_ret(pws& ws, token_t** s);
 st_t* parse_binset(pws& ws, token_t** s);
 st_t* parse_comp(pws& ws, token_t** s);
 st_t* parse_parenthesized(pws& ws, token_t** s);

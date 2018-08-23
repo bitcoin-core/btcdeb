@@ -59,6 +59,7 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_RANGE)) { try(parse_range); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_AT)) { try(parse_at); }
     if (ws_.pcache.count(pcv)) return ws_.pcache.at(pcv)->hit(s);
+    try(parse_ret);
     try(parse_unary_expr);
     try(parse_preg);
     try(parse_fcall);
@@ -128,6 +129,18 @@ st_t* parse_set(pws& ws, token_t** s) {
     st_t* rv = new set_t(var->varname, val);
     delete var;
     return rv;
+}
+
+st_t* parse_ret(pws& ws, token_t** s) {
+    // "return" [expr]
+    DEBUG_PARSER("ret");
+    token_t* r = *s;
+    if (r->token != tok_symbol || strcmp(r->value, "return")) return nullptr;
+    r = r->next;
+    st_t* val = parse_expr(ws, &r);
+    if (!val) return nullptr;
+    *s = r;
+    return new ret_t(val);
 }
 
 st_t* parse_binset(pws& ws, token_t** s) {
