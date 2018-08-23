@@ -127,6 +127,7 @@ libecide_a_CFLAGS = -std=gnu99
 libecide_a_SOURCES = \
 	compiler/env.h \
 	compiler/env.cpp \
+	compiler/tinyast.h \
 	compiler/tinytokenizer.h \
 	compiler/tinytokenizer.cpp \
 	compiler/tinyparser.h \

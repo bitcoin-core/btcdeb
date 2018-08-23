@@ -30,6 +30,7 @@ enum token_type {
     tok_comma,
     tok_lcurly,
     tok_rcurly,
+    tok_colon,
     tok_semicolon,
     tok_lbracket,
     tok_rbracket,
@@ -58,6 +59,7 @@ static const char* token_type_str[] = {
     ",",
     "lcurly",
     "rcurly",
+    "colon",
     "semicolon",
     "lbracket",
     "rbracket",
@@ -99,6 +101,7 @@ inline token_type determine_token(const char c, const char p, token_type restric
     if (c == ')') return tok_rparen;
     if (c == '}') return tok_rcurly;
     if (c == ']') return tok_rbracket;
+    if (c == ':') return tok_colon;
     if (c == ';') return tok_semicolon;
     if (c == ' ' || c == '\t' || c == '\n') return tok_ws;
     if (restrict_type != tok_undef) {

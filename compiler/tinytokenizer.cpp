@@ -82,6 +82,7 @@ token_t* tokenize(const char* s) {
             case tok_rcurly:
             case tok_lbracket:
             case tok_rbracket:
+            case tok_colon:
             case tok_semicolon:
             case tok_div:
             case tok_hex:
