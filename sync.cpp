@@ -165,6 +165,14 @@ static const auto MinimalDataExceptTX = std::set<uint256>{
     uint256S("e57364803169c23c245a643301097682036be61918eee362334d9d710c74dbd4"),
     uint256S("a9b61a5aa4e406b0c9fb5ed9007bd87b6273117f502fa9e100ec08fb347d08db"),
     uint256S("059787f0673ab2c00b8f2f9810fdd14b0cd6a3034cc44dc30de124f606d3670a"),
+    uint256S("dca2b033741d59a5c07e42adf04d36707aceae76596d883827fbd6e9ffa6d909"),
+    uint256S("f10f94e9305abf3dc90f1c3e965574a208c92a7fd71f6fb8f948abb455bba506"),
+    uint256S("87ef8c3ce56e1cb99a1be9c70fea6645d5e3668eab081857d8ccee09d1802c12"),
+    uint256S("158c4311575a869cda8c965c64f702571182083a68d21876ca19c499cf58031f"),
+    uint256S("5d6947307cf6d0be19078c2995542814f6cd2cf63e39a78789471bc034ad5e38"),
+    uint256S("99898f1e9835d12216deeadf9a83394e460863dfb597351a61266a69829df56e"),
+    uint256S("dadfc42bc0e0c0d8b00a9d574adb0bb623bc7195a84a37b9823e8638782517af"),
+    uint256S("2a56b65eea3e60d5df2347fae1c82ce49a70e143ce392a1e46838c57f051b3b5"),
 };
 static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("825baed503ce5d28bf7332b6dac4751aaceea5cf2df9148b90cbc61894b65261"),
@@ -176,23 +184,13 @@ static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("b16bf8cfca4c2bfaa250c378e4f73662c1ef99a1794a127d4d57321ddd73d367"),
     uint256S("61e26d407c17e8ee33a8b166c78f78c53cdcdc0078ae1f9405e6583cfb90eaf4"),
     uint256S("e60547f1fea31e2104301cfac210402205151fb09816ede05858806662416bd8"),
+    uint256S("fd9b541d23f6e9bddb34ede15c7684eeec36231118796b691ae525f95578acf1"),
+    uint256S("38df010716e13254fb5fc16065c1cf62ee2aeaed2fad79973f8a76ba91da36da"),
 };
 static const auto NullFailExceptTX = std::set<uint256>{
     uint256S("be774942fc7f8ed3e89ec8c750e6b4f52983b758f869e7249dad0c3f7d57a294"),
+    uint256S("fd9b541d23f6e9bddb34ede15c7684eeec36231118796b691ae525f95578acf1"),
 };
-/*
-mindata.txt
-f10f94e9305abf3dc90f1c3e965574a208c92a7fd71f6fb8f948abb455bba506
-87ef8c3ce56e1cb99a1be9c70fea6645d5e3668eab081857d8ccee09d1802c12
-158c4311575a869cda8c965c64f702571182083a68d21876ca19c499cf58031f
-5d6947307cf6d0be19078c2995542814f6cd2cf63e39a78789471bc034ad5e38
-99898f1e9835d12216deeadf9a83394e460863dfb597351a61266a69829df56e
-dadfc42bc0e0c0d8b00a9d574adb0bb623bc7195a84a37b9823e8638782517af
-2a56b65eea3e60d5df2347fae1c82ce49a70e143ce392a1e46838c57f051b3b5
-nulldummy.txt
-nullfail.txt
-fd9b541d23f6e9bddb34ede15c7684eeec36231118796b691ae525f95578acf1
-*/
 std::set<uint256> mindata;
 std::set<uint256> nullfail;
 std::set<uint256> nulldummy;
@@ -320,7 +318,7 @@ int main(int argc, const char** argv)
                             nullfail.insert(x.hash);
                             FILE* fp = fopen("nullfail.txt", "a+");
                             if (!fp) fp = fopen("nullfail.txt", "w");
-                            fprintf(fp, "%s\n", x.ToString().c_str());
+                            fprintf(fp, "%s\n", x.hash.ToString().c_str());
                             fclose(fp);
                             printf("nullfail: {\n");
                             for (auto d : nullfail) {
@@ -374,20 +372,20 @@ int main(int argc, const char** argv)
                 CAutoFile af(fp, SER_DISK, 0);
                 af << height << view << txs;
             }
-            {
-                tiny::view view2;
-                FILE* fp = fopen("current-sync-state.new", "rb");
-                if (fp) {
-                    CAutoFile af(fp, SER_DISK, 0);
-                    af >> height >> view2 >> txs;
-                }
-                assert(view == view2);
-                // FILE* fp2 = fopen("tmpfile", "wb");
-                // if (fp2) {
-                //     CAutoFile af(fp2, SER_DISK, 0);
-                //     af << height << view2 << txs;
-                // }
-            }
+            // {
+            //     tiny::view view2;
+            //     FILE* fp = fopen("current-sync-state.new", "rb");
+            //     if (fp) {
+            //         CAutoFile af(fp, SER_DISK, 0);
+            //         af >> height >> view2 >> txs;
+            //     }
+            //     assert(view == view2);
+            //     // FILE* fp2 = fopen("tmpfile", "wb");
+            //     // if (fp2) {
+            //     //     CAutoFile af(fp2, SER_DISK, 0);
+            //     //     af << height << view2 << txs;
+            //     // }
+            // }
             // {
             //     FILE* fp = fopen("current-sync-state.new", "rb");
             //     FILE* fp2 = fopen("tmpfile", "rb");
@@ -413,28 +411,50 @@ int main(int argc, const char** argv)
             unlink("current-sync-state.dat");
             rename("current-sync-state.new", "current-sync-state.dat");
             printf("\n");
-            // if ((height % 1000) == 0) {
-            //     printf("backing up 1k block state..."); fflush(stdout);
-            //     FILE* fp = fopen("current-sync-state.dat", "rb");
-            //     FILE* fp2 = fopen("backup-state-1k.dat", "wb");
-            //     char* buf = (char*)malloc(65536);
-            //     size_t sz;
-            //     while (0 < (sz = fread(buf, 1, 65536, fp))) {
-            //         (void)fwrite(buf, 1, sz, fp2);
-            //     }
-            //     fclose(fp);
-            //     fclose(fp2);
-            //     {
-            //         tiny::view view2;
-            //         FILE* fp = fopen("backup-state-1k.dat", "rb");
-            //         if (fp) {
-            //             CAutoFile af(fp, SER_DISK, 0);
-            //             af >> height >> view2 >> txs;
-            //         }
-            //         assert(view == view2);
-            //     }
-            //     printf("\n");
-            // }
+            static int milestones[] = {1000, 5000, 10000};
+            bool update[] = {false, false, false};
+            bool do_update = false;
+            for (int m = 0; m < 3; ++m) {
+                do_update |= (update[m] = (height % milestones[m]) != 0);
+            }
+            if (do_update) {
+                FILE* fp = fopen("current-sync-state.dat", "rb");
+                FILE* fp2[3];
+                std::string fname[3];
+                printf("backing up ");
+                int j = 0;
+                for (int m = 0; m < 3; ++m) if (update[m]) {
+                    printf("%dk ", milestones[m]/1000);
+                    fname[j] = strprintf("backup-state-%dk.dat", m/1000);
+                    fp2[j] = fopen(fname[j].c_str(), "wb");
+                    j++;
+                }
+                printf("block state%s...", j == 1 ? "" : "s");
+                fflush(stdout);
+
+                char* buf = (char*)malloc(65536);
+                size_t sz;
+                while (0 < (sz = fread(buf, 1, 65536, fp))) {
+                    for (int m = 0; m < j; ++m) {
+                        if (sz != fwrite(buf, 1, sz, fp2[m])) {
+                            fprintf(stderr, "error: could not write to file %s; disk full?\n", fname[m].c_str());
+                            return 1;
+                        }
+                    }
+                }
+                fclose(fp);
+                for (int m = 0; m < j; ++m) fclose(fp2[m]);
+                // {
+                //     tiny::view view2;
+                //     FILE* fp = fopen("backup-state-1k.dat", "rb");
+                //     if (fp) {
+                //         CAutoFile af(fp, SER_DISK, 0);
+                //         af >> height >> view2 >> txs;
+                //     }
+                //     assert(view == view2);
+                // }
+                printf("\n");
+            }
         }
     }
 }
