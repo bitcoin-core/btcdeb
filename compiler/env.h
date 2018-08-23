@@ -171,7 +171,7 @@ struct env_t: public tiny::st_callback_table {
     inline std::shared_ptr<var>& pull(tiny::ref r) {
         for (;;) {
             std::shared_ptr<var> v = ctx->temps[r];
-            if (v->pref) { r = v->pref; continue; }
+            if (v->pref && v->pref != r) { r = v->pref; continue; }
             return ctx->temps[r];
         }
     }
