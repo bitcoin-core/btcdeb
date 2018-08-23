@@ -173,6 +173,7 @@ static const auto MinimalDataExceptTX = std::set<uint256>{
     uint256S("99898f1e9835d12216deeadf9a83394e460863dfb597351a61266a69829df56e"),
     uint256S("dadfc42bc0e0c0d8b00a9d574adb0bb623bc7195a84a37b9823e8638782517af"),
     uint256S("2a56b65eea3e60d5df2347fae1c82ce49a70e143ce392a1e46838c57f051b3b5"),
+    uint256S("09bdfd8bd713658612594e2d6df5e7f80ba3898e3ae3c6b3aa8ef986204d1e1e"),
 };
 static const auto DummyMultisigExceptTX = std::set<uint256>{
     uint256S("825baed503ce5d28bf7332b6dac4751aaceea5cf2df9148b90cbc61894b65261"),
@@ -206,6 +207,19 @@ unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid
     if (DummyMultisigExceptTX.count(txid) || nulldummy.count(txid)) flags ^= SCRIPT_VERIFY_NULLDUMMY;
     if (NullFailExceptTX.count(txid) || nullfail.count(txid)) flags ^= SCRIPT_VERIFY_NULLFAIL;
     return flags;
+}
+
+inline void mark(const uint256& hash, std::set<uint256>& set, const std::string& fprefix) {
+    set.insert(hash);
+    FILE* fp = fopen((fprefix + ".txt").c_str(), "a+");
+    if (!fp) fp = fopen((fprefix + ".txt").c_str(), "w");
+    fprintf(fp, "%s\n", hash.ToString().c_str());
+    fclose(fp);
+    printf("%s: {\n", fprefix.c_str());
+    for (auto d : set) {
+        printf("\t%s\n", d.ToString().c_str());
+    }
+    printf("}\n");
 }
 
 int main(int argc, const char** argv)
@@ -291,6 +305,15 @@ int main(int argc, const char** argv)
                     bool result = false;
                     try {
                         result = ContinueScript(*env);
+                    } catch (scriptnum_error const& ex) {
+                        fprintf(stderr, "block %s, index %zu tx %s raised a scriptnum error on validating input %d=%s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str());
+                        if (mindata.count(x.hash)) {
+                            fprintf(stderr, "error: %s (mindata inclusion did not fix)\n", ex.what());
+                            exit(1);
+                        }
+                        mark(x.hash, mindata, "mindata");
+                        selected--;
+                        continue;
                     } catch (std::exception const& ex) {
                         fprintf(stderr, "block %s, index %zu tx %s raised an exception on validating input %d=%s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str());
                         fprintf(stderr, "error: %s\n", ex.what());
@@ -301,44 +324,17 @@ int main(int argc, const char** argv)
                         fprintf(stderr, "block %s, index %zu tx %s failed to validate input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string());
                         fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
                         if (*env->serror == SCRIPT_ERR_MINIMALDATA) {
-                            mindata.insert(x.hash);
-                            FILE* fp = fopen("mindata.txt", "a+");
-                            if (!fp) fp = fopen("mindata.txt", "w");
-                            fprintf(fp, "%s\n", x.hash.ToString().c_str());
-                            fclose(fp);
-                            printf("mindata: {\n");
-                            for (auto d : mindata) {
-                                printf("\t%s\n", d.ToString().c_str());
-                            }
-                            printf("}\n");
+                            mark(x.hash, mindata, "mindata");
                             selected--;
                             continue;
                         }
                         if (*env->serror == SCRIPT_ERR_SIG_NULLFAIL) {
-                            nullfail.insert(x.hash);
-                            FILE* fp = fopen("nullfail.txt", "a+");
-                            if (!fp) fp = fopen("nullfail.txt", "w");
-                            fprintf(fp, "%s\n", x.hash.ToString().c_str());
-                            fclose(fp);
-                            printf("nullfail: {\n");
-                            for (auto d : nullfail) {
-                                printf("\t%s\n", d.ToString().c_str());
-                            }
-                            printf("}\n");
+                            mark(x.hash, nullfail, "nullfail");
                             selected--;
                             continue;
                         }
                         if (*env->serror == SCRIPT_ERR_SIG_NULLDUMMY) {
-                            nulldummy.insert(x.hash);
-                            FILE* fp = fopen("nulldummy.txt", "a+");
-                            if (!fp) fp = fopen("nulldummy.txt", "w");
-                            fprintf(fp, "%s\n", x.hash.ToString().c_str());
-                            fclose(fp);
-                            printf("nulldummy: {\n");
-                            for (auto d : nulldummy) {
-                                printf("\t%s\n", d.ToString().c_str());
-                            }
-                            printf("}\n");
+                            mark(x.hash, nulldummy, "nulldummy");
                             selected--;
                             continue;
                         }
