@@ -189,6 +189,31 @@ void Value::do_sub() {
     add(data, a, b, g);
 }
 
+void Value::do_not_op() {
+    std::vector<char> vc;
+    int64_t j;
+    switch (type) {
+    case T_INT:
+        int64 = !int64;
+        return;
+    case T_DATA:
+        type = T_INT;
+        for (auto& v : data) if (v) { int64 = false; return; }
+        int64 = true;
+        return;
+    case T_STRING:
+        type = T_INT;
+        int64 = str.length() == 0;
+        return;
+    case T_OPCODE:
+        opcode = opcode == OP_FALSE ? OP_TRUE : OP_FALSE;
+        return;
+    default:
+        fprintf(stderr, "irreversible value type\n");
+        exit(1);
+    }
+}
+
 #ifdef ENABLE_DANGEROUS
 
 void Value::do_combine_privkeys() {

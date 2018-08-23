@@ -72,6 +72,8 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             "(0b1011)",
             "(aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899)",
             "(aabbccddeeff00112233445566778899gaabbccddeeff0011223344556677889)",
+            "!1",
+            "!0",
             nullptr,
         };
         tiny::st_t* expected[] = {
@@ -85,6 +87,8 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             RVAL("1011", tiny::tok_bin),
             VAR("aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"),
             VAR("aabbccddeeff00112233445566778899gaabbccddeeff0011223344556677889"),
+            new tiny::unary_t(tiny::tok_exclaim, VAL("1")),
+            new tiny::unary_t(tiny::tok_exclaim, VAL("0")),
         };
         for (size_t i = 0; inputs[i]; ++i) {
             GIVEN(inputs[i]) {

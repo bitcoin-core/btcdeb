@@ -6,12 +6,66 @@
 
 namespace tiny {
 
-st_t* x;
+std::vector<std::string> pdt;
+std::string pdts = "";
+static size_t ctr = 0;
+struct pdo {
+    pdo(const std::string& v) {
+        pdt.push_back(v);
+        ctr++;
+        printf("%s%s [%zu] {\n", pdts.c_str(), v.c_str(), ctr);
+        pdts += "  ";
+    }
+    ~pdo() {
+        pdts = pdts.substr(2);
+        pdt.pop_back();
+        if (pdt.size()) printf("%s} // %s\n", pdts.c_str(), pdt.back().c_str());
+    }
+};
+
+void brurk()
+{
+    printf("");
+    int a = 0;
+    printf("");
+}
 
 // std::string indent = "";
-#define try(parser) /*indent += " ";*/ x = parser(ws, s); /*indent = indent.substr(1);*/ if (x) { /*printf("%sGOT " #parser "\n", indent.c_str());*/ return x; }
-#define DEBUG_PARSER(s) //printf("- %s\n", s)
+#define try(parser) /*indent += " ";*/ x = parser(ws, s); /*indent = indent.substr(1);*/ if (x) { if (ws.pcache.count(pcv)) delete ws.pcache[pcv]; ws.pcache[pcv] = new cache(x->clone(), *s); /*printf("%s[caching %s=%p]\n", pdts.c_str(), x->to_string().c_str(), *s);*/ /*printf("%sGOT " #parser "\n", indent.c_str());*/ return x; }
+#define DEBUG_PARSER(s) //pdo __pdo(s) //printf("- %s\n", s)
 #define CLAIM(flag) ws.mark = r; pws _pws_instance(ws, flag)
+
+st_t* parse_expr(pws& ws_, token_t** s) {
+    DEBUG_PARSER("expr");
+    st_t* x;
+    token_t* pcv = *s;
+    if (ws_.pcache.count(pcv)) return ws_.pcache.at(pcv)->hit(s);
+
+    uint64_t flags = 0;
+    pws clean(ws_.pcache, flags);
+    clean.mark = *s;
+    // if (ws_.mark != *s) printf("(clean)\n");
+    pws& ws = ws_.mark == *s ? ws_ : clean;
+    if (ws.avail(PWS_BIN)) { try(parse_binary_expr); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_SET)) {
+        try(parse_set);
+        try(parse_binset);
+    }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_COMP)) { try(parse_comp); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_PCALL)) { try(parse_pcall); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_RANGE)) { try(parse_range); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_AT)) { try(parse_at); }
+    if (ws_.pcache.count(pcv)) return ws_.pcache.at(pcv)->hit(s);
+    try(parse_unary_expr);
+    try(parse_preg);
+    try(parse_fcall);
+    try(parse_parenthesized);
+    try(parse_array);
+    try(parse_variable);
+    try(parse_restricted);
+    try(parse_value);
+    return nullptr;
+}
 
 st_t* parse_variable(pws& ws, token_t** s) {
     DEBUG_PARSER("variable");
@@ -50,31 +104,6 @@ st_t* parse_restricted(pws& ws, token_t** s) {
         *s = r;
         return t;
     }
-    return nullptr;
-}
-
-st_t* parse_expr(pws& ws_, token_t** s) {
-    DEBUG_PARSER("expr");
-    uint64_t flags = 0;
-    pws clean(flags);
-    clean.mark = *s;
-    pws& ws = ws_.mark == *s ? ws_ : clean;
-    if (ws.avail(PWS_BIN)) { try(parse_tok_binary_expr); }
-    if (ws.avail(PWS_SET)) {
-        try(parse_set);
-        try(parse_binset);
-    }
-    if (ws.avail(PWS_COMP)) { try(parse_comp); }
-    if (ws.avail(PWS_PCALL)) { try(parse_pcall); }
-    if (ws.avail(PWS_RANGE)) { try(parse_range); }
-    if (ws.avail(PWS_AT)) { try(parse_at); }
-    try(parse_preg);
-    try(parse_fcall);
-    try(parse_parenthesized);
-    try(parse_array);
-    try(parse_variable);
-    try(parse_restricted);
-    try(parse_value);
     return nullptr;
 }
 
@@ -178,7 +207,7 @@ st_t* parse_parenthesized(pws& ws, token_t** s) {
     r = r->next;
     st_t* v = parse_expr(ws, &r);
     if (!v) return nullptr;
-    if (!r || r->token != tok_rparen) { delete v; return nullptr; }
+    if (!r || r->token != tok_rparen) { return nullptr; }
     *s = r->next;
     return v;
 }
@@ -211,9 +240,9 @@ st_t* parse_parenthesized(pws& ws, token_t** s) {
 // must disallow [expr2] from being a binary_expr() with op_token + or -.
 //
 
-st_t* parse_tok_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
+st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
     // tok_plus|tok_minus|tok_mul|tok_div [expr]
-    DEBUG_PARSER("tok_binary_expr_post_lhs");
+    DEBUG_PARSER("binary_expr_post_lhs");
     token_t* r = *s;
     switch (r->token) {
     case tok_plus:
@@ -238,7 +267,7 @@ st_t* parse_tok_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
         }
         if (rhs && z) {
             bin_t* tmp = new bin_t(op_token, lhs, rhs);
-            bin_t* extension = (bin_t*)parse_tok_binary_expr_post_lhs(ws, &z, tmp);
+            bin_t* extension = (bin_t*)parse_binary_expr_post_lhs(ws, &z, tmp);
             if (extension) {
                 *s = z;
                 return extension;
@@ -253,9 +282,9 @@ st_t* parse_tok_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
     return new bin_t(op_token, lhs, rhs);
 }
 
-st_t* parse_tok_binary_expr(pws& ws, token_t** s) {
+st_t* parse_binary_expr(pws& ws, token_t** s) {
     // [expr] tok_plus|tok_minus|tok_mul|tok_div [expr]
-    DEBUG_PARSER("tok_binary_expr");
+    DEBUG_PARSER("binary_expr");
     token_t* r = *s;
     st_t* lhs;
     {
@@ -264,10 +293,23 @@ st_t* parse_tok_binary_expr(pws& ws, token_t** s) {
     }
     if (!lhs) return nullptr;
     if (!r) { delete lhs; return nullptr; }
-    st_t* res = parse_tok_binary_expr_post_lhs(ws, &r, lhs);
+    st_t* res = parse_binary_expr_post_lhs(ws, &r, lhs);
     if (!res) return nullptr;
     *s = r;
     return res;
+}
+
+st_t* parse_unary_expr(pws& ws, token_t** s) {
+    // tok_exclaim [expr]
+    DEBUG_PARSER("unary_expr");
+    token_t* r = *s;
+    if (!r->next || r->token != tok_exclaim) return nullptr;
+    token_type op_token = r->token;
+    r = r->next;
+    st_t* e = parse_expr(ws, &r);
+    if (!e) return nullptr;
+    *s = r;
+    return new unary_t(op_token, e);
 }
 
 st_t* parse_csv(pws& ws, token_t** s, token_type restricted_type) {
@@ -394,7 +436,7 @@ st_t* parse_sequence(pws& ws, token_t** s) {
     std::vector<st_c> sequence_list;
     while (r && r->token != tok_rcurly) {
         uint64_t flags = 0;
-        pws sub_ws(flags);
+        pws sub_ws(ws.pcache, flags);
         st_t* e = parse_expr(sub_ws, &r);
         sequence_list.emplace_back(e);
         if (r && r->token == tok_semicolon) {
@@ -434,10 +476,15 @@ st_t* parse_preg(pws& ws, token_t** s) { DEBUG_PARSER("preg");
 }
 
 st_t* treeify(token_t* tokens) {
+    cache_t pcache;
     uint64_t flags = 0;
-    pws ws(flags);
+    pws ws(pcache, flags);
     token_t* s = tokens;
     st_t* value = parse_expr(ws, &s);
+    if (!s && value) {
+        value = value->clone();
+    }
+    for (auto& v : pcache) delete v.second;
     if (s) {
         throw std::runtime_error(strprintf("failed to treeify tokens around token %s", s->value));
         return nullptr;

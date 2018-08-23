@@ -310,6 +310,27 @@ struct env_t: public tiny::st_callback_table {
         return compare(pull(a), pull(b), op) ? _true : _false;
     }
     tiny::ref unary(tiny::token_type op, tiny::ref val) override {
+        std::shared_ptr<var> v;
+        Value z((int64_t)0);
+        switch (op) {
+        case tiny::tok_exclaim:
+            if (ctx->arrays.count(val)) {
+                std::vector<std::shared_ptr<var>> res;
+                for (auto& e : ctx->arrays.at(val)) {
+                    z = Value(e->data);
+                    z.do_not_op();
+                    res.emplace_back(std::make_shared<var>(z));
+                }
+                return push_arr(res);
+            }
+            if (ctx->programs.count(val)) return _true;
+            v = pull(val);
+            z = Value(v->data);
+            z.do_not_op();
+            ctx->temps.push_back(std::make_shared<var>(z));
+            return ctx->temps.size() - 1;
+        default: break;
+        }
         throw std::runtime_error("not implemented");
     }
     tiny::ref fcall(const std::string& fname, tiny::ref args) override {

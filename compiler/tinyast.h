@@ -7,6 +7,8 @@
 
 #include <compiler/tinytokenizer.h>
 
+#include <map>
+
 namespace tiny {
 
 typedef size_t ref;
@@ -56,6 +58,9 @@ struct st_t {
     virtual ref eval(st_callback_table* ct) {
         return nullref;
     }
+    virtual st_t* clone() {
+        return new st_t();
+    }
 };
 
 struct st_c {
@@ -104,6 +109,9 @@ struct st_c {
             delete refcnt;
         }
     }
+    st_c clone() {
+        return st_c(r->clone());
+    }
 };
 
 struct var_t: public st_t {
@@ -115,6 +123,9 @@ struct var_t: public st_t {
     virtual ref eval(st_callback_table* ct) override {
         return ct->load(varname);
     }
+    virtual st_t* clone() override {
+        return new var_t(varname);
+    }
 };
 
 struct value_t: public st_t {
@@ -122,7 +133,7 @@ struct value_t: public st_t {
     token_type restriction; // tok_hex, tok_bin, tok_undef
     std::string value;
     value_t(token_type type_in, const std::string& value_in, token_type restriction_in) : type(type_in), restriction(restriction_in), value(value_in) {
-        if (type == tok_string) {
+        if (type == tok_string && value.length() > 0 && value[0] == '"' && value[value.length()-1] == '"') {
             // get rid of quotes
             value = value.substr(1, value.length() - 2);
         }
@@ -132,6 +143,9 @@ struct value_t: public st_t {
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->convert(value, type, restriction);
+    }
+    virtual st_t* clone() override {
+        return new value_t(type, value, restriction);
     }
 };
 
@@ -146,6 +160,9 @@ struct set_t: public st_t {
         ref result = value.r->eval(ct);
         ct->save(varname, result);
         return result;
+    }
+    virtual st_t* clone() override {
+        return new set_t(varname, value.clone());
     }
 };
 
@@ -171,6 +188,13 @@ struct list_t: public st_t {
         }
         return ct->to_array(values.size(), listref);
     }
+    virtual st_t* clone() override {
+        std::vector<st_c> cv;
+        for (auto& v : values) {
+            cv.push_back(v.clone());
+        }
+        return new list_t(cv);
+    }
 };
 
 struct at_t: public st_t {
@@ -186,6 +210,9 @@ struct at_t: public st_t {
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->at(array->eval(ct), index->eval(ct));
+    }
+    virtual st_t* clone() override {
+        return new at_t(array->clone(), index->clone());
     }
 };
 
@@ -205,6 +232,9 @@ struct range_t: public st_t {
     virtual ref eval(st_callback_table* ct) override {
         return ct->range(array->eval(ct), index_begin->eval(ct), index_end->eval(ct));
     }
+    virtual st_t* clone() override {
+        return new range_t(array->clone(), index_begin->clone(), index_end->clone());
+    }
 };
 
 struct call_t: public st_t {
@@ -220,6 +250,9 @@ struct call_t: public st_t {
     virtual ref eval(st_callback_table* ct) override {
         return ct->fcall(fname, args ? args->eval(ct) : nullref);
     }
+    virtual st_t* clone() override {
+        return new call_t(fname, (list_t*)args->clone());
+    }
 };
 
 struct pcall_t: public st_t {
@@ -234,6 +267,9 @@ struct pcall_t: public st_t {
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->pcall(pref.r->eval(ct), args ? args->eval(ct) : nullref);
+    }
+    virtual st_t* clone() override {
+        return new pcall_t(pref.r->clone(), (list_t*)args->clone());
     }
 };
 
@@ -253,6 +289,13 @@ struct sequence_t: public st_t {
             rv = x.r->eval(ct);
         }
         return rv;
+    }
+    virtual st_t* clone() override {
+        std::vector<st_c> c;
+        for (auto& v : sequence) {
+            c.push_back(v.clone());
+        }
+        return new sequence_t(c);
     }
 };
 
@@ -290,6 +333,9 @@ struct func_t: public st_t {
         program_t* program = new program_t(argnames, sequence);
         return ct->preg(program);
     }
+    virtual st_t* clone() override {
+        return new func_t(argnames, (sequence_t*)sequence.r->clone());
+    }
 };
 
 struct cmp_t: public st_t {
@@ -307,6 +353,9 @@ struct cmp_t: public st_t {
     virtual ref eval(st_callback_table* ct) override {
         return ct->compare(lhs->eval(ct), rhs->eval(ct), op);
     }
+    virtual st_t* clone() override {
+        return new cmp_t(op, lhs->clone(), rhs->clone());
+    }
 };
 
 struct bin_t: public st_t {
@@ -323,6 +372,27 @@ struct bin_t: public st_t {
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->bin(op_token, lhs->eval(ct), rhs->eval(ct));
+    }
+    virtual st_t* clone() override {
+        return new bin_t(op_token, lhs->clone(), rhs->clone());
+    }
+};
+
+struct unary_t: public st_t {
+    token_type op_token;
+    st_t* v;
+    unary_t(token_type op_token_in, st_t* v_in) : op_token(op_token_in), v(v_in) {}
+    ~unary_t() {
+        delete v;
+    }
+    virtual std::string to_string() override {
+        return std::string() + token_type_str[op_token] + "(" + v->to_string() + ")";
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        return ct->unary(op_token, v->eval(ct));
+    }
+    virtual st_t* clone() override {
+        return new unary_t(op_token, v->clone());
     }
 };
 

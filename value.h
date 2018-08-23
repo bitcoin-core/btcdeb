@@ -468,6 +468,7 @@ struct Value {
     void do_add();
     void do_sub();
     void do_negate_pubkey();
+    void do_not_op();
 #ifdef ENABLE_DANGEROUS
     void do_combine_privkeys();
     void do_multiply_privkeys();
