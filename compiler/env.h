@@ -403,6 +403,63 @@ struct env_t: public tiny::st_callback_table {
         ctx->temps.push_back(std::make_shared<var>(r));
         return ctx->temps.size() - 1;
     }
+    tiny::ref arr_range(tiny::ref arrayref, int64_t is, int64_t ie) {
+        auto arr = ctx->arrays.at(arrayref);
+        is = range_chk(is, arr.size());
+        ie = range_chk(ie, arr.size());
+        std::vector<std::shared_ptr<var>> res;
+        if (is > ie) {
+            for (size_t i = ie; i < is; ++i) {
+                res.insert(res.begin(), arr[i]);
+            }
+        } else {
+            for (size_t i = is; i < ie; ++i) {
+                res.push_back(arr[i]);
+            }
+        }
+        return push_arr(res);
+    }
+    tiny::ref range(tiny::ref ref, tiny::ref startref, tiny::ref endref) override {
+        auto istart = pull(startref);
+        int64_t is = istart->data.int_value();
+        auto iend = pull(endref);
+        int64_t ie = iend->data.int_value();
+        if (ctx->arrays.count(ref) > 0) return arr_range(ref, is, ie);
+        Value r((int64_t)0);
+        auto& v = pull(ref);
+        switch (v->data.type) {
+        case Value::T_STRING:
+            is = range_chk(is, v->data.str.length());
+            ie = range_chk(ie, v->data.str.length());
+            r.type = Value::T_STRING;
+            if (is > ie) {
+                r.str = v->data.str.substr(ie, is-ie);
+                r.do_reverse();
+            } else {
+                r.str = v->data.str.substr(is, ie-is);
+            }
+            break;
+        case Value::T_DATA:
+            is = range_chk(is, v->data.data.size());
+            ie = range_chk(ie, v->data.data.size());
+            r.type = Value::T_DATA;
+            if (is > ie) {
+                r.data.clear();
+                for (int64_t i = is; i > ie; --i) {
+                    r.data.push_back(v->data.data[i]);
+                }
+            } else {
+                r.data.resize(ie - is);
+                memcpy(r.data.data(), &v->data.data[is], ie-is);
+            }
+            break;
+        default:
+            // this also includes opcodes but we consider them to be ints
+            throw std::runtime_error("range reference cannot target integers");
+        }
+        ctx->temps.push_back(std::make_shared<var>(r));
+        return ctx->temps.size() - 1;
+    }
     tiny::ref preg(tiny::program_t* program) override {
         auto pref = std::make_shared<var>((tiny::ref)ctx->temps.size());
         ctx->temps.push_back(pref);

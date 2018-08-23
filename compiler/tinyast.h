@@ -42,6 +42,7 @@ struct st_callback_table {
     virtual ref  convert(const std::string& value, token_type type, token_type restriction) = 0;
     virtual ref  to_array(size_t count, ref* refs) = 0;
     virtual ref  at(ref arrayref, ref indexref) = 0;
+    virtual ref  range(ref arrayref, ref startref, ref endref) = 0;
     virtual ref  compare(ref a, ref b, cmp_op op) = 0;
 };
 
@@ -185,6 +186,24 @@ struct at_t: public st_t {
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->at(array->eval(ct), index->eval(ct));
+    }
+};
+
+struct range_t: public st_t {
+    st_t* array;
+    st_t* index_begin;
+    st_t* index_end;
+    range_t(st_t* array_in, st_t* index_begin_in, st_t* index_end_in) : array(array_in), index_begin(index_begin_in), index_end(index_end_in) {}
+    ~range_t() {
+        delete array;
+        delete index_begin;
+        delete index_end;
+    }
+    virtual std::string to_string() override {
+        return array->to_string() + "[" + index_begin->to_string() + ":" + index_end->to_string() + "]";
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        return ct->range(array->eval(ct), index_begin->eval(ct), index_end->eval(ct));
     }
 };
 

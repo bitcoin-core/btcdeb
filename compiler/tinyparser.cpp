@@ -66,6 +66,7 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     }
     if (ws.avail(PWS_COMP)) { try(parse_comp); }
     if (ws.avail(PWS_PCALL)) { try(parse_pcall); }
+    if (ws.avail(PWS_RANGE)) { try(parse_range); }
     if (ws.avail(PWS_AT)) { try(parse_at); }
     try(parse_preg);
     try(parse_fcall);
@@ -311,6 +312,29 @@ st_t* parse_at(pws& ws, token_t** s) {
     if (!r || r->token != tok_rbracket) { delete array; delete index; return nullptr; }
     *s = r->next;
     return new at_t(array, index);
+}
+
+st_t* parse_range(pws& ws, token_t** s) {
+    // [expr] lbracket [expr] colon [expr] rbracket
+    DEBUG_PARSER("range");
+    token_t* r = *s;
+    st_t* array;
+    {
+        CLAIM(PWS_RANGE);
+        array = parse_expr(ws, &r);
+    }
+    if (!array) return nullptr;
+    if (!r || !r->next || r->token != tok_lbracket) { delete array; return nullptr; }
+    r = r->next;
+    st_t* index_start = parse_expr(ws, &r);
+    if (!index_start) { delete array; return nullptr; }
+    if (!r || !r->next || r->token != tok_colon) { delete array; delete index_start; return nullptr; }
+    r = r->next;
+    st_t* index_end = parse_expr(ws, &r);
+    if (!index_end) { delete array; delete index_start; return nullptr; }
+    if (!r || r->token != tok_rbracket) { delete array; delete index_start; delete index_end; return nullptr; }
+    *s = r->next;
+    return new range_t(array, index_start, index_end);
 }
 
 st_t* parse_array(pws& ws, token_t** s) {

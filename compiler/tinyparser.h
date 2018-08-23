@@ -15,6 +15,7 @@ const uint64_t PWS_SET = 1 << 1;
 const uint64_t PWS_PCALL = 1 << 2;
 const uint64_t PWS_COMP = 1 << 3;
 const uint64_t PWS_AT = 1 << 4;
+const uint64_t PWS_RANGE = 1 << 5;
 
 struct pws {
     uint64_t& flags;
@@ -39,6 +40,7 @@ st_t* parse_parenthesized(pws& ws, token_t** s);
 st_t* parse_tok_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs);
 st_t* parse_tok_binary_expr(pws& ws, token_t** s);
 st_t* parse_csv(pws& ws, token_t** s, token_type restricted_type = tok_undef);
+st_t* parse_range(pws& ws, token_t** s);
 st_t* parse_at(pws& ws, token_t** s);
 st_t* parse_array(pws& ws, token_t** s);
 st_t* parse_pcall(pws& ws, token_t** s);
