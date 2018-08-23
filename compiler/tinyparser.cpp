@@ -31,9 +31,10 @@ void brurk()
 }
 
 // std::string indent = "";
-#define try(parser) /*indent += " ";*/ x = parser(ws, s); /*indent = indent.substr(1);*/ if (x) { if (ws.pcache.count(pcv)) delete ws.pcache[pcv]; ws.pcache[pcv] = new cache(x->clone(), *s); /*printf("%s[caching %s=%p]\n", pdts.c_str(), x->to_string().c_str(), *s);*/ /*printf("%sGOT " #parser "\n", indent.c_str());*/ return x; }
+#define try(parser) /*indent += " ";*/ x = parser(ws, s); /*indent = indent.substr(1);*/ if (x) { if (ws.pcache.count(pcv)) delete ws.pcache[pcv]; ws.pcache[pcv] = new cache(x->clone(), *s); /*printf("%s[caching %s=%p]\n", pdts.c_str(), x->to_string().c_str(), *s); printf("GOT " #parser ": %s\n", x->to_string().c_str());*/ return x; }
 #define DEBUG_PARSER(s) //pdo __pdo(s) //printf("- %s\n", s)
 #define CLAIM(flag) ws.mark = r; pws _pws_instance(ws, flag)
+#define CLAIM2(flag1, flag2) ws.mark = r; pws _pws_instance(ws, flag1 | flag2)
 
 st_t* parse_expr(pws& ws_, token_t** s) {
     DEBUG_PARSER("expr");
@@ -44,9 +45,11 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     uint64_t flags = 0;
     pws clean(ws_.pcache, flags);
     clean.mark = *s;
+    clean.flags |= ws_.flags & PWS_LOGICAL;
     // if (ws_.mark != *s) printf("(clean)\n");
     pws& ws = ws_.mark == *s ? ws_ : clean;
-    if (ws.avail(PWS_BIN)) { try(parse_binary_expr); }
+    if (ws.avail(PWS_LOGICAL)) { try(parse_logical_expr); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_BIN)) { try(parse_binary_expr); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_SET)) {
         try(parse_set);
         try(parse_binset);
@@ -212,7 +215,9 @@ st_t* parse_parenthesized(pws& ws, token_t** s) {
 //                      ^^^^^^^^
 // 2. Mul div           a * b + c
 //                      ^^^^^
-// 3. Add sub concat (last)
+// 3. Add sub concat
+// 4. And (&&)
+// 5. Or, xor (||, ^)
 //
 // When processing, the parser goes left to right, but the processing order
 // becomes right to left:
@@ -235,15 +240,13 @@ st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
     // tok_plus|tok_minus|tok_mul|tok_div [expr]
     DEBUG_PARSER("binary_expr_post_lhs");
     token_t* r = *s;
+    CLAIM(PWS_LOGICAL);
     switch (r->token) {
     case tok_plus:
     case tok_minus:
     case tok_concat:
     case tok_mul:
     case tok_div:
-    case tok_land:
-    case tok_lor:
-    case tok_lxor:
         break;
     default:
         return nullptr;
@@ -278,8 +281,9 @@ st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
 
 st_t* parse_binary_expr(pws& ws, token_t** s) {
     // [expr] tok_plus|tok_minus|tok_mul|tok_div [expr]
-    DEBUG_PARSER("binary_expr");
     token_t* r = *s;
+    CLAIM(PWS_LOGICAL);
+    DEBUG_PARSER("binary_expr");
     st_t* lhs;
     {
         CLAIM(PWS_BIN);
@@ -288,6 +292,63 @@ st_t* parse_binary_expr(pws& ws, token_t** s) {
     if (!lhs) return nullptr;
     if (!r) { delete lhs; return nullptr; }
     st_t* res = parse_binary_expr_post_lhs(ws, &r, lhs);
+    if (!res) return nullptr;
+    *s = r;
+    return res;
+}
+
+st_t* parse_logical_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
+    // tok_plus|tok_minus|tok_mul|tok_div [expr]
+    DEBUG_PARSER("logical_expr_post_lhs");
+    token_t* r = *s;
+    switch (r->token) {
+    case tok_land:
+    case tok_lor:
+    case tok_lxor:
+        break;
+    default:
+        return nullptr;
+    }
+    token_type op_token = r->token;
+    r = r->next;
+    if (!r) return nullptr;
+    st_t* rhs;
+    if (op_token == tok_land) {
+        // prio left hand side, if this expression expands
+        token_t* z = r;
+        {
+            CLAIM(PWS_LOGICAL);
+            rhs = parse_expr(ws, &z);
+        }
+        if (rhs && z) {
+            bin_t* tmp = new bin_t(op_token, lhs, rhs);
+            bin_t* extension = (bin_t*)parse_logical_expr_post_lhs(ws, &z, tmp);
+            if (extension) {
+                *s = z;
+                return extension;
+            }
+            tmp->lhs = new st_t(); // don't kill our lhs!
+            delete tmp;
+        }
+    }
+    rhs = parse_expr(ws, &r);
+    if (!rhs) { delete lhs; return nullptr; }
+    *s = r;
+    return new bin_t(op_token, lhs, rhs);
+}
+
+st_t* parse_logical_expr(pws& ws, token_t** s) {
+    // [expr] tok_land|tok_lor|tok_lxor [expr]
+    DEBUG_PARSER("logical_expr");
+    token_t* r = *s;
+    st_t* lhs;
+    {
+        CLAIM(PWS_LOGICAL);
+        lhs = parse_expr(ws, &r);
+    }
+    if (!lhs) return nullptr;
+    if (!r) { delete lhs; return nullptr; }
+    st_t* res = parse_logical_expr_post_lhs(ws, &r, lhs);
     if (!res) return nullptr;
     *s = r;
     return res;

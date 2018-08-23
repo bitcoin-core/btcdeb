@@ -18,6 +18,7 @@ const uint64_t PWS_PCALL = 1 << 2;
 const uint64_t PWS_COMP = 1 << 3;
 const uint64_t PWS_AT = 1 << 4;
 const uint64_t PWS_RANGE = 1 << 5;
+const uint64_t PWS_LOGICAL = 1 << 6;
 
 struct cache {
     st_t* val;
@@ -57,6 +58,7 @@ st_t* parse_comp(pws& ws, token_t** s);
 st_t* parse_parenthesized(pws& ws, token_t** s);
 st_t* parse_binary_expr(pws& ws, token_t** s);
 st_t* parse_unary_expr(pws& ws, token_t** s);
+st_t* parse_logical_expr(pws& ws, token_t** s);
 st_t* parse_csv(pws& ws, token_t** s, token_type restricted_type = tok_undef);
 st_t* parse_range(pws& ws, token_t** s);
 st_t* parse_at(pws& ws, token_t** s);

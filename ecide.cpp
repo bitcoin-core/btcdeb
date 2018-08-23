@@ -150,8 +150,11 @@ int fn_debug(const char* args)
         debug_tokens = !debug_tokens;
         fprintf(stderr, "debug tokens = %s\n", debug_tokens ? "on" : "off");
     } else if (!strcmp(argv[0], "trees")) {
-        debug_tokens = !debug_tokens;
+        debug_trees = !debug_trees;
         fprintf(stderr, "debug trees = %s\n", debug_trees ? "on" : "off");
+    } else {
+        fprintf(stderr, "unknown flag: %s\n", argv[0]);
+        return -1;
     }
     return 0;
 }
@@ -213,7 +216,7 @@ int parse(const char* args_in)
         }
         tree = tiny::treeify(tokens);
         if (debug_trees) {
-            printf("<< trees >>\n");
+            printf("<< tree >>\n");
             tree->print();
             printf("\n");
         }
