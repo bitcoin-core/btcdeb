@@ -54,7 +54,6 @@ int main(int argc, char* const* argv)
     efun(base58chkdec);
     efun(bech32enc);
     efun(bech32dec);
-    efun(sign);
     efun(type);
     efun(int);
     efun(hex);
@@ -208,56 +207,59 @@ int parse(const char* args_in)
     v2.vfun();                          \
     return std::make_shared<var>(v2, false)
 
+#define ARGx_NO_CURVE(vfun)                                                             \
+    std::vector<std::shared_ptr<var>> res;                                              \
+    if (args.size() == 1 && args[0]->pref) args = env.ctx->arrays.at(args[0]->pref);    \
+    for (auto& v : args) {                                                              \
+        if (v->pref) {                                                                  \
+            throw std::runtime_error("nested complex arguments not allowed");           \
+        }                                                                               \
+        NO_CURVE_CHK(v);                                                                \
+        Value v2(v->data);                                                              \
+        v2.vfun();                                                                      \
+        res.push_back(std::make_shared<var>(v2));                                       \
+    }                                                                                   \
+    if (res.size() > 1) {                                                               \
+        tiny::ref ref = env.push_arr(res);                                              \
+        return env.pull(ref);                                                           \
+    } else {                                                                            \
+        return res[0];                                                                  \
+    }
+
 std::shared_ptr<var> e_sha256(std::vector<std::shared_ptr<var>> args) {
-    std::vector<std::shared_ptr<var>> res;
-    if (args.size() == 1 && args[0]->pref) args = env.ctx->arrays.at(args[0]->pref);
-    for (auto& v : args) {
-        if (v->pref) {
-            throw std::runtime_error("nested complex arguments not allowed");
-        }
-        Value v2(v->data);
-        v2.do_sha256();
-        res.push_back(std::make_shared<var>(v2));
-    }
-    if (res.size() > 1) {
-        // return array
-        tiny::ref ref = env.push_arr(res);
-        return env.pull(ref);
-    } else {
-        return res[0];
-    }
+    ARGx_NO_CURVE(do_sha256)
 }
 
 std::shared_ptr<var> e_reverse(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_reverse);
+    ARGx_NO_CURVE(do_reverse);
 }
 
 std::shared_ptr<var> e_ripemd160(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_ripemd160);
+    ARGx_NO_CURVE(do_ripemd160);
 }
 std::shared_ptr<var> e_hash256(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_hash256);
+    ARGx_NO_CURVE(do_hash256);
 }
 std::shared_ptr<var> e_hash160(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_hash160);
+    ARGx_NO_CURVE(do_hash160);
 }
 std::shared_ptr<var> e_base58enc(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_base58enc);
+    ARGx_NO_CURVE(do_base58enc);
 }
 std::shared_ptr<var> e_base58dec(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_base58dec);
+    ARGx_NO_CURVE(do_base58dec);
 }
 std::shared_ptr<var> e_base58chkenc(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_base58chkenc);
+    ARGx_NO_CURVE(do_base58chkenc);
 }
 std::shared_ptr<var> e_base58chkdec(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_base58chkdec);
+    ARGx_NO_CURVE(do_base58chkdec);
 }
 std::shared_ptr<var> e_bech32enc(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_bech32enc);
+    ARGx_NO_CURVE(do_bech32enc);
 }
 std::shared_ptr<var> e_bech32dec(std::vector<std::shared_ptr<var>> args) {
-    ARG1_NO_CURVE(do_bech32dec);
+    ARGx_NO_CURVE(do_bech32dec);
 }
 
 void echo(std::vector<std::shared_ptr<var>>& args, bool& need_nl) {
@@ -276,10 +278,6 @@ std::shared_ptr<var> e_echo(std::vector<std::shared_ptr<var>> args) {
     bool need_nl = false;
     echo(args, need_nl);
     return std::shared_ptr<var>(nullptr);
-}
-
-std::shared_ptr<var> e_sign(std::vector<std::shared_ptr<var>> args) {
-    throw std::runtime_error("not implemented");
 }
 
 std::shared_ptr<var> e_type(std::vector<std::shared_ptr<var>> args) {
