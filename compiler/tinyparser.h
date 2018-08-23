@@ -55,7 +55,6 @@ st_t* parse_set(pws& ws, token_t** s);
 st_t* parse_binset(pws& ws, token_t** s);
 st_t* parse_comp(pws& ws, token_t** s);
 st_t* parse_parenthesized(pws& ws, token_t** s);
-st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs);
 st_t* parse_binary_expr(pws& ws, token_t** s);
 st_t* parse_unary_expr(pws& ws, token_t** s);
 st_t* parse_csv(pws& ws, token_t** s, token_type restricted_type = tok_undef);

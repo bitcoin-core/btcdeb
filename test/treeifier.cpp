@@ -108,8 +108,8 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             "1 - 1",
             "a * a",
             "10 / 5",
-            "\"hello\" || \"world\"",
-            "0xab || 0xcd",
+            "\"hello\" ++ \"world\"",
+            "0xab ++ 0xcd",
             "function()",
             nullptr,
         };
@@ -138,7 +138,7 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
         const char* inputs[] = {
             "a *= 5",
             "() {}",
-            "a ||= 11",
+            "a ++= 11",
             nullptr,
         };
         tiny::st_t* expected[] = {
@@ -162,8 +162,8 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
         const char* inputs[] = {
             "2 + 3 * 5",
             "2 * 3 + 5",
-            "2 || 3 * 5",
-            "2 * 3 || 5",
+            "2 ++ 3 * 5",
+            "2 * 3 ++ 5",
             "() { 10 }",
             "a = a * 5",
             nullptr,

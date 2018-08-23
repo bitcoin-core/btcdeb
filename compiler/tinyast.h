@@ -14,23 +14,6 @@ namespace tiny {
 typedef size_t ref;
 static const ref nullref = 0;
 
-enum cmp_op {
-    cmp_eq,
-    cmp_ne,
-    cmp_lt,
-    cmp_gt,
-    cmp_le,
-    cmp_ge,
-};
-static const char* cmp_op_str[] = {
-    "==",
-    "!=",
-    "<",
-    ">",
-    "<=",
-    ">=",
-};
-
 class program_t;
 
 struct st_callback_table {
@@ -45,7 +28,7 @@ struct st_callback_table {
     virtual ref  to_array(size_t count, ref* refs) = 0;
     virtual ref  at(ref arrayref, ref indexref) = 0;
     virtual ref  range(ref arrayref, ref startref, ref endref) = 0;
-    virtual ref  compare(ref a, ref b, cmp_op op) = 0;
+    virtual ref  compare(ref a, ref b, token_type op) = 0;
 };
 
 struct st_t {
@@ -339,16 +322,16 @@ struct func_t: public st_t {
 };
 
 struct cmp_t: public st_t {
-    cmp_op op;
+    token_type op;
     st_t* lhs;
     st_t* rhs;
-    cmp_t(cmp_op op_in, st_t* lhs_in, st_t* rhs_in) : op(op_in), lhs(lhs_in), rhs(rhs_in) {}
+    cmp_t(token_type op_in, st_t* lhs_in, st_t* rhs_in) : op(op_in), lhs(lhs_in), rhs(rhs_in) {}
     ~cmp_t() {
         delete lhs;
         delete rhs;
     }
     virtual std::string to_string() override {
-        return "(" + lhs->to_string() + " " + cmp_op_str[op] + " " + rhs->to_string() + ")";
+        return "(" + lhs->to_string() + " " + token_type_str[op] + " " + rhs->to_string() + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->compare(lhs->eval(ct), rhs->eval(ct), op);

@@ -17,8 +17,12 @@ extern "C" {
 int fn_help(const char* args);
 int fn_vars(const char* args);
 int fn_funs(const char* args);
+int fn_debug(const char* args);
 
 int parse(const char* args);
+
+bool debug_tokens = false;
+bool debug_trees = false;
 
 int main(int argc, char* const* argv)
 {
@@ -66,6 +70,7 @@ int main(int argc, char* const* argv)
     kerl_register("help", fn_help, "Find out how to use this tool.");
     kerl_register("vars", fn_vars, "Show variables.");
     kerl_register("funs", fn_funs, "Show built-in functions.");
+    kerl_register("debug", fn_debug, "Toggle debug flags.");
     kerl_register_fallback(parse);
     kerl_set_enable_whitespaced_sensitivity();
     kerl_run("> ");
@@ -96,6 +101,9 @@ int fn_help(const char* args)
     fprintf(stderr, "Echo the string 'Hello World' to the user:\n");
     fprintf(stderr, "> echo(\"hello world\")\n\n");
 
+    fprintf(stderr, "Concatenate the two strings \"hello \" and \"world\":\n");
+    fprintf(stderr, "> \"hello \" ++ \"world\"\n\n");
+
     fprintf(stderr, "==== Function Declarations ====\n\n");
 
     fprintf(stderr, "Create a function trash256 which returns the tripe sha256 of the input v:\n");
@@ -113,8 +121,38 @@ int fn_help(const char* args)
     fprintf(stderr, "> arr *= 10\n\n");
 
     fprintf(stderr, "Calculate the sha256 hash of the entries in arr into a new variable called hashes:\n");
-    fprintf(stderr, "> hashes = sha256(arr)\n");
+    fprintf(stderr, "> hashes = sha256(arr)\n\n");
 
+    fprintf(stderr, "==== Debugging ECIDE ====\n\n");
+
+    fprintf(stderr, "Display tokenization results:\n");
+    fprintf(stderr, "> debug tokens\n\n");
+
+    fprintf(stderr, "Display treeify results:\n");
+    fprintf(stderr, "> debug trees\n\n");
+
+    return 0;
+}
+
+int fn_debug(const char* args)
+{
+    size_t argc;
+    char** argv;
+    if (kerl_make_argcv(args, &argc, &argv)) {
+        printf("user abort\n");
+        return -1;
+    }
+    if (argc != 1) {
+        fprintf(stderr, "Toggles debug options.\nAvailable options are: tokens, trees\n");
+        return -1;
+    }
+    if (!strcmp(argv[0], "tokens")) {
+        debug_tokens = !debug_tokens;
+        fprintf(stderr, "debug tokens = %s\n", debug_tokens ? "on" : "off");
+    } else if (!strcmp(argv[0], "trees")) {
+        debug_tokens = !debug_tokens;
+        fprintf(stderr, "debug trees = %s\n", debug_trees ? "on" : "off");
+    }
     return 0;
 }
 
@@ -169,12 +207,16 @@ int parse(const char* args_in)
         tokens = tiny::tokenize(args);
         free(args);
         args = nullptr;
-        /*tokens->print();
-        printf("***** PARSE\n"); */
+        if (debug_tokens) {
+            printf("<< tokens >>\n");
+            tokens->print();
+        }
         tree = tiny::treeify(tokens);
-        // printf("T: "); tree->print();
-        // printf("\n");
-        // printf("***** EXEC\n");
+        if (debug_trees) {
+            printf("<< trees >>\n");
+            tree->print();
+            printf("\n");
+        }
         result = tree->eval(&env);
         delete tree;
         delete tokens;

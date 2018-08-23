@@ -172,14 +172,14 @@ st_t* parse_comp(pws& ws, token_t** s) {
     }
     if (!a) return nullptr;
     if (!r || !r->next) { delete a; return nullptr; }
-    cmp_op op;
+    token_type op = r->token;
     switch (r->token) {
-    case tok_eq: op = cmp_eq; break;
-    case tok_ne: op = cmp_ne; break;
-    case tok_lt: op = cmp_lt; break;
-    case tok_gt: op = cmp_gt; break;
-    case tok_le: op = cmp_le; break;
-    case tok_ge: op = cmp_ge; break;
+    case tok_eq: 
+    case tok_ne: 
+    case tok_lt: 
+    case tok_gt: 
+    case tok_le: 
+    case tok_ge: break;
     default: delete a; return nullptr;
     }
     r = r->next;
@@ -241,6 +241,9 @@ st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
     case tok_concat:
     case tok_mul:
     case tok_div:
+    case tok_land:
+    case tok_lor:
+    case tok_lxor:
         break;
     default:
         return nullptr;

@@ -93,6 +93,7 @@ token_t* tokenize(const char* s) {
             case tok_hex:
             case tok_bin:
             case tok_land:
+            case tok_lor:
             case tok_lxor:
             case tok_eq:
             case tok_le:

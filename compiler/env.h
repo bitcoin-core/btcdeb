@@ -15,6 +15,10 @@
 
 struct var;
 
+extern std::shared_ptr<var> env_true;
+extern std::shared_ptr<var> env_false;
+#define env_bool(b) ((b) ? env_true : env_false)
+
 extern var* G;
 
 struct var {
@@ -99,6 +103,26 @@ struct var {
         v.data.insert(v.data.end(), v2.data.begin(), v2.data.end());
         return std::make_shared<var>(v, false);
     }
+    std::shared_ptr<var> land(const var& other) const {
+        Value v(data), v2(other.data);
+        v.do_boolify();
+        if (!v.int64) return env_false;
+        v2.do_boolify();
+        return env_bool(v2.int64);
+    }
+    std::shared_ptr<var> lor(const var& other) const {
+        Value v(data), v2(other.data);
+        v.do_boolify();
+        if (v.int64) return env_true;
+        v2.do_boolify();
+        return env_bool(v2.int64);
+    }
+    std::shared_ptr<var> lxor(const var& other) const {
+        Value v(data), v2(other.data);
+        v.do_boolify();
+        v2.do_boolify();
+        return env_bool(v.int64 != v2.int64);
+    }
 };
 
 typedef std::shared_ptr<var> (*env_func) (std::vector<std::shared_ptr<var>> args);
@@ -125,9 +149,6 @@ struct context {
         owned_programs.clear();
     }
 };
-
-extern std::shared_ptr<var> env_true;
-extern std::shared_ptr<var> env_false;
 
 struct env_t: public tiny::st_callback_table {
     context* ctx;
@@ -207,23 +228,15 @@ struct env_t: public tiny::st_callback_table {
     tiny::ref bin(tiny::token_type op, std::shared_ptr<var>& l, std::shared_ptr<var>& r) {
         std::shared_ptr<var> tmp;
         switch (op) {
-        case tiny::tok_plus:
-            tmp = l->add(*r);
-            break;
-        case tiny::tok_minus:
-            tmp = l->sub(*r);
-            break;
-        case tiny::tok_mul:
-            tmp = l->mul(*r);
-            break;
-        case tiny::tok_div:
-            tmp = l->div(*r);
-            break;
-        case tiny::tok_concat:
-            tmp = l->concat(*r);
-            break;
-        default:
-            throw std::runtime_error(strprintf("invalid binary operation (%s)", tiny::token_type_str[op]));
+        case tiny::tok_plus:   tmp = l->add(*r); break;
+        case tiny::tok_minus:  tmp = l->sub(*r); break;
+        case tiny::tok_mul:    tmp = l->mul(*r); break;
+        case tiny::tok_div:    tmp = l->div(*r); break;
+        case tiny::tok_concat: tmp = l->concat(*r); break;
+        case tiny::tok_land:   tmp = l->land(*r); break;
+        case tiny::tok_lor:    tmp = l->lor(*r); break;
+        case tiny::tok_lxor:   tmp = l->lxor(*r); break;
+        default: throw std::runtime_error(strprintf("invalid binary operation (%s)", tiny::token_type_str[op]));
         }
         ctx->temps.push_back(tmp);
         return ctx->temps.size() - 1;
@@ -273,14 +286,14 @@ struct env_t: public tiny::st_callback_table {
         }
         return bin(op, pull(lhs), pull(rhs));
     }
-    bool compare(std::shared_ptr<var>& a, std::shared_ptr<var>& b, tiny::cmp_op op) {
+    bool compare(std::shared_ptr<var>& a, std::shared_ptr<var>& b, tiny::token_type op) {
         if (a->pref) {
-            if (op != tiny::cmp_eq && op != tiny::cmp_ne) throw std::runtime_error("invalid comparison type for program comparison (only allows == and !=)");
-            return op == tiny::cmp_eq ? a->pref == b->pref : a->pref != b->pref;
+            if (op != tiny::tok_eq && op != tiny::tok_ne) throw std::runtime_error("invalid comparison type for program comparison (only allows == and !=)");
+            return op == tiny::tok_eq ? a->pref == b->pref : a->pref != b->pref;
         }
         int64_t c = 0;
-        if (op == tiny::cmp_eq) return a->data.to_string() == b->data.to_string();
-        if (op == tiny::cmp_ne) return a->data.to_string() != b->data.to_string();
+        if (op == tiny::tok_eq) return a->data.to_string() == b->data.to_string();
+        if (op == tiny::tok_ne) return a->data.to_string() != b->data.to_string();
         if (a->data.type == Value::T_STRING) throw std::runtime_error("cannot compare strings in that fashion");
         if (a->data.type != b->data.type) {
             a->data.data_value();
@@ -289,14 +302,14 @@ struct env_t: public tiny::st_callback_table {
         if (a->data.type == Value::T_INT) c = a->data.int64 - b->data.int64;
         else c = memcmp(a->data.data.data(), b->data.data.data(), std::min<size_t>(a->data.data.size(), b->data.data.size()));
         switch (op) {
-        case tiny::cmp_lt: return c < 0;
-        case tiny::cmp_gt: return c > 0;
-        case tiny::cmp_le: return c <= 0;
-        case tiny::cmp_ge: return c >= 0;
+        case tiny::tok_lt: return c < 0;
+        case tiny::tok_gt: return c > 0;
+        case tiny::tok_le: return c <= 0;
+        case tiny::tok_ge: return c >= 0;
         default: return false;
         }
     }
-    tiny::ref compare(tiny::ref a, tiny::ref b, tiny::cmp_op op) override {
+    tiny::ref compare(tiny::ref a, tiny::ref b, tiny::token_type op) override {
         if (ctx->arrays.count(a)) {
             if (ctx->arrays.count(b) == 0) throw std::runtime_error("cannot mix arrays and non-arrays in comparison operator");
             auto aarr = ctx->arrays[a];

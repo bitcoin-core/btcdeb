@@ -189,29 +189,31 @@ void Value::do_sub() {
     add(data, a, b, g);
 }
 
-void Value::do_not_op() {
+void Value::do_boolify() {
     std::vector<char> vc;
     int64_t j;
     switch (type) {
     case T_INT:
-        int64 = !int64;
         return;
     case T_DATA:
         type = T_INT;
-        for (auto& v : data) if (v) { int64 = false; return; }
-        int64 = true;
+        for (auto& v : data) if (v) { int64 = true; return; }
+        int64 = false;
         return;
     case T_STRING:
         type = T_INT;
-        int64 = str.length() == 0;
+        int64 = str.length() > 0;
         return;
     case T_OPCODE:
-        opcode = opcode == OP_FALSE ? OP_TRUE : OP_FALSE;
+        type = T_INT;
+        int64 = opcode == OP_TRUE;
         return;
-    default:
-        fprintf(stderr, "irreversible value type\n");
-        exit(1);
     }
+}
+
+void Value::do_not_op() {
+    do_boolify();
+    int64 = !int64;
 }
 
 #ifdef ENABLE_DANGEROUS

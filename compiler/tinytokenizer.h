@@ -37,6 +37,7 @@ enum token_type {
     tok_hex,
     tok_bin,
     tok_land, // logical and
+    tok_lor, // logical or
     tok_lxor, // logical xor
     tok_eq, // ==
     tok_le, // <=
@@ -61,7 +62,7 @@ static const char* token_type_str[] = {
     "+",
     "-",
     "/",
-    "||",
+    "++",
     ",",
     "lcurly",
     "rcurly",
@@ -72,6 +73,7 @@ static const char* token_type_str[] = {
     "hex",
     "bin",
     "&&",
+    "||",
     "^",
     "==",
     "<=",
@@ -101,10 +103,16 @@ struct token_t {
 
 inline token_type determine_token(const char c, const char p, token_type restrict_type, token_type current, int& consumes) {
     consumes = 0;
-    if (c == '|') return p == '|' ? tok_concat : tok_consumable;
+    if (c == '+') {
+        if (p == '+') { 
+            consumes = 1;
+            return tok_concat;
+        }
+        return tok_plus;
+    }
+    if (c == '|') return p == '|' ? tok_lor : tok_consumable;
     if (c == '&') return p == '&' ? tok_land : tok_consumable;
     if (c == '^') return tok_lxor;
-    if (c == '+') return tok_plus;
     if (c == '-') return tok_minus;
     if (c == '*') return tok_mul;
     if (c == '/') return tok_div;
