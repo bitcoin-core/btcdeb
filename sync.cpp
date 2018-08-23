@@ -411,7 +411,7 @@ int main(int argc, const char** argv)
             bool update[] = {false, false, false};
             bool do_update = false;
             for (int m = 0; m < 3; ++m) {
-                do_update |= (update[m] = (height % milestones[m]) != 0);
+                do_update |= (update[m] = (height % milestones[m]) == 0);
             }
             if (do_update) {
                 FILE* fp = fopen("current-sync-state.dat", "rb");
@@ -421,7 +421,7 @@ int main(int argc, const char** argv)
                 int j = 0;
                 for (int m = 0; m < 3; ++m) if (update[m]) {
                     printf("%dk ", milestones[m]/1000);
-                    fname[j] = strprintf("backup-state-%dk.dat", m/1000);
+                    fname[j] = strprintf("backup-state-%dk.dat", milestones[m]/1000);
                     fp2[j] = fopen(fname[j].c_str(), "wb");
                     j++;
                 }
