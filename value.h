@@ -156,7 +156,7 @@ struct Value {
             return;
         }
         int64 = non_numeric ? 0 : atoll(v);
-        if (int64 != 0) {
+        if (int64 != 0 || !strcmp(v, "0")) {
             // verify
             char buf[vlen + 1];
             sprintf(buf, "%" PRId64, int64);
