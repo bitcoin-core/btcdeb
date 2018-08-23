@@ -1,6 +1,6 @@
 #include "catch.hpp"
 
-#include "../tinyparser.h"
+#include "../compiler/tinytokenizer.h"
 
 inline tiny::token_t* T_2(tiny::token_type t1, tiny::token_type t2) {
     tiny::token_t* v1 = new tiny::token_t(t1, nullptr);

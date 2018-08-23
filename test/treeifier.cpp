@@ -1,6 +1,6 @@
 #include "catch.hpp"
 
-#include "../tinyparser.h"
+#include "../compiler/tinyparser.h"
 
 inline std::vector<tiny::st_c> _list(tiny::st_t* list[]) {
     std::vector<tiny::st_c> r;

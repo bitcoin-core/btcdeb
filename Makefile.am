@@ -30,6 +30,8 @@ bin_PROGRAMS = btcdeb btcc test-btcdeb
 noinst_PROGRAMS =
 
 if ENABLE_DANGEROUS
+LIBECIDE=libecide.a
+EXTRA_LIBRARIES += $(LIBECIDE)
 bin_PROGRAMS += ecide test-ecide
 endif
 
@@ -118,6 +120,19 @@ libkerl_a_CPPFLAGS = $(AM_CPPFLAGS) -Ikerl
 libkerl_a_CFLAGS = -std=gnu99
 libkerl_a_SOURCES = kerl/kerl.c kerl/kerl.h
 
+if ENABLE_DANGEROUS
+# ecide library #
+libecide_a_CPPFLAGS = $(AM_CPPFLAGS) -Icompiler
+libecide_a_CFLAGS = -std=gnu99
+libecide_a_SOURCES = \
+	compiler/env.h \
+	compiler/env.cpp \
+	compiler/tinytokenizer.h \
+	compiler/tinytokenizer.cpp \
+	compiler/tinyparser.h \
+	compiler/tinyparser.cpp
+endif
+
 # btcdeb binary #
 btcdeb_SOURCES = \
 	instance.h \
@@ -139,14 +154,13 @@ if ENABLE_DANGEROUS
 # ecide binary #
 ecide_SOURCES = \
 	ecide.cpp \
-	cliargs.h \
-	tinyparser.cpp \
-	tinyparser.h
+	cliargs.h
 ecide_CPPFLAGS = $(AM_CPPFLAGS)
 ecide_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 ecide_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 ecide_LDADD = \
+	$(LIBECIDE) \
 	$(LIBBITCOIN_DEB) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
@@ -157,14 +171,13 @@ test_ecide_SOURCES = \
 	test/catch.hpp \
 	test/test-ecide.cpp \
 	test/tokenizer.cpp \
-	test/treeifier.cpp \
-	tinyparser.h \
-	tinyparser.cpp
+	test/treeifier.cpp
 test_ecide_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 test_ecide_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_ecide_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 test_ecide_LDADD = \
+	$(LIBECIDE) \
 	$(LIBBITCOIN_DEB) \
 	$(LIBBITCOIN) \
 	$(LIBKERL) \
