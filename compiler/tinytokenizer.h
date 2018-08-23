@@ -15,10 +15,10 @@ enum token_type {
     tok_undef,
     tok_symbol,    // variable, function name, ...
     tok_number,
-    tok_equal,
+    tok_set,
     tok_lt,
     tok_gt,
-    tok_exclaim,
+    tok_not,
     tok_lparen,
     tok_rparen,
     tok_string,
@@ -26,7 +26,7 @@ enum token_type {
     tok_plus,
     tok_minus,
     tok_div,
-    tok_concat,
+    tok_concat, // concatenation or logical or
     tok_comma,
     tok_lcurly,
     tok_rcurly,
@@ -36,6 +36,12 @@ enum token_type {
     tok_rbracket,
     tok_hex,
     tok_bin,
+    tok_land, // logical and
+    tok_lxor, // logical xor
+    tok_eq, // ==
+    tok_le, // <=
+    tok_ge, // >=
+    tok_ne, // !=
     tok_consumable, // consumed by fulfilled token sequences
     tok_ws,
 };
@@ -65,6 +71,12 @@ static const char* token_type_str[] = {
     "rbracket",
     "hex",
     "bin",
+    "&&",
+    "^",
+    "==",
+    "<=",
+    ">=",
+    "!=",
     "consumable",
     "ws",
 };
@@ -87,17 +99,28 @@ struct token_t {
     }
 };
 
-inline token_type determine_token(const char c, const char p, token_type restrict_type, token_type current) {
+inline token_type determine_token(const char c, const char p, token_type restrict_type, token_type current, int& consumes) {
+    consumes = 0;
     if (c == '|') return p == '|' ? tok_concat : tok_consumable;
+    if (c == '&') return p == '&' ? tok_land : tok_consumable;
+    if (c == '^') return tok_lxor;
     if (c == '+') return tok_plus;
     if (c == '-') return tok_minus;
     if (c == '*') return tok_mul;
     if (c == '/') return tok_div;
     if (c == ',') return tok_comma;
-    if (c == '=') return tok_equal;
+    if (c == '=') {
+        token_type r = tok_set;
+        if (p == '=') r = tok_eq;
+        else if (p == '!') r = tok_ne;
+        else if (p == '<') r = tok_le;
+        else if (p == '>') r = tok_ge;
+        consumes = r != tok_set;
+        return r;
+    }
     if (c == '<') return tok_lt;
     if (c == '>') return tok_gt;
-    if (c == '!') return tok_exclaim;
+    if (c == '!') return tok_not;
     if (c == ')') return tok_rparen;
     if (c == '}') return tok_rcurly;
     if (c == ']') return tok_rbracket;

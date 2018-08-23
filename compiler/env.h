@@ -313,7 +313,7 @@ struct env_t: public tiny::st_callback_table {
         std::shared_ptr<var> v;
         Value z((int64_t)0);
         switch (op) {
-        case tiny::tok_exclaim:
+        case tiny::tok_not:
             if (ctx->arrays.count(val)) {
                 std::vector<std::shared_ptr<var>> res;
                 for (auto& e : ctx->arrays.at(val)) {

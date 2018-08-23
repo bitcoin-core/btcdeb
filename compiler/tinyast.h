@@ -251,7 +251,7 @@ struct call_t: public st_t {
         return ct->fcall(fname, args ? args->eval(ct) : nullref);
     }
     virtual st_t* clone() override {
-        return new call_t(fname, (list_t*)args->clone());
+        return new call_t(fname, args ? (list_t*)args->clone() : nullptr);
     }
 };
 

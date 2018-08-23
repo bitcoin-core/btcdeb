@@ -16,6 +16,7 @@ token_t* tokenize(const char* s) {
     token_type restrict_type = tok_undef;
     size_t token_start = 0;
     size_t i;
+    int consumes;
     for (i = 0; s[i]; ++i) {
         // if we are finding a character, keep reading until we find it
         if (finding) {
@@ -24,7 +25,11 @@ token_t* tokenize(const char* s) {
             open = false;
             continue; // we move one extra step, or "foo" will be read in as "foo
         }
-        auto token = determine_token(s[i], i ? s[i-1] : 0, restrict_type, tail ? tail->token : tok_undef);
+        auto token = determine_token(s[i], i ? s[i-1] : 0, restrict_type, tail ? tail->token : tok_undef, consumes);
+        if (consumes) {
+            // we only support 1 token consumption at this point
+            tail->token = tok_consumable;
+        }
         // printf("token = %s\n", token_type_str[token]);
         if (token == tok_consumable && tail->token == tok_consumable) {
             throw std::runtime_error(strprintf("tokenization failure at character '%c'", s[i]));
@@ -67,10 +72,10 @@ token_t* tokenize(const char* s) {
                 if (!head) head = tail;
                 open = true;
                 break;
-            case tok_equal:
+            case tok_set:
             case tok_lt:
             case tok_gt:
-            case tok_exclaim:
+            case tok_not:
             case tok_lparen:
             case tok_rparen:
             case tok_mul:
@@ -87,6 +92,12 @@ token_t* tokenize(const char* s) {
             case tok_div:
             case tok_hex:
             case tok_bin:
+            case tok_land:
+            case tok_lxor:
+            case tok_eq:
+            case tok_le:
+            case tok_ge:
+            case tok_ne:
                 if (tail && tail->token == tok_consumable) {
                     delete tail;
                     if (head == tail) head = prev;
