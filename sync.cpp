@@ -192,20 +192,24 @@ static const auto NullFailExceptTX = std::set<uint256>{
     uint256S("be774942fc7f8ed3e89ec8c750e6b4f52983b758f869e7249dad0c3f7d57a294"),
     uint256S("fd9b541d23f6e9bddb34ede15c7684eeec36231118796b691ae525f95578acf1"),
 };
+static const auto UpgradableNOPExceptTX = std::set<uint256>{
+    uint256S("c8b86e0dcfe3a1dd48c99ee4b5ddf6172a552303e7f338d49124e060caf62d09"),
+};
 std::set<uint256> mindata;
 std::set<uint256> nullfail;
 std::set<uint256> nulldummy;
+std::set<uint256> upgradablenop;
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
 unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid) {
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
     if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC | SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S;
     if (height < BIP65Height) flags ^= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
-    if (height < UpgradableNops) flags ^= SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS;
+    if (height < UpgradableNops || upgradablenop.count(txid)) flags ^= SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS;
     if (blockhash == BIP16Exception) flags ^= SCRIPT_VERIFY_P2SH;
-    if (MinimalDataExceptTX.count(txid) || mindata.count(txid)) flags ^= SCRIPT_VERIFY_MINIMALDATA;
-    if (DummyMultisigExceptTX.count(txid) || nulldummy.count(txid)) flags ^= SCRIPT_VERIFY_NULLDUMMY;
-    if (NullFailExceptTX.count(txid) || nullfail.count(txid)) flags ^= SCRIPT_VERIFY_NULLFAIL;
+    if (mindata.count(txid)) flags ^= SCRIPT_VERIFY_MINIMALDATA;
+    if (nulldummy.count(txid)) flags ^= SCRIPT_VERIFY_NULLDUMMY;
+    if (nullfail.count(txid)) flags ^= SCRIPT_VERIFY_NULLFAIL;
     return flags;
 }
 
@@ -215,11 +219,19 @@ inline void mark(const uint256& hash, std::set<uint256>& set, const std::string&
     if (!fp) fp = fopen((fprefix + ".txt").c_str(), "w");
     fprintf(fp, "%s\n", hash.ToString().c_str());
     fclose(fp);
-    printf("%s: {\n", fprefix.c_str());
-    for (auto d : set) {
-        printf("\t%s\n", d.ToString().c_str());
+    printf("%s: +%s\n", fprefix.c_str(), hash.ToString().c_str());
+}
+
+inline void load_e(std::set<uint256>& set, const std::string& fprefix) {
+    FILE* fp = fopen((fprefix + ".txt").c_str(), "r");
+    if (!fp) return;
+    char buf[70];
+    while (nullptr != (fgets(buf, 70, fp))) {
+        assert(strlen(buf) == 65); // 64 byte hex + '\n'
+        buf[64] = 0; // chop off newline
+        set.insert(uint256S(buf));
     }
-    printf("}\n");
+    fclose(fp);
 }
 
 int main(int argc, const char** argv)
@@ -247,6 +259,25 @@ int main(int argc, const char** argv)
         af >> height >> view >> txs;
         printf("\n");
     }
+
+    // load exceptions
+    mindata = MinimalDataExceptTX;
+    nullfail = NullFailExceptTX;
+    nulldummy = DummyMultisigExceptTX;
+    upgradablenop = UpgradableNOPExceptTX;
+
+    fp = fopen("exceptions.dat", "rb");
+    if (fp) {
+        CAutoFile af(fp, SER_DISK, 0);
+        af >> mindata >> nullfail >> nulldummy >> upgradablenop;
+        printf("loaded [ %zu, %zu, %zu, %zu ] exceptions\n", mindata.size(), nullfail.size(), nulldummy.size(), upgradablenop.size());
+    }
+
+    // append exceptions
+    load_e(mindata, "mindata");
+    load_e(nullfail, "nullfail");
+    load_e(nulldummy, "nulldummy");
+    load_e(upgradablenop, "upgradablenop");
 
     ECCVerifyHandle evh;
     for (;;) {
@@ -338,6 +369,11 @@ int main(int argc, const char** argv)
                             selected--;
                             continue;
                         }
+                        if (*env->serror == SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS) {
+                            mark(x.hash, upgradablenop, "upgradablenop");
+                            selected--;
+                            continue;
+                        }
                         return 1;
                     }
 
@@ -407,6 +443,9 @@ int main(int argc, const char** argv)
             unlink("current-sync-state.dat");
             rename("current-sync-state.new", "current-sync-state.dat");
             printf("\n");
+            fp = fopen("exceptions.dat", "wb");
+            CAutoFile af(fp, SER_DISK, 0);
+            af << mindata << nullfail << nulldummy << upgradablenop;
             static int milestones[] = {1000, 5000, 10000};
             bool update[] = {false, false, false};
             bool do_update = false;
