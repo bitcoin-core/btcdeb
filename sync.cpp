@@ -201,10 +201,17 @@ std::set<uint256> nulldummy;
 std::set<uint256> upgradablenop;
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
+// Deployment of BIP68, BIP112, and BIP113.
+#define CSVHeight 419328
+// Segwit
+#define SWHeight  481824
+
 unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid) {
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
     if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC | SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S;
     if (height < BIP65Height) flags ^= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
+    if (height < CSVHeight) flags ^= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
+    if (height < SWHeight) flags ^= SCRIPT_VERIFY_WITNESS;
     if (height < UpgradableNops || upgradablenop.count(txid)) flags ^= SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS;
     if (blockhash == BIP16Exception) flags ^= SCRIPT_VERIFY_P2SH;
     if (mindata.count(txid)) flags ^= SCRIPT_VERIFY_MINIMALDATA;
@@ -327,7 +334,7 @@ int main(int argc, const char** argv)
                     bool require_cleanstack = instance.sigver == SigVersion::WITNESS_V0;
 
                     if (!instance.setup_environment(get_flags(height, blockhex, x.hash))) {
-                        fprintf(stderr, "block %s, index %zu tx %s failed to initialize script environment for input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string());
+                        fprintf(stderr, "block %s, index %zu tx %s failed to initialize script environment for input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string().c_str());
                         exit(1);
                     }
 
@@ -352,7 +359,7 @@ int main(int argc, const char** argv)
                     }
 
                     if (!result) {
-                        fprintf(stderr, "block %s, index %zu tx %s failed to validate input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string());
+                        fprintf(stderr, "block %s, index %zu tx %s failed to validate input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string().c_str());
                         fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
                         if (*env->serror == SCRIPT_ERR_MINIMALDATA) {
                             mark(x.hash, mindata, "mindata");
