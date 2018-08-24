@@ -55,7 +55,7 @@ public:
 
     bool at_end();
     bool at_start();
-    const char* error_string();
+    std::string error_string();
 
     bool step(size_t steps = 1);
 

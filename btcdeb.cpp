@@ -203,7 +203,7 @@ int main(int argc, char* const* argv)
     }
 
     if (!instance.setup_environment(flags)) {
-        fprintf(stderr, "failed to initialize script environment: %s\n", instance.error_string());
+        fprintf(stderr, "failed to initialize script environment: %s\n", instance.error_string().c_str());
         return 1;
     }
 
@@ -303,7 +303,7 @@ int main(int argc, char* const* argv)
 
 int fn_step(const char* arg) {
     if (env->done) fail("at end of script\n");
-    if (!instance.step()) fail("error: %s\n", instance.error_string());
+    if (!instance.step()) fail("error: %s\n", instance.error_string().c_str());
     print_dualstack();
     if (env->curr_op_seq < count) {
         printf("%s\n", script_lines[env->curr_op_seq]);

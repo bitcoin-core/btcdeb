@@ -132,7 +132,7 @@ bool Instance::setup_environment(unsigned int flags) {
 
 bool Instance::at_end() { return env->done; }
 bool Instance::at_start() { return env->pc == env->script.begin(); }
-const char* Instance::error_string() { return exception_string == "" ? ScriptErrorString(*env->serror) : ("exception thrown: " + exception_string).c_str(); }
+std::string Instance::error_string() { return exception_string == "" ? ScriptErrorString(*env->serror) : "exception thrown: " + exception_string; }
 
 bool Instance::step(size_t steps) {
     exception_string = "";
