@@ -332,7 +332,7 @@ struct env_t: public tiny::st_callback_table {
                 for (auto& e : ctx->arrays.at(val)) {
                     z = Value(e->data);
                     z.do_not_op();
-                    res.emplace_back(std::make_shared<var>(z));
+                    res.emplace_back(z.int64 ? env_true : env_false);
                 }
                 return push_arr(res);
             }
@@ -340,11 +340,13 @@ struct env_t: public tiny::st_callback_table {
             v = pull(val);
             z = Value(v->data);
             z.do_not_op();
-            ctx->temps.push_back(std::make_shared<var>(z));
-            return ctx->temps.size() - 1;
+            return z.int64 ? _true : _false;
         default: break;
         }
         throw std::runtime_error("not implemented");
+    }
+    bool truthy(tiny::ref v) override {
+        return unary(tiny::tok_not, v) == _false;
     }
     tiny::ref fcall(const std::string& fname, tiny::ref args) override {
         if (ctx->vars.count(fname)) {

@@ -19,6 +19,7 @@ const uint64_t PWS_COMP = 1 << 3;
 const uint64_t PWS_AT = 1 << 4;
 const uint64_t PWS_RANGE = 1 << 5;
 const uint64_t PWS_LOGICAL = 1 << 6;
+const uint64_t PWS_IF = 1 << 7;
 
 struct cache {
     st_t* val;
@@ -68,6 +69,7 @@ st_t* parse_pcall(pws& ws, token_t** s);
 st_t* parse_fcall(pws& ws, token_t** s);
 st_t* parse_sequence(pws& ws, token_t** s);
 st_t* parse_preg(pws& ws, token_t** s);
+st_t* parse_if(pws& ws, token_t** s);
 
 st_t* treeify(token_t* tokens);
 

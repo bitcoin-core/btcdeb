@@ -30,6 +30,7 @@ struct st_callback_table {
     virtual ref  at(ref arrayref, ref indexref) = 0;
     virtual ref  range(ref arrayref, ref startref, ref endref) = 0;
     virtual ref  compare(ref a, ref b, token_type op) = 0;
+    virtual bool truthy(ref v) = 0;
 };
 
 struct st_t {
@@ -395,6 +396,30 @@ struct unary_t: public st_t {
     }
     virtual st_t* clone() override {
         return new unary_t(op_token, v->clone());
+    }
+};
+
+struct if_t: public st_t {
+    st_t* condition;
+    st_t* iftrue;
+    st_t* iffalse;
+    if_t(st_t* condition_in, st_t* iftrue_in, st_t* iffalse_in) : condition(condition_in), iftrue(iftrue_in), iffalse(iffalse_in) {}
+    ~if_t() {
+        delete condition;
+        if (iftrue) delete iftrue;
+        if (iffalse) delete iffalse;
+    }
+    virtual std::string to_string() override {
+        return "if (" + condition->to_string() + ") " + iftrue->to_string() + (iffalse ? " else " + iffalse->to_string() : "");
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        if (ct->truthy(condition->eval(ct))) {
+            return iftrue ? iftrue->eval(ct) : nullref;
+        }
+        return iffalse ? iffalse->eval(ct) : nullref;
+    }
+    virtual st_t* clone() override {
+        return new if_t(condition->clone(), iftrue ? iftrue->clone() : nullptr, iffalse ? iffalse->clone() : nullptr);
     }
 };
 

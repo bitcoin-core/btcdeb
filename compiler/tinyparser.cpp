@@ -30,8 +30,25 @@ void brurk()
     printf("");
 }
 
+token_t* head = nullptr;
+inline size_t count(token_t* head, token_t* t) {
+    size_t i = 0;
+    for (token_t* q = head; q && q != t; q = q->next) i++;
+    return i;
+}
+
 // std::string indent = "";
-#define try(parser) /*indent += " ";*/ x = parser(ws, s); /*indent = indent.substr(1);*/ if (x) { if (ws.pcache.count(pcv)) delete ws.pcache[pcv]; ws.pcache[pcv] = new cache(x->clone(), *s); /*printf("%s[caching %s=%p]\n", pdts.c_str(), x->to_string().c_str(), *s); printf("GOT " #parser ": %s\n", x->to_string().c_str());*/ return x; }
+#define try(parser) \
+    /*indent += " ";*/ \
+    x = parser(ws, s); \
+    /*indent = indent.substr(1);*/\
+    if (x) {\
+        if (ws.pcache.count(pcv)) delete ws.pcache[pcv];\
+        ws.pcache[pcv] = new cache(x->clone(), *s);\
+        /*printf("#%zu [caching %s=%p(%s, %s)]\n", count(head, *s), x->to_string().c_str(), *s, *s ? token_type_str[(*s)->token] : "<null>", *s ? (*s)->value ?: "<nil>" : "<null>");*/\
+        /* printf("GOT " #parser ": %s\n", x->to_string().c_str());*/\
+        return x;\
+    }
 #define DEBUG_PARSER(s) //pdo __pdo(s) //printf("- %s\n", s)
 #define CLAIM(flag) ws.mark = r; pws _pws_instance(ws, flag)
 #define CLAIM2(flag1, flag2) ws.mark = r; pws _pws_instance(ws, flag1 | flag2)
@@ -40,15 +57,17 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     DEBUG_PARSER("expr");
     st_t* x;
     token_t* pcv = *s;
+    // printf("parsing #%zu=%s (%s)\n", count(head, pcv), token_type_str[pcv->token], pcv->value ?: "<null>");
     if (ws_.pcache.count(pcv)) return ws_.pcache.at(pcv)->hit(s);
 
     uint64_t flags = 0;
     pws clean(ws_.pcache, flags);
     clean.mark = *s;
-    clean.flags |= ws_.flags & PWS_LOGICAL;
+    clean.flags |= ws_.flags & (PWS_LOGICAL | PWS_IF);
     // if (ws_.mark != *s) printf("(clean)\n");
     pws& ws = ws_.mark == *s ? ws_ : clean;
-    if (ws.avail(PWS_LOGICAL)) { try(parse_logical_expr); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_IF)) { try(parse_if); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_LOGICAL)) { try(parse_logical_expr); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_BIN)) { try(parse_binary_expr); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_SET)) {
         try(parse_set);
@@ -543,12 +562,36 @@ st_t* parse_preg(pws& ws, token_t** s) { DEBUG_PARSER("preg");
     return new func_t(an, prog);
 }
 
+st_t* parse_if(pws& ws, token_t** s) {
+    // if lparen [expr] rparen [expr] ( else [expr] )
+    token_t* r = *s;
+    CLAIM(PWS_IF);
+    if (!r->next || r->token != tok_symbol || strcmp(r->value, "if")
+        || !r->next->next || r->next->token != tok_lparen) return nullptr;
+    r = r->next->next;
+    st_t* condition = parse_expr(ws, &r);
+    if (!condition) return nullptr;
+    if (!r || !r->next || r->token != tok_rparen) { delete condition; return nullptr; }
+    r = r->next;
+    st_t* iftrue = r->token == tok_lcurly ? parse_sequence(ws, &r) : parse_expr(ws, &r);
+    if (!iftrue) { delete condition; return nullptr; }
+    st_t* iffalse = nullptr;
+    if (r && r->token == tok_symbol && !strcmp(r->value, "else")) {
+        r = r->next;
+        iffalse = r->token == tok_lcurly ? parse_sequence(ws, &r) : parse_expr(ws, &r);
+    }
+    *s = r;
+    return new if_t(condition, iftrue, iffalse);
+}
+
 st_t* treeify(token_t* tokens) {
+    head = tokens;
     cache_t pcache;
     uint64_t flags = 0;
     pws ws(pcache, flags);
     token_t* s = tokens;
     st_t* value = parse_expr(ws, &s);
+    head = nullptr;
     if (!s && value) {
         value = value->clone();
     }
