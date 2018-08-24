@@ -2,24 +2,24 @@
 
 #include "../compiler/tinyparser.h"
 
-inline std::vector<tiny::st_c> _list(tiny::st_t* list[]) {
-    std::vector<tiny::st_c> r;
-    for (size_t i = 0; list[i]; ++i) {
-        r.emplace_back(list[i]);
-    }
-    return r;
-}
-#define LIST(vals...) _list((tiny::st_t*[]){vals, nullptr})
+// inline std::vector<tiny::st_c> _list(tiny::st_t* list[]) {
+//     std::vector<tiny::st_c> r;
+//     for (size_t i = 0; list[i]; ++i) {
+//         r.emplace_back(list[i]);
+//     }
+//     return r;
+// }
+// #define LIST(vals...) _list((tiny::st_t*[]){vals, nullptr})
 
 #define RVAL(str, r)    new tiny::value_t(tiny::tok_number, str, r)
 #define VAL(str)        RVAL(str, tiny::tok_undef)
 #define VAR(name)       new tiny::var_t(name)
 #define BIN(op,a,b)     new tiny::bin_t(op, a, b)
-#define CALL(fname, args) new tiny::call_t(fname, new tiny::list_t(LIST(args)))
-#define PCALL(r, args)  new tiny::pcall_t(r, new tiny::list_t(LIST(args)))
+// #define CALL(fname, args) new tiny::call_t(fname, new tiny::list_t(LIST(args)))
+// #define PCALL(r, args)  new tiny::pcall_t(r, new tiny::list_t(LIST(args)))
 #define PREG(args, seq) new tiny::func_t(args, seq)
 #define SET(varname, val) new tiny::set_t(varname, val)
-#define SEQ(vals...) new tiny::sequence_t(LIST(vals))
+// #define SEQ(vals...) new tiny::sequence_t(LIST(vals))
 
 TEST_CASE("Simple Treeify", "[treeify-simple]") {
     SECTION("1 entry") {
@@ -137,13 +137,13 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
     SECTION("4 tokens") {
         const char* inputs[] = {
             "a *= 5",
-            "() {}",
+            // "() {}",
             "a ++= 11",
             nullptr,
         };
         tiny::st_t* expected[] = {
             SET("a", BIN(tiny::tok_mul, VAR("a"), VAL("5"))),
-            PREG(std::vector<std::string>(), SEQ(nullptr)),
+            // PREG(std::vector<std::string>(), SEQ(nullptr)),
             SET("a", BIN(tiny::tok_concat, VAR("a"), VAL("11"))),
         };
         for (size_t i = 0; inputs[i]; ++i) {
@@ -164,7 +164,7 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             "2 * 3 + 5",
             "2 ++ 3 * 5",
             "2 * 3 ++ 5",
-            "() { 10 }",
+            // "() { 10 }",
             "a = a * 5",
             nullptr,
         };
@@ -173,7 +173,7 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             BIN(tiny::tok_plus, BIN(tiny::tok_mul, VAL("2"), VAL("3")), VAL("5")),
             BIN(tiny::tok_concat, VAL("2"), BIN(tiny::tok_mul, VAL("3"), VAL("5"))),
             BIN(tiny::tok_concat, BIN(tiny::tok_mul, VAL("2"), VAL("3")), VAL("5")),
-            PREG(std::vector<std::string>(), SEQ(VAL("10"))),
+            // PREG(std::vector<std::string>(), SEQ(VAL("10"))),
             SET("a", BIN(tiny::tok_mul, VAR("a"), VAL("5"))),
         };
         for (size_t i = 0; inputs[i]; ++i) {
