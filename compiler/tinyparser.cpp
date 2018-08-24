@@ -23,13 +23,6 @@ struct pdo {
     }
 };
 
-void brurk()
-{
-    printf("");
-    int a = 0;
-    printf("");
-}
-
 token_t* head = nullptr;
 inline size_t count(token_t* head, token_t* t) {
     size_t i = 0;
