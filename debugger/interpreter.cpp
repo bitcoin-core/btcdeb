@@ -102,6 +102,7 @@ bool StepScript(InterpreterEnv& env)
             pc = env.pbegincodehash = script.begin();
             pend = script.end();
             env.curr_op_seq++;
+            env.nOpCount = 0; // reset to avoid hitting limit prematurely!
             return true;
         }
         return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
@@ -127,6 +128,7 @@ bool StepScript(InterpreterEnv& env)
             // so we need to copy the stack here
             env.p2shstack = env.stack;
         }
+        env.nOpCount = 0; // reset to avoid hitting limit prematurely!
         return true;
     }
 
