@@ -103,4 +103,6 @@ TEST_CASE("Bignum", "[s256b-bignum]") {
         auto nAmulBmodn = (nA * nB) % n;
         REQUIRE(nAmulBmodn.to_string() == "bf47cd7ccc46c36f27fb98b0e12a99d90303dfc567c3ecb9363047d21daeb4dd");
     }
+
+    // TODO: num mod_inverse(const num& m) const;
 }

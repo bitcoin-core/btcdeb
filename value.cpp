@@ -397,3 +397,37 @@ void DeserializeBool(const char* bv, std::vector<uint8_t>& output) {
         }
     }
 }
+
+#undef abort
+#undef PACKAGE_BUGREPORT
+#undef PACKAGE_NAME
+#undef PACKAGE_STRING
+#undef PACKAGE_TARNAME
+#undef PACKAGE_URL
+#undef PACKAGE_VERSION
+
+#include <secp256k1/include/secp256k1.h>
+#include <secp256k1/src/secp256k1.c>
+#include <secp256k1/src/util.h>
+#include <secp256k1/src/field_impl.h>
+#include <secp256k1/src/group_impl.h>
+
+void Value::calc_point(std::vector<uint8_t>& x, std::vector<uint8_t>& y) {
+    CPubKey pubkey(data);
+    if (!pubkey.IsValid()) throw std::runtime_error("invalid pubkey");
+    secp256k1_pubkey pk;
+    if (!secp256k1_ec_pubkey_parse(secp256k1_context_sign, &pk, &pubkey[0], pubkey.size())) {
+        throw std::runtime_error("failed to parse pubkey");
+    }
+
+    int secp256k1_pubkey_load(const secp256k1_context* ctx, secp256k1_ge* ge, const secp256k1_pubkey* pubkey);
+    secp256k1_ge ge;
+    if (!secp256k1_pubkey_load(secp256k1_context_sign, &ge, &pk)) {
+        throw std::runtime_error("failed to load pubkey into group element");
+    }
+
+    x.resize(32);
+    y.resize(32);
+    secp256k1_fe_get_b32(x.data(), &ge.x);
+    secp256k1_fe_get_b32(y.data(), &ge.y);
+}

@@ -22,6 +22,8 @@ extern std::shared_ptr<var> env_false;
 #define env_bool(b) ((b) ? env_true : env_false)
 
 extern var* G;
+extern var* Gx;
+extern var* Gy;
 
 struct var {
     Value data;
@@ -200,7 +202,7 @@ struct env_t: public tiny::st_callback_table {
             return ctx->temps[r];
         }
     }
-    tiny::ref refer(std::shared_ptr<var>& v) {
+    inline tiny::ref refer(std::shared_ptr<var>& v) {
         for (tiny::ref i = 0; i < ctx->temps.size(); ++i) {
             if (ctx->temps[i] == v) return i;
         }
@@ -223,7 +225,7 @@ struct env_t: public tiny::st_callback_table {
         }
         save(variable, pull(value));
     }
-    tiny::ref push_arr(std::vector<std::shared_ptr<var>>& arr) {
+    tiny::ref push_arr(const std::vector<std::shared_ptr<var>>& arr) {
         tiny::ref pos = ctx->temps.size();
         ctx->temps.push_back(std::make_shared<var>(pos));
         ctx->arrays[pos] = arr;
@@ -374,9 +376,76 @@ struct env_t: public tiny::st_callback_table {
         }
         auto tmp = ctx->fmap[fname](a);
         if (tmp.get()) {
-            ctx->temps.push_back(tmp);
-            return ctx->temps.size() - 1;
+            return refer(tmp);
         } else return 0;
+    }
+    tiny::ref pcall(tiny::ref program, tiny::ref args) override {
+        if (ctx->arrays.count(program)) {
+            // calling an array of programs, presumably
+            std::vector<std::shared_ptr<var>> res;
+            // note that ctx will jump around for each pcall so we cannot rely on iterators
+            for (size_t i = 0; i < ctx->arrays[program].size(); ++i) {
+                auto v = ctx->arrays[program][i];
+                if (v->internal_function) {
+                    res.push_back(pull(fcall(v->data.str, args)));
+                } else {
+                    if (!v->pref) throw std::runtime_error("item in array is not a program");
+                    res.push_back(pull(pcall(v->pref, args)));
+                }
+            }
+            return push_arr(res);
+        }
+        std::string pname = "<anonymous function>";
+        auto& pref = ctx->temps.at(program);
+        for (auto& x : ctx->vars) {
+            if (x.second == pref) {
+                pname = x.first;
+                break;
+            }
+        }
+        if (ctx->programs.count(program) == 0) {
+            throw std::runtime_error(strprintf("uncallable target %s", pname));
+        }
+        std::vector<std::shared_ptr<var>> a;
+        if (args) {
+            if (ctx->arrays.count(args) == 0) {
+                throw std::runtime_error(strprintf("pcall() with non-array argument (internal error) - input ref=%zu", args));
+            }
+            a = ctx->arrays.at(args);
+        }
+        auto p = ctx->programs[program];
+        if (p->argnames.size() != a.size()) {
+            throw std::runtime_error(strprintf("invalid number of arguments in call to %s: got %d, expected %zu", pname, a.size(), p->argnames.size()));
+        }
+        contexts.emplace_back(*ctx);
+        ctx = &contexts.back();
+        // pair args with values
+        for (int i = 0; i < a.size(); ++i) {
+            save(p->argnames[i], a[i]);
+        }
+        tiny::ref rv = p->run(this);
+        if (rv == tiny::nullref) return rv;
+        std::shared_ptr<var> rvp = pull(rv);
+        std::vector<std::shared_ptr<var>> rva;
+        tiny::program_t* prog = ctx->programs.count(rv) ? ctx->programs.at(rv) : nullptr;
+        if (prog) {
+            auto it = std::find(ctx->owned_programs.begin(), ctx->owned_programs.end(), prog);
+            if (it != ctx->owned_programs.end()) {
+                ctx->owned_programs.erase(it);
+            }
+        }
+        if (ctx->arrays.count(rv)) rva = ctx->arrays.at(rv);
+        ctx->teardown();
+        contexts.pop_back();
+        ctx = &contexts.back();
+        if (rva.size()) {
+            return push_arr(rva);
+        } else if (prog) {
+            return preg(prog);
+        } else {
+            ctx->temps.push_back(rvp);
+            return ctx->temps.size() - 1;
+        }
     }
     tiny::ref convert(const std::string& value, tiny::token_type type, tiny::token_type restriction) override {
         Value v((int64_t)0);
@@ -507,74 +576,6 @@ struct env_t: public tiny::st_callback_table {
         ctx->programs[ref] = program;
         ctx->owned_programs.push_back(program);
         return ref;
-    }
-    tiny::ref pcall(tiny::ref program, tiny::ref args) override {
-        if (ctx->arrays.count(program)) {
-            // calling an array of programs, presumably
-            std::vector<std::shared_ptr<var>> res;
-            // note that ctx will jump around for each pcall so we cannot rely on iterators
-            for (size_t i = 0; i < ctx->arrays[program].size(); ++i) {
-                auto v = ctx->arrays[program][i];
-                if (v->internal_function) {
-                    res.push_back(pull(fcall(v->data.str, args)));
-                } else {
-                    if (!v->pref) throw std::runtime_error("item in array is not a program");
-                    res.push_back(pull(pcall(v->pref, args)));
-                }
-            }
-            return push_arr(res);
-        }
-        std::string pname = "<anonymous function>";
-        auto& pref = ctx->temps.at(program);
-        for (auto& x : ctx->vars) {
-            if (x.second == pref) {
-                pname = x.first;
-                break;
-            }
-        }
-        if (ctx->programs.count(program) == 0) {
-            throw std::runtime_error(strprintf("uncallable target %s", pname));
-        }
-        std::vector<std::shared_ptr<var>> a;
-        if (args) {
-            if (ctx->arrays.count(args) == 0) {
-                throw std::runtime_error(strprintf("pcall() with non-array argument (internal error) - input ref=%zu", args));
-            }
-            a = ctx->arrays.at(args);
-        }
-        auto p = ctx->programs[program];
-        if (p->argnames.size() != a.size()) {
-            throw std::runtime_error(strprintf("invalid number of arguments in call to %s: got %d, expected %zu", pname, a.size(), p->argnames.size()));
-        }
-        contexts.emplace_back(*ctx);
-        ctx = &contexts.back();
-        // pair args with values
-        for (int i = 0; i < a.size(); ++i) {
-            save(p->argnames[i], a[i]);
-        }
-        tiny::ref rv = p->run(this);
-        if (rv == tiny::nullref) return rv;
-        std::shared_ptr<var> rvp = pull(rv);
-        std::vector<std::shared_ptr<var>> rva;
-        tiny::program_t* prog = ctx->programs.count(rv) ? ctx->programs.at(rv) : nullptr;
-        if (prog) {
-            auto it = std::find(ctx->owned_programs.begin(), ctx->owned_programs.end(), prog);
-            if (it != ctx->owned_programs.end()) {
-                ctx->owned_programs.erase(it);
-            }
-        }
-        if (ctx->arrays.count(rv)) rva = ctx->arrays.at(rv);
-        ctx->teardown();
-        contexts.pop_back();
-        ctx = &contexts.back();
-        if (rva.size()) {
-            return push_arr(rva);
-        } else if (prog) {
-            return preg(prog);
-        } else {
-            ctx->temps.push_back(rvp);
-            return ctx->temps.size() - 1;
-        }
     }
     void printvar_(tiny::ref vref) {
         if (ctx->programs.count(vref)) {

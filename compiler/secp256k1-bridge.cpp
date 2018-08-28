@@ -6,7 +6,7 @@
 #include <utilstrencodings.h>
 
 #undef HAVE_CONFIG_H
-#define USE_NUM_GMP
+#define USE_NUM_GMP 1
 
 #include <secp256k1/include/secp256k1.h>
 #include <secp256k1/src/num_gmp_impl.h>

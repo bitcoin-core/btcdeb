@@ -9,7 +9,7 @@ EXTRA_LIBRARIES =
 
 BITCOIN_INCLUDES=-I$(builddir)
 
-BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
+BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include -I$(srcdir)/secp256k1
 
 LIBBITCOIN=libbitcoin.a
 LIBKERL=libkerl.a

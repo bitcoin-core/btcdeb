@@ -13,6 +13,7 @@ extern "C" {
 }
 
 #include <compiler/env.h>
+#include <compiler/secp256k1-bridge.h>
 
 int fn_help(const char* args);
 int fn_vars(const char* args);
@@ -42,8 +43,10 @@ int main(int argc, char* const* argv)
     VALUE_WARN = false;
 
     // Set G
-    env.ctx->vars["G"] = std::make_shared<var>(Value("ffffffffddddddddffffffffddddddde445123192e953da2402da1730da79c9b"), true);
+    env.ctx->vars["G"] = std::make_shared<var>(Value("0xffffffffddddddddffffffffddddddde445123192e953da2402da1730da79c9b"), true);
     G = env.ctx->vars["G"].get();
+    Gx = new var(Value("0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798"));
+    Gy = new var(Value("0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8"));
     #define efun(name) \
         std::shared_ptr<var> e_##name(std::vector<std::shared_ptr<var>> args);\
         env.ctx->fmap[#name] = e_##name
@@ -63,6 +66,8 @@ int main(int argc, char* const* argv)
     efun(hex);
     efun(echo);
     efun(random);
+    efun(jacobi);
+    efun(point);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -243,6 +248,7 @@ int parse(const char* args_in)
 }
 
 #define ARG_CHK(count) if (args.size() != count) throw std::runtime_error(strprintf("invalid number of arguments (" #count " expected, got %zu)", args.size()))
+#define CURVE_CHK(v) if (!v->on_curve) throw std::runtime_error("invalid argument (curve point required)");
 #define NO_CURVE_CHK(v) if (v->on_curve) throw std::runtime_error("invalid argument (curve points not allowed)");
 #define ARG1_NO_CURVE(vfun)             \
     ARG_CHK(1);                         \
@@ -329,7 +335,15 @@ std::shared_ptr<var> e_echo(std::vector<std::shared_ptr<var>> args) {
 std::shared_ptr<var> e_type(std::vector<std::shared_ptr<var>> args) {
     Value w("string placeholder");
     for (auto v : args) {
-        switch (v->data.type) {
+        if (v->pref) {
+            if (env.ctx->arrays.count(v->pref)) {
+                w.str = "array";
+            } else if (env.ctx->programs.count(v->pref)) {
+                w.str = "function";
+            } else {
+                w.str = "????";
+            }
+        } else switch (v->data.type) {
         case Value::T_STRING: w.str = "string"; break;
         case Value::T_INT: w.str = "int"; break;
         case Value::T_DATA: w.str = "data"; break;
@@ -369,4 +383,36 @@ std::shared_ptr<var> e_random(std::vector<std::shared_ptr<var>> args) {
     unsigned char* buf = w.data.data();
     GetRandBytes(buf, num);
     return std::make_shared<var>(w);
+}
+
+std::shared_ptr<var> e_jacobi(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    if (v->pref) throw std::runtime_error("complex argument not allowed");
+    NO_CURVE_CHK(v);
+
+    v->data.data_value();
+    v->data.type = Value::T_DATA;
+    secp256k1::num x(v->data.to_string());
+    secp256k1::num p("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
+    int rv = x.jacobi(p);
+    Value w((uint64_t)rv);
+    return std::make_shared<var>(w);
+}
+
+std::shared_ptr<var> e_point(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    CURVE_CHK(v);
+
+    std::vector<uint8_t> x, y;
+    if (v.get() == G) {
+        x = Gx->data.data;
+        y = Gy->data.data;
+    } else {
+        v->data.calc_point(x, y);
+    }
+    std::shared_ptr<var> vx = std::make_shared<var>(Value(x));
+    std::shared_ptr<var> vy = std::make_shared<var>(Value(y));
+    return env.pull(env.push_arr(std::vector<std::shared_ptr<var>>{ vx, vy }));
 }

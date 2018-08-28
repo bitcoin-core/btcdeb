@@ -610,6 +610,7 @@ struct Value {
         return "???";
     }
     static Value prepare_extraction(const Value& a, const Value& b);
+    void calc_point(std::vector<uint8_t>& x, std::vector<uint8_t>& y);
 private:
     bool extract_values(std::vector<std::vector<uint8_t>>& values);
 };
