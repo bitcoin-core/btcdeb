@@ -199,6 +199,7 @@ std::set<uint256> mindata;
 std::set<uint256> nullfail;
 std::set<uint256> nulldummy;
 std::set<uint256> upgradablenop;
+std::set<uint256> lows;
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
 // Deployment of BIP68, BIP112, and BIP113.
@@ -207,17 +208,18 @@ std::set<uint256> upgradablenop;
 #define SWHeight  481824
 
 unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid) {
-    unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
-    if (height < BIP66Height) flags ^= SCRIPT_VERIFY_STRICTENC | SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S;
-    if (height < BIP65Height) flags ^= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
-    if (height < CSVHeight) flags ^= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
-    if (height < SWHeight) flags ^= SCRIPT_VERIFY_WITNESS;
-    if (height < UpgradableNops || upgradablenop.count(txid)) flags ^= SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS;
-    if (blockhash == BIP16Exception) flags ^= SCRIPT_VERIFY_P2SH;
-    if (mindata.count(txid)) flags ^= SCRIPT_VERIFY_MINIMALDATA;
-    if (nulldummy.count(txid)) flags ^= SCRIPT_VERIFY_NULLDUMMY;
-    if (nullfail.count(txid)) flags ^= SCRIPT_VERIFY_NULLFAIL;
-    return flags;
+    unsigned int dflags = 0;
+    if (height < BIP66Height) dflags |= SCRIPT_VERIFY_STRICTENC | SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_LOW_S;
+    if (height < BIP65Height) dflags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
+    if (height < CSVHeight) dflags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
+    if (height < SWHeight) dflags |= SCRIPT_VERIFY_WITNESS;
+    if (height < UpgradableNops || upgradablenop.count(txid)) dflags |= SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS;
+    if (blockhash == BIP16Exception) dflags |= SCRIPT_VERIFY_P2SH;
+    if (mindata.count(txid)) dflags |= SCRIPT_VERIFY_MINIMALDATA;
+    if (nulldummy.count(txid)) dflags |= SCRIPT_VERIFY_NULLDUMMY;
+    if (nullfail.count(txid)) dflags |= SCRIPT_VERIFY_NULLFAIL;
+    if (lows.count(txid)) dflags |= SCRIPT_VERIFY_LOW_S;
+    return STANDARD_SCRIPT_VERIFY_FLAGS & ~dflags;
 }
 
 inline void mark(const uint256& hash, std::set<uint256>& set, const std::string& fprefix) {
@@ -277,7 +279,10 @@ int main(int argc, const char** argv)
     if (fp) {
         CAutoFile af(fp, SER_DISK, 0);
         af >> mindata >> nullfail >> nulldummy >> upgradablenop;
-        printf("loaded [ %zu, %zu, %zu, %zu ] exceptions\n", mindata.size(), nullfail.size(), nulldummy.size(), upgradablenop.size());
+        try {
+            af >> lows;
+        } catch (...) {}
+        printf("loaded [ %zu, %zu, %zu, %zu, %zu ] exceptions\n", mindata.size(), nullfail.size(), nulldummy.size(), upgradablenop.size(), lows.size());
     }
 
     // append exceptions
@@ -285,6 +290,7 @@ int main(int argc, const char** argv)
     load_e(nullfail, "nullfail");
     load_e(nulldummy, "nulldummy");
     load_e(upgradablenop, "upgradablenop");
+    load_e(lows, "lows");
 
     ECCVerifyHandle evh;
     for (;;) {
@@ -381,6 +387,11 @@ int main(int argc, const char** argv)
                             selected--;
                             continue;
                         }
+                        if (*env->serror == SCRIPT_ERR_SIG_HIGH_S) {
+                            mark(x.hash, lows, "lows");
+                            selected--;
+                            continue;
+                        }
                         return 1;
                     }
 
@@ -450,9 +461,11 @@ int main(int argc, const char** argv)
             unlink("current-sync-state.dat");
             rename("current-sync-state.new", "current-sync-state.dat");
             printf("\n");
-            fp = fopen("exceptions.dat", "wb");
-            CAutoFile af(fp, SER_DISK, 0);
-            af << mindata << nullfail << nulldummy << upgradablenop;
+            {
+                fp = fopen("exceptions.dat", "wb");
+                CAutoFile af(fp, SER_DISK, 0);
+                af << mindata << nullfail << nulldummy << upgradablenop << lows;
+            }
             static int milestones[] = {1000, 5000, 10000};
             bool update[] = {false, false, false};
             bool do_update = false;
@@ -460,7 +473,7 @@ int main(int argc, const char** argv)
                 do_update |= (update[m] = (height % milestones[m]) == 0);
             }
             if (do_update) {
-                FILE* fp = fopen("current-sync-state.dat", "rb");
+                fp = fopen("current-sync-state.dat", "rb");
                 FILE* fp2[3];
                 std::string fname[3];
                 printf("backing up ");
