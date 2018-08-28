@@ -85,8 +85,11 @@ TEST_CASE("Bignum", "[s256b-bignum]") {
         ,   n2("0000000000000000000000000000000000000000000000000000000000000002")
         ,   na("0000000000000000000000000000000000006f95f29fa6fd4cdafcb43b806d3c")
         ,   nb("000000000000000000000000000000000000aef2928472b3640e0a07e11db940")
+        ,   nA("bd1c928ad00c68f0336fc5ea29b85e4439126f95f29fa6fd4cdafcb43b806d3c")
+        ,   nB("4ef3253d6063299ebe2853fa46837507db8daef2928472b3640e0a07e11db940")
         ,   nF("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-        ,   G("ffffffffddddddddffffffffddddddde445123192e953da2402da1730da79c9b");
+        ,   G("ffffffffddddddddffffffffddddddde445123192e953da2402da1730da79c9b")
+        ,   p("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
         auto n3 = n1 + n2;
         REQUIRE(n3.to_string() == "03");
         auto nFe = nF - n1;
@@ -97,6 +100,8 @@ TEST_CASE("Bignum", "[s256b-bignum]") {
         REQUIRE(namulb.to_string() == "4c41a6851e1b24be7e8d63da93e8300bca2b70ac8e235e40cad7ab00");
         auto z = n2 >> 1;
         REQUIRE(z == n1);
+        auto nAmulBmodp = (nA * nB) % p;
+        REQUIRE(nAmulBmodp.to_string() == "bf47cd7ccc46c36f27fb98b0e12a99d90303dfc567c3ecb9363047d21daeb4dd");
         // TODO: modulo
         //     num operator%(const num& m) const;
     }
