@@ -99,7 +99,9 @@ struct var {
         if (data.type == Value::T_STRING && other.data.type == Value::T_STRING) return add(other);
         Value v(data), v2(other.data);
         v.data_value();
+        v.type = Value::T_DATA;
         v2.data_value();
+        v2.type = Value::T_DATA;
         v.data.insert(v.data.end(), v2.data.begin(), v2.data.end());
         return std::make_shared<var>(v, false);
     }
