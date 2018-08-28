@@ -551,6 +551,7 @@ struct env_t: public tiny::st_callback_table {
             save(p->argnames[i], a[i]);
         }
         tiny::ref rv = p->run(this);
+        if (rv == tiny::nullref) return rv;
         std::shared_ptr<var> rvp = pull(rv);
         std::vector<std::shared_ptr<var>> rva;
         tiny::program_t* prog = ctx->programs.count(rv) ? ctx->programs.at(rv) : nullptr;
