@@ -58,6 +58,8 @@ token_t* tokenize(const char* s) {
                     delete tail;
                     if (head == tail) head = prev;
                     tail = prev;
+                } else {
+                    throw std::runtime_error(strprintf("tokenization failure around character '%c'", s[i]));
                 }
             } else if (!finalized) {
                 tail->value = strndup(&s[token_start], i-token_start);

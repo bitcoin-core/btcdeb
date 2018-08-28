@@ -590,7 +590,7 @@ st_t* treeify(token_t* tokens) {
     }
     for (auto& v : pcache) delete v.second;
     if (s) {
-        throw std::runtime_error(strprintf("failed to treeify tokens around token %s", s->value));
+        throw std::runtime_error(strprintf("failed to treeify tokens around token %s", s->value ?: token_type_str[s->token]));
         return nullptr;
     }
     return value;
