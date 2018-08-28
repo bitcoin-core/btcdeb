@@ -128,6 +128,8 @@ libecide_a_CFLAGS = -std=gnu99
 libecide_a_SOURCES = \
 	compiler/env.h \
 	compiler/env.cpp \
+	compiler/secp256k1-bridge.h \
+	compiler/secp256k1-bridge.cpp \
 	compiler/tinyast.h \
 	compiler/tinytokenizer.h \
 	compiler/tinytokenizer.cpp \
@@ -173,6 +175,7 @@ ecide_LDADD = \
 # test-ecide binary #
 test_ecide_SOURCES = \
 	test/catch.hpp \
+	test/s256bdg.cpp \
 	test/test-ecide.cpp \
 	test/tokenizer.cpp \
 	test/treeifier.cpp

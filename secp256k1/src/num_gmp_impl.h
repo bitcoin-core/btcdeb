@@ -26,6 +26,17 @@ static void secp256k1_num_copy(secp256k1_num *r, const secp256k1_num *a) {
     *r = *a;
 }
 
+static size_t secp256k1_num_get_bin_size(const secp256k1_num *a) {
+    unsigned char tmp[65];
+    int len = 0;
+    int shift = 0;
+    if (a->limbs>1 || a->data[0] != 0) {
+        len = mpn_get_str(tmp, 256, (mp_limb_t*)a->data, a->limbs);
+    }
+    while (shift < len && tmp[shift] == 0) shift++;
+    return len - shift;
+}
+
 static void secp256k1_num_get_bin(unsigned char *r, unsigned int rlen, const secp256k1_num *a) {
     unsigned char tmp[65];
     int len = 0;

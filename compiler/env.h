@@ -11,6 +11,8 @@
 
 #include <compiler/tinyparser.h>
 
+#include <compiler/secp256k1-bridge.h>
+
 #include <value.h>
 
 struct var;
