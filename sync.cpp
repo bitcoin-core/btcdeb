@@ -365,6 +365,11 @@ int main(int argc, const char** argv)
                     }
 
                     if (!result) {
+                        if (*env->serror == SCRIPT_ERR_SIG_HIGH_S) {
+                            mark(x.hash, lows, "lows");
+                            selected--;
+                            continue;
+                        }
                         fprintf(stderr, "block %s, index %zu tx %s failed to validate input %d=%s: %s\n", blockhex.ToString().c_str(), idx, x.hash.ToString().c_str(), selected, vin.prevout.hash.ToString().c_str(), instance.error_string().c_str());
                         fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
                         if (*env->serror == SCRIPT_ERR_MINIMALDATA) {
@@ -384,11 +389,6 @@ int main(int argc, const char** argv)
                         }
                         if (*env->serror == SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS) {
                             mark(x.hash, upgradablenop, "upgradablenop");
-                            selected--;
-                            continue;
-                        }
-                        if (*env->serror == SCRIPT_ERR_SIG_HIGH_S) {
-                            mark(x.hash, lows, "lows");
                             selected--;
                             continue;
                         }
