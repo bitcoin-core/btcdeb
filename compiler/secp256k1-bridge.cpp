@@ -4,6 +4,7 @@
 
 #include "secp256k1-bridge.h"
 #include <utilstrencodings.h>
+#include <tinyformat.h>
 
 #undef HAVE_CONFIG_H
 #define USE_NUM_GMP 1
@@ -14,6 +15,8 @@
 #define N(n) ((secp256k1_num*)n)
 
 namespace secp256k1 {
+
+num no7("07");
 
 num::~num() {
     if (n) delete (secp256k1_num*) n;
@@ -47,6 +50,7 @@ num::num(const std::string& hex) {
     } else {
         bin = ParseHex(hex);
     }
+    if (bin.size() == 0) throw std::runtime_error(strprintf("invalid hex string: \"%s\"", hex));
     n = new secp256k1_num;
     secp256k1_num_set_bin(N(n), bin.data(), bin.size());
     if (neg) secp256k1_num_negate(N(n));
@@ -70,6 +74,10 @@ num num::mod_inverse(const num& m) const {
 
 int num::jacobi(const num& b) const {
     return secp256k1_num_jacobi(N(n), N(b.n));
+}
+
+int num::compare(const num& o) const {
+    return secp256k1_num_cmp(N(n), N(o.n));
 }
 
 bool num::operator==(const num& o) const {

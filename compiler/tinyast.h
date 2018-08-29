@@ -21,6 +21,7 @@ struct st_callback_table {
     virtual ref  load(const std::string& variable) = 0;
     virtual void save(const std::string& variable, ref value) = 0;
     virtual ref  bin(token_type op, ref lhs, ref rhs) = 0;
+    // virtual ref  mod(ref v, ref m) = 0;
     virtual ref  unary(token_type op, ref val) = 0;
     virtual ref  fcall(const std::string& fname, ref args) = 0;
     virtual ref  pcall(ref program, ref args) = 0;
@@ -31,6 +32,9 @@ struct st_callback_table {
     virtual ref  range(ref arrayref, ref startref, ref endref) = 0;
     virtual ref  compare(ref a, ref b, token_type op) = 0;
     virtual bool truthy(ref v) = 0;
+    // modulo
+    virtual void push_mod(ref v) = 0;
+    virtual void pop_mod() = 0;
 };
 
 struct st_t {
@@ -378,6 +382,29 @@ struct bin_t: public st_t {
     }
     virtual st_t* clone() override {
         return new bin_t(op_token, lhs->clone(), rhs->clone());
+    }
+};
+
+struct mod_t: public st_t {
+    st_t* value;
+    st_t* modulo;
+    mod_t(st_t* value_in, st_t* modulo_in) : value(value_in), modulo(modulo_in) {}
+    ~mod_t() {
+        delete value;
+        delete modulo;
+    }
+    virtual std::string to_string() override {
+        return "(" + value->to_string() + " mod " + modulo->to_string() + ")";
+    }
+    virtual ref eval(st_callback_table* ct) override {
+        
+        ct->push_mod(modulo->eval(ct));
+        ref rv = value->eval(ct);
+        ct->pop_mod();
+        return rv;
+    }
+    virtual st_t* clone() override {
+        return new mod_t(value->clone(), modulo->clone());
     }
 };
 

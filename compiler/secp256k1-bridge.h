@@ -26,9 +26,15 @@ public:
     num mod_inverse(const num& m) const;
     /** Compute the jacobi symbol (this|b). b must be positive and odd. */
     int jacobi(const num& b) const;
+    /** Compare to o, and return -1 if this is less, 0 if equal, and 1 if greater. */
+    int compare(const num& o) const;
 
     bool operator==(const num& o) const;
     bool operator==(int i) const;
+    bool operator>(const num& o) const { return compare(o) > 0; }
+    bool operator<(const num& o) const { return compare(o) < 0; }
+    bool operator>=(const num& o) const { return compare(o) >= 0; }
+    bool operator<=(const num& o) const { return compare(o) <= 0; }
     num operator+(const num& o) const;
     num operator-(const num& o) const;
     num operator*(const num& o) const;
@@ -39,6 +45,8 @@ public:
 
     template <typename T> inline bool operator!=(const T& o) const { return !operator==(o); }
 };
+
+extern num no7;
 
 } // namespace secp256k1
 

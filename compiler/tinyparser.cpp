@@ -60,6 +60,7 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     // if (ws_.mark != *s) printf("(clean)\n");
     pws& ws = ws_.mark == *s ? ws_ : clean;
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_IF)) { try(parse_if); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_MOD)) { try(parse_mod); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_LOGICAL)) { try(parse_logical_expr); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_BIN)) { try(parse_binary_expr); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_SET)) {
@@ -322,6 +323,24 @@ st_t* parse_binary_expr(pws& ws, token_t** s) {
     return res;
 }
 
+st_t* parse_mod(pws& ws, token_t** s) {
+    // [expr] mod [expr]
+    DEBUG_PARSER("mod");
+    token_t* r = *s;
+    st_t* value;
+    {
+        CLAIM(PWS_MOD);
+        value = parse_expr(ws, &r);
+    }
+    if (!value) return nullptr;
+    if (!r || r->token != tok_symbol || strcmp(r->value, "mod")) { delete value; return nullptr; }
+    r = r->next;
+    st_t* m = parse_expr(ws, &r);
+    if (!m) { delete value; return nullptr; }
+    *s = r;
+    return new mod_t(value, m);
+}
+
 st_t* parse_logical_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
     // tok_plus|tok_minus|tok_mul|tok_div [expr]
     DEBUG_PARSER("logical_expr_post_lhs");
@@ -559,13 +578,11 @@ st_t* parse_if(pws& ws, token_t** s) {
     // if lparen [expr] rparen [expr] ( else [expr] )
     token_t* r = *s;
     CLAIM(PWS_IF);
-    if (!r->next || r->token != tok_symbol || strcmp(r->value, "if")
-        || !r->next->next || r->next->token != tok_lparen) return nullptr;
-    r = r->next->next;
+    if (!r->next || r->token != tok_symbol || strcmp(r->value, "if")) return nullptr;
+    r = r->next;
     st_t* condition = parse_expr(ws, &r);
     if (!condition) return nullptr;
-    if (!r || !r->next || r->token != tok_rparen) { delete condition; return nullptr; }
-    r = r->next;
+    if (!r) { delete condition; return nullptr; }
     st_t* iftrue = r->token == tok_lcurly ? parse_sequence(ws, &r) : parse_expr(ws, &r);
     if (!iftrue) { delete condition; return nullptr; }
     st_t* iffalse = nullptr;

@@ -43,7 +43,7 @@ int main(int argc, char* const* argv)
     VALUE_WARN = false;
 
     // Set G
-    env.ctx->vars["G"] = std::make_shared<var>(Value("0xffffffffddddddddffffffffddddddde445123192e953da2402da1730da79c9b"), true);
+    env.ctx->vars["G"] = std::make_shared<var>(Value("0x0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798"), true);
     G = env.ctx->vars["G"].get();
     Gx = new var(Value("0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798"));
     Gy = new var(Value("0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8"));
@@ -68,6 +68,7 @@ int main(int argc, char* const* argv)
     efun(random);
     efun(jacobi);
     efun(point);
+    efun(oncurve);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -197,7 +198,6 @@ int parse(const char* args_in)
             curlies += (args[i] == '{') - (args[i] == '}');
         }
         if (curlies > 0) {
-            printf("[%zu curlies]\n", curlies);
             if (kerl_more(&capacity, &len, &args, '}')) {
                 printf("user abort\n");
                 return -1;
@@ -400,19 +400,27 @@ std::shared_ptr<var> e_jacobi(std::vector<std::shared_ptr<var>> args) {
     return std::make_shared<var>(w);
 }
 
-std::shared_ptr<var> e_point(std::vector<std::shared_ptr<var>> args) {
+void calc_point(std::vector<std::shared_ptr<var>> args, std::vector<uint8_t>& x, std::vector<uint8_t>& y) {
     ARG_CHK(1);
     auto v = args[0];
     CURVE_CHK(v);
 
+    v->data.calc_point(x, y);
+}
+
+std::shared_ptr<var> e_point(std::vector<std::shared_ptr<var>> args) {
     std::vector<uint8_t> x, y;
-    if (v.get() == G) {
-        x = Gx->data.data;
-        y = Gy->data.data;
-    } else {
-        v->data.calc_point(x, y);
-    }
+    calc_point(args, x, y);
     std::shared_ptr<var> vx = std::make_shared<var>(Value(x));
     std::shared_ptr<var> vy = std::make_shared<var>(Value(y));
     return env.pull(env.push_arr(std::vector<std::shared_ptr<var>>{ vx, vy }));
+}
+
+std::shared_ptr<var> e_oncurve(std::vector<std::shared_ptr<var>> args) {
+    std::vector<uint8_t> x, y;
+    calc_point(args, x, y);
+    secp256k1::num nx(HexStr(x));
+    secp256k1::num ny(HexStr(y));
+    secp256k1::num p("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
+    return (((ny * ny) % p) - ((((nx * nx) % p) * nx) % p)) % p == secp256k1::no7 ? env_true : env_false;
 }

@@ -491,6 +491,7 @@ struct Value {
             return;
         }
     }
+    bool is_pubkey();
     void do_verify_sig();
     void do_combine_pubkeys();
     void do_tweak_pubkey();

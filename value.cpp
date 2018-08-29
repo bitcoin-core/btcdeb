@@ -47,6 +47,12 @@ void Value::do_verify_sig() {
     type = T_INT;
 }
 
+bool Value::is_pubkey() {
+    if (type != T_DATA) return false;
+    if (!secp256k1_context_sign) ECC_Start();
+    return CPubKey(data).IsValid();
+}
+
 void Value::do_combine_pubkeys() {
     if (!secp256k1_context_sign) ECC_Start();
 

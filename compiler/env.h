@@ -141,6 +141,8 @@ struct context {
     std::map<tiny::ref, std::vector<std::shared_ptr<var>>> arrays;
     std::string last_saved;
     std::vector<tiny::program_t*> owned_programs;
+    std::vector<std::shared_ptr<var>> mods;
+    std::shared_ptr<var> mod;
     context() {}
     context(const context& pre)
     : programs(pre.programs)
@@ -149,6 +151,8 @@ struct context {
     , temps(pre.temps)
     , arrays(pre.arrays)
     , last_saved("")
+    , mods(pre.mods)
+    , mod(pre.mod)
     {}
     void teardown() {
         for (tiny::program_t* prog : owned_programs) delete prog;
@@ -157,6 +161,16 @@ struct context {
 };
 
 struct env_t: public tiny::st_callback_table {
+#define ARRTHRU(reference, callback...) \
+        if (ctx->arrays.count(reference)) { \
+            auto& arr = ctx->arrays.at(reference); \
+            std::vector<std::shared_ptr<var>> res; \
+            for (auto& v : arr) { \
+                res.push_back(pull(callback)); \
+            } \
+            return push_arr(res); \
+        }
+
     context* ctx;
     std::vector<context> contexts;
     tiny::ref _true, _false;
@@ -192,6 +206,15 @@ struct env_t: public tiny::st_callback_table {
         }
         auto& v = ctx->vars.at(variable);
         if (v->pref) return v->pref;
+        if (ctx->mod.get() && v->data.type == Value::T_DATA) {
+            auto n = secp256k1::num(v->data.to_string());
+            auto m = secp256k1::num(ctx->mod->data.to_string());
+            if (n >= m) {
+                n = n % m;
+                Value mv(ParseHex(n.to_string()));
+                v = std::make_shared<var>(mv);
+            }
+        }
         ctx->temps.push_back(v);
         return ctx->temps.size() - 1;
     }
@@ -248,49 +271,72 @@ struct env_t: public tiny::st_callback_table {
         return ctx->temps.size() - 1;
     }
     tiny::ref bin(tiny::token_type op, std::shared_ptr<var>& l, tiny::ref rhs) {
-        if (ctx->arrays.count(rhs)) {
-            auto& arr = ctx->arrays.at(rhs);
-            std::vector<std::shared_ptr<var>> res;
-            for (auto& v : arr) {
-                res.push_back(pull(bin(op, l, v)));
-            }
-            return push_arr(res);
-        }
+        ARRTHRU(rhs, bin(op, l, v));
+        // if (ctx->arrays.count(rhs)) {
+        //     auto& arr = ctx->arrays.at(rhs);
+        //     std::vector<std::shared_ptr<var>> res;
+        //     for (auto& v : arr) {
+        //         res.push_back(pull(bin(op, l, v)));
+        //     }
+        //     return push_arr(res);
+        // }
         auto r = pull(rhs);
         if (!r) throw std::runtime_error(strprintf("undefined reference %zu (RHS)", rhs));
         return bin(op, l, r);
     }
     tiny::ref bin(tiny::token_type op, tiny::ref lhs, std::shared_ptr<var>& r) {
-        if (ctx->arrays.count(lhs)) {
-            auto& arr = ctx->arrays.at(lhs);
-            std::vector<std::shared_ptr<var>> res;
-            for (auto& v : arr) {
-                res.push_back(pull(bin(op, v, r)));
-            }
-            return push_arr(res);
-        }
+        ARRTHRU(lhs, bin(op, v, r));
+        // if (ctx->arrays.count(lhs)) {
+        //     auto& arr = ctx->arrays.at(lhs);
+        //     std::vector<std::shared_ptr<var>> res;
+        //     for (auto& v : arr) {
+        //         res.push_back(pull(bin(op, v, r)));
+        //     }
+        //     return push_arr(res);
+        // }
         auto l = pull(lhs);
         if (!l) throw std::runtime_error(strprintf("undefined reference %zu (LHS)", lhs));
         return bin(op, l, r);
     }
     tiny::ref bin(tiny::token_type op, tiny::ref lhs, tiny::ref rhs) override {
-        if (ctx->arrays.count(lhs)) {
-            auto& arr = ctx->arrays.at(lhs);
-            std::vector<std::shared_ptr<var>> res;
-            for (auto& v : arr) {
-                res.push_back(pull(bin(op, v, rhs)));
-            }
-            return push_arr(res);
-        }
-        if (ctx->arrays.count(rhs)) {
-            auto& arr = ctx->arrays.at(rhs);
-            std::vector<std::shared_ptr<var>> res;
-            for (auto& v : arr) {
-                res.push_back(pull(bin(op, lhs, v)));
-            }
-            return push_arr(res);
-        }
+        ARRTHRU(lhs, bin(op, v, rhs));
+        // if (ctx->arrays.count(lhs)) {
+        //     auto& arr = ctx->arrays.at(lhs);
+        //     std::vector<std::shared_ptr<var>> res;
+        //     for (auto& v : arr) {
+        //         res.push_back(pull(bin(op, v, rhs)));
+        //     }
+        //     return push_arr(res);
+        // }
+        ARRTHRU(rhs, bin(op, lhs, v));
+        // if (ctx->arrays.count(rhs)) {
+        //     auto& arr = ctx->arrays.at(rhs);
+        //     std::vector<std::shared_ptr<var>> res;
+        //     for (auto& v : arr) {
+        //         res.push_back(pull(bin(op, lhs, v)));
+        //     }
+        //     return push_arr(res);
+        // }
         return bin(op, pull(lhs), pull(rhs));
+    }
+    // tiny::ref mod(std::shared_ptr<var>& value, std::shared_ptr<var>& m) {
+    // 
+    // }
+    // tiny::ref mod(tiny::ref value, tiny::ref m) override {
+    //     auto mv = pull(m);
+    //     ARRTHRU(value, mod(v, mv));
+    // 
+    // }
+    // modulo
+    void push_mod(tiny::ref m) override {
+        auto v = m ? pull(m) : std::shared_ptr<var>();
+        ctx->mod = v;
+        ctx->mods.push_back(v);
+    }
+    void pop_mod() override {
+        if (ctx->mods.size() == 0) throw std::runtime_error("unable to pop mod stack (it is empty)");
+        ctx->mods.pop_back();
+        ctx->mod = ctx->mods.size() ? ctx->mods.back() : std::shared_ptr<var>();
     }
     bool compare(std::shared_ptr<var>& a, std::shared_ptr<var>& b, tiny::token_type op) {
         if (a->pref) {
@@ -462,7 +508,7 @@ struct env_t: public tiny::st_callback_table {
         default:
             throw std::runtime_error(strprintf("unknown restriction token %s", tiny::token_type_str[restriction]));
         }
-        auto tmp = std::make_shared<var>(v);
+        auto tmp = std::make_shared<var>(v, v.is_pubkey());
         ctx->temps.push_back(tmp);
         return ctx->temps.size() - 1;
     }
@@ -515,7 +561,7 @@ struct env_t: public tiny::st_callback_table {
     tiny::ref arr_range(tiny::ref arrayref, int64_t is, int64_t ie) {
         auto arr = ctx->arrays.at(arrayref);
         is = range_chk(is, arr.size());
-        ie = range_chk(ie, arr.size());
+        ie = range_chk(ie, arr.size() + 1);
         std::vector<std::shared_ptr<var>> res;
         if (is > ie) {
             for (size_t i = ie; i < is; ++i) {
@@ -539,7 +585,7 @@ struct env_t: public tiny::st_callback_table {
         switch (v->data.type) {
         case Value::T_STRING:
             is = range_chk(is, v->data.str.length());
-            ie = range_chk(ie, v->data.str.length());
+            ie = range_chk(ie, v->data.str.length() + 1);
             r.type = Value::T_STRING;
             if (is > ie) {
                 r.str = v->data.str.substr(ie, is-ie);
@@ -550,7 +596,7 @@ struct env_t: public tiny::st_callback_table {
             break;
         case Value::T_DATA:
             is = range_chk(is, v->data.data.size());
-            ie = range_chk(ie, v->data.data.size());
+            ie = range_chk(ie, v->data.data.size() + 1);
             r.type = Value::T_DATA;
             if (is > ie) {
                 r.data.clear();
