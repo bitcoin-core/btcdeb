@@ -200,6 +200,7 @@ std::set<uint256> nullfail;
 std::set<uint256> nulldummy;
 std::set<uint256> upgradablenop;
 std::set<uint256> lows;
+std::set<uint256> strictencs;
 #define UpgradableNops 212615 // last offender 212614, tx 03d7e1fa4d5fefa169431f24f7798552861b255cd55d377066fedcd088fb0e99
 
 // Deployment of BIP68, BIP112, and BIP113.
@@ -219,6 +220,7 @@ unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid
     if (nulldummy.count(txid)) dflags |= SCRIPT_VERIFY_NULLDUMMY;
     if (nullfail.count(txid)) dflags |= SCRIPT_VERIFY_NULLFAIL;
     if (lows.count(txid)) dflags |= SCRIPT_VERIFY_LOW_S;
+    if (strictencs.count(txid)) dflags |= SCRIPT_VERIFY_STRICTENC;
     return STANDARD_SCRIPT_VERIFY_FLAGS & ~dflags;
 }
 
@@ -281,16 +283,19 @@ int main(int argc, const char** argv)
         af >> mindata >> nullfail >> nulldummy >> upgradablenop;
         try {
             af >> lows;
+            af >> strictencs;
         } catch (...) {}
-        printf("loaded [ %zu, %zu, %zu, %zu, %zu ] exceptions\n", mindata.size(), nullfail.size(), nulldummy.size(), upgradablenop.size(), lows.size());
+        printf("loaded [ %zu, %zu, %zu, %zu, %zu, %zu ] exceptions\n", mindata.size(), nullfail.size(), nulldummy.size(), upgradablenop.size(), lows.size(), strictencs.size());
     }
 
-    // append exceptions
-    load_e(mindata, "mindata");
-    load_e(nullfail, "nullfail");
-    load_e(nulldummy, "nulldummy");
-    load_e(upgradablenop, "upgradablenop");
-    load_e(lows, "lows");
+    // below is no longer needed, as the data is duplicated in the exceptions.dat file
+    // // append exceptions
+    // load_e(mindata, "mindata");
+    // load_e(nullfail, "nullfail");
+    // load_e(nulldummy, "nulldummy");
+    // load_e(upgradablenop, "upgradablenop");
+    // load_e(lows, "lows");
+    // load_e(strictencs, "strictencs");
 
     ECCVerifyHandle evh;
     for (;;) {
@@ -392,6 +397,11 @@ int main(int argc, const char** argv)
                             selected--;
                             continue;
                         }
+                        if (*env->serror == SCRIPT_ERR_PUBKEYTYPE) {
+                            mark(x.hash, strictencs, "strictencs");
+                            selected--;
+                            continue;
+                        }
                         return 1;
                     }
 
@@ -464,7 +474,7 @@ int main(int argc, const char** argv)
             {
                 fp = fopen("exceptions.dat", "wb");
                 CAutoFile af(fp, SER_DISK, 0);
-                af << mindata << nullfail << nulldummy << upgradablenop << lows;
+                af << mindata << nullfail << nulldummy << upgradablenop << lows << strictencs;
             }
             static int milestones[] = {1000, 5000, 10000};
             bool update[] = {false, false, false};
