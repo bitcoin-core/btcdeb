@@ -224,13 +224,13 @@ unsigned int get_flags(int height, const uint256& blockhash, const uint256& txid
     return STANDARD_SCRIPT_VERIFY_FLAGS & ~dflags;
 }
 
-inline void mark(const uint256& hash, std::set<uint256>& set, const std::string& fprefix) {
+inline void mark(const uint256& hash, std::set<uint256>& set, const std::string& fprefix, bool quiet = false) {
     set.insert(hash);
     FILE* fp = fopen((fprefix + ".txt").c_str(), "a+");
     if (!fp) fp = fopen((fprefix + ".txt").c_str(), "w");
     fprintf(fp, "%s\n", hash.ToString().c_str());
     fclose(fp);
-    printf("%s: +%s\n", fprefix.c_str(), hash.ToString().c_str());
+    if (!quiet) printf("%s: +%s\n", fprefix.c_str(), hash.ToString().c_str());
 }
 
 inline void load_e(std::set<uint256>& set, const std::string& fprefix) {
@@ -371,7 +371,7 @@ int main(int argc, const char** argv)
 
                     if (!result) {
                         if (*env->serror == SCRIPT_ERR_SIG_HIGH_S) {
-                            mark(x.hash, lows, "lows");
+                            mark(x.hash, lows, "lows", true);
                             selected--;
                             continue;
                         }
