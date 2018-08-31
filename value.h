@@ -500,9 +500,14 @@ struct Value {
     void do_negate_pubkey();
     void do_not_op();
     void do_boolify();
+    inline bool is_null_or_int(int64_t i) const {
+        return (type == T_DATA && (data.size() == 0 || (data.size() == 1 && data[0] == (uint8_t)i)))
+            || (type == T_INT && int64 == i);
+    }
 #ifdef ENABLE_DANGEROUS
     void do_combine_privkeys();
     void do_multiply_privkeys();
+    void do_pow_privkey();
     void do_negate_privkey();
     void do_encode_wif() {
         data_value();

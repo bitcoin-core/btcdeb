@@ -50,6 +50,9 @@ struct st_t {
     virtual st_t* clone() {
         return new st_t();
     }
+    virtual size_t ops() {
+        return 1;
+    }
 };
 
 struct st_c {
@@ -304,12 +307,15 @@ struct sequence_t: public st_t {
         }
         return new sequence_t(c);
     }
+    virtual size_t ops() override {
+        size_t sz = 0;
+        for (auto& op : sequence) sz += op.r->ops();
+        return sz;
+    }
 };
 
-class program_t {
-private:
+struct program_t {
     st_c prog;
-public:
     std::vector<std::string> argnames;
     program_t(const std::vector<std::string>& argnames_in, const st_c& prog_in) : argnames(argnames_in), prog(prog_in) {}
     ref run(st_callback_table* ct) {
@@ -342,6 +348,9 @@ struct func_t: public st_t {
     }
     virtual st_t* clone() override {
         return new func_t(argnames, (sequence_t*)sequence.r->clone());
+    }
+    virtual size_t ops() override {
+        return sequence.r->ops();
     }
 };
 
@@ -424,6 +433,9 @@ struct unary_t: public st_t {
     virtual st_t* clone() override {
         return new unary_t(op_token, v->clone());
     }
+    virtual size_t ops() override {
+        return v->ops();
+    }
 };
 
 struct if_t: public st_t {
@@ -447,6 +459,9 @@ struct if_t: public st_t {
     }
     virtual st_t* clone() override {
         return new if_t(condition->clone(), iftrue ? iftrue->clone() : nullptr, iffalse ? iffalse->clone() : nullptr);
+    }
+    virtual size_t ops() override {
+        return (iftrue ? iftrue->ops() : 0) + (iffalse ? iffalse->ops() : 0);
     }
 };
 

@@ -574,6 +574,19 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_tweak_mul(
     const unsigned char *tweak
 ) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
 
+/** Tweak a private key by setting it to the power of a tweak.
+ * Returns: 1: power operation succeeded
+ *          0: error
+ * Args:    ctx:    pointer to a context object (cannot be NULL)
+ * In/Out:  seckey: pointer to a 32-byte private key
+ * In:      tweak:  pointer to a 32-byte tweak
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_privkey_tweak_pow(
+    const secp256k1_context* ctx,
+    unsigned char *seckey,
+    const unsigned char *tweak
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+
 /** Updates the context randomization to protect against side-channel leakage.
  *  Returns: 1: randomization successfully updated
  *           0: error

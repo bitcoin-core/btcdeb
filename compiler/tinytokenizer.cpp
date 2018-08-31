@@ -98,11 +98,12 @@ token_t* tokenize(const char* s) {
             case tok_bin:
             case tok_land:
             case tok_lor:
-            case tok_lxor:
+            case tok_pow:
             case tok_eq:
             case tok_le:
             case tok_ge:
             case tok_ne:
+            case tok_arrow:
                 if (tail && tail->token == tok_consumable) {
                     delete tail;
                     if (head == tail) head = prev;

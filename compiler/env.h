@@ -13,123 +13,8 @@
 
 #include <compiler/secp256k1-bridge.h>
 
-#include <value.h>
+#include <compiler/var.h>
 
-struct var;
-
-extern std::shared_ptr<var> env_true;
-extern std::shared_ptr<var> env_false;
-#define env_bool(b) ((b) ? env_true : env_false)
-
-extern var* G;
-extern var* Gx;
-extern var* Gy;
-
-struct var {
-    Value data;
-    tiny::ref pref = 0;
-    bool on_curve = false;
-    bool internal_function = false;
-    var(const std::string& internal_function_name) : var(0) {
-        data.type = Value::T_STRING;
-        data.str = internal_function_name;
-        internal_function = true;
-    }
-    var(Value data_in, bool on_curve_in = false) : data(data_in), on_curve(on_curve_in) {}
-    var(tiny::ref pref_in) : data((int64_t)0), pref(pref_in) {}
-    var() : data((int64_t)0) {}
-    Value curve_check_and_prep(const var& other, const std::string& op) const {
-        // only works if both are on the same curve
-        if (on_curve != other.on_curve) {
-            throw std::runtime_error(strprintf("invalid binary operation: variables must be of same type for %s operator", op));
-        }
-        return Value::prepare_extraction(data, other.data);
-    }
-    std::shared_ptr<var> add(const var& other, const std::string& op = "addition") const {
-        if (data.type == Value::T_STRING && other.data.type == Value::T_STRING) {
-            Value v2((int64_t)0);
-            v2.type = Value::T_STRING;
-            v2.str = data.str + other.data.str;
-            return std::make_shared<var>(v2, false);
-        }
-        if (data.type == Value::T_INT && other.data.type == Value::T_INT) {
-            Value v2(data.int64 + other.data.int64);
-            return std::make_shared<var>(v2, false);
-        }
-        Value prep = curve_check_and_prep(other, op);
-        if (on_curve) prep.do_combine_pubkeys();
-        else          prep.do_combine_privkeys();
-        return std::make_shared<var>(prep, on_curve);
-    }
-    std::shared_ptr<var> sub(const var& other) const {
-        if (data.type == Value::T_INT && other.data.type == Value::T_INT) {
-            Value v2(data.int64 - other.data.int64);
-            return std::make_shared<var>(v2, false);
-        }
-        Value x(other.data);
-        if (other.on_curve) x.do_negate_pubkey(); else x.do_negate_privkey();
-        return add(var(x, other.on_curve), "subtraction");
-    }
-    std::shared_ptr<var> mul(const var& other) const {
-        if (data.type == Value::T_INT && other.data.type == Value::T_INT) {
-            Value v2(data.int64 * other.data.int64);
-            return std::make_shared<var>(v2, false);
-        }
-        //              on curve        off curve
-        // on curve     INVALID         tweak-pubkey
-        // off curve    tweak-pubkey    multiply-privkeys
-        if (on_curve && other.on_curve) {
-            throw std::runtime_error("invalid binary operation: variables cannot both be curve points for multiplication operator");
-        }
-        if (&other == G) {
-            Value prep(data);
-            prep.do_get_pubkey();
-            return std::make_shared<var>(prep, true);
-        }
-        if (on_curve) return other.mul(*this);
-        Value prep = Value::prepare_extraction(data, other.data);
-        if (!other.on_curve) prep.do_multiply_privkeys();
-        else prep.do_tweak_pubkey();
-        return std::make_shared<var>(prep, other.on_curve);
-    }
-    std::shared_ptr<var> div(const var& other) const {
-        if (data.type == Value::T_INT && other.data.type == Value::T_INT) {
-            Value v2(data.int64 / other.data.int64);
-            return std::make_shared<var>(v2, false);
-        }
-        throw std::runtime_error("division not implemented");
-    }
-    std::shared_ptr<var> concat(const var& other) const {
-        if (data.type == Value::T_STRING && other.data.type == Value::T_STRING) return add(other);
-        Value v(data), v2(other.data);
-        v.data_value();
-        v.type = Value::T_DATA;
-        v2.data_value();
-        v2.type = Value::T_DATA;
-        v.data.insert(v.data.end(), v2.data.begin(), v2.data.end());
-        return std::make_shared<var>(v, false);
-    }
-    std::shared_ptr<var> land(const var& other) const {
-        Value v(data), v2(other.data);
-        v.do_boolify();
-        if (!v.int64) return env_false;
-        v2.do_boolify();
-        return env_bool(v2.int64);
-    }
-    std::shared_ptr<var> lor(const var& other) const {
-        Value v(data), v2(other.data);
-        v.do_boolify();
-        if (v.int64) return env_true;
-        v2.do_boolify();
-        return env_bool(v2.int64);
-    }
-    std::shared_ptr<var> lxor(const var& other) const {
-        Value v(data), v2(other.data);
-        v.do_boolify();
-        v2.do_boolify();
-        return env_bool(v.int64 != v2.int64);
-    }
-};
 
 typedef std::shared_ptr<var> (*env_func) (std::vector<std::shared_ptr<var>> args);
 
@@ -264,7 +149,8 @@ struct env_t: public tiny::st_callback_table {
         case tiny::tok_concat: tmp = l->concat(*r); break;
         case tiny::tok_land:   tmp = l->land(*r); break;
         case tiny::tok_lor:    tmp = l->lor(*r); break;
-        case tiny::tok_lxor:   tmp = l->lxor(*r); break;
+        // case tiny::tok_lxor:   tmp = l->lxor(*r); break;
+        case tiny::tok_pow:    tmp = l->pow(*r); break;
         default: throw std::runtime_error(strprintf("invalid binary operation (%s)", tiny::token_type_str[op]));
         }
         ctx->temps.push_back(tmp);
@@ -299,6 +185,22 @@ struct env_t: public tiny::st_callback_table {
         return bin(op, l, r);
     }
     tiny::ref bin(tiny::token_type op, tiny::ref lhs, tiny::ref rhs) override {
+        if (ctx->arrays.count(lhs) && ctx->arrays.count(rhs)) {
+            auto l = ctx->arrays.at(lhs);
+            auto r = ctx->arrays.at(rhs);
+            std::vector<std::shared_ptr<var>> res;
+            if (op == tiny::tok_concat) {
+                res = l;
+                res.insert(res.end(), r.begin(), r.end());
+                return push_arr(res);
+            }
+            if (ctx->arrays.at(lhs).size() == ctx->arrays.at(rhs).size()) {
+                for (size_t i = 0; i < l.size(); ++i) {
+                    res.push_back(pull(bin(op, l[i], r[i])));
+                }
+                return push_arr(res);
+            }
+        }
         ARRTHRU(lhs, bin(op, v, rhs));
         // if (ctx->arrays.count(lhs)) {
         //     auto& arr = ctx->arrays.at(lhs);
@@ -425,6 +327,85 @@ struct env_t: public tiny::st_callback_table {
             return refer(tmp);
         } else return 0;
     }
+    tiny::ref transfer(tiny::ref r) {
+        // TODO: it may be worth it to simply set the ctx to the destination value and use the
+        // TODO: existing functions, with an additional context argument in the call to transfer
+        // TODO: for 'source'
+        if (!r) return r;
+        assert(contexts.size() > 1);
+        auto& dst = contexts.at(contexts.size() - 2);
+        auto& src = *ctx;
+        auto& v = pull(r);
+        std::vector<std::shared_ptr<var>> rva;
+        tiny::program_t* prog = src.programs.count(r) ? src.programs.at(r) : nullptr;
+        if (prog) {
+            auto it = std::find(src.owned_programs.begin(), src.owned_programs.end(), prog);
+            if (it != src.owned_programs.end()) {
+                src.owned_programs.erase(it);
+            }
+            tiny::ref tr = dst.temps.size();
+            dst.temps.push_back(std::make_shared<var>((tiny::ref)tr));
+            dst.programs[tr] = prog;
+            dst.owned_programs.push_back(prog);
+            return tr;
+        }
+        if (src.arrays.count(r)) {
+            std::vector<std::shared_ptr<var>> tarr;
+            for (auto& e : src.arrays.at(r)) {
+                tarr.push_back(dst.temps[transfer(refer(e))]);
+            }
+            tiny::ref tr = dst.temps.size();
+            dst.temps.push_back(std::make_shared<var>(tr));
+            dst.arrays[tr] = tarr;
+            return tr;
+        }
+        dst.temps.push_back(v);
+        return dst.temps.size() - 1;
+    }
+    tiny::ref _call(tiny::program_t* p, const std::vector<std::shared_ptr<var>>& a, const std::string& pname = "<anonymous function>") {
+        if (p->argnames.size() != a.size()) {
+            throw std::runtime_error(strprintf("invalid number of arguments in call to %s: got %d, expected %zu", pname, a.size(), p->argnames.size()));
+        }
+        contexts.emplace_back(*ctx);
+        ctx = &contexts.back();
+        // pair args with values
+        for (int i = 0; i < a.size(); ++i) {
+            save(p->argnames[i], a[i]);
+        }
+        tiny::ref rv = p->run(this);
+        // transfer
+        rv = transfer(rv);
+        // if (rv == tiny::nullref) {
+        //     ctx->teardown();
+        //     contexts.pop_back();
+        //     ctx = &contexts.back();
+        //     return rv;
+        // }
+        // std::shared_ptr<var> rvp = pull(rv);
+        // std::vector<std::shared_ptr<var>> rva;
+        // tiny::program_t* prog = ctx->programs.count(rv) ? ctx->programs.at(rv) : nullptr;
+        // if (prog) {
+        //     auto it = std::find(ctx->owned_programs.begin(), ctx->owned_programs.end(), prog);
+        //     if (it != ctx->owned_programs.end()) {
+        //         ctx->owned_programs.erase(it);
+        //     }
+        // }
+        // if (ctx->arrays.count(rv)) {
+        //     rva = ctx->arrays.at(rv);
+        // }
+        ctx->teardown();
+        contexts.pop_back();
+        ctx = &contexts.back();
+        // if (rva.size()) {
+        //     return push_arr(rva);
+        // } else if (prog) {
+        //     return preg(prog);
+        // } else {
+        //     ctx->temps.push_back(rvp);
+        //     return ctx->temps.size() - 1;
+        // }
+        return rv;
+    }
     tiny::ref pcall(tiny::ref program, tiny::ref args) override {
         if (ctx->arrays.count(program)) {
             // calling an array of programs, presumably
@@ -460,38 +441,7 @@ struct env_t: public tiny::st_callback_table {
             a = ctx->arrays.at(args);
         }
         auto p = ctx->programs[program];
-        if (p->argnames.size() != a.size()) {
-            throw std::runtime_error(strprintf("invalid number of arguments in call to %s: got %d, expected %zu", pname, a.size(), p->argnames.size()));
-        }
-        contexts.emplace_back(*ctx);
-        ctx = &contexts.back();
-        // pair args with values
-        for (int i = 0; i < a.size(); ++i) {
-            save(p->argnames[i], a[i]);
-        }
-        tiny::ref rv = p->run(this);
-        if (rv == tiny::nullref) return rv;
-        std::shared_ptr<var> rvp = pull(rv);
-        std::vector<std::shared_ptr<var>> rva;
-        tiny::program_t* prog = ctx->programs.count(rv) ? ctx->programs.at(rv) : nullptr;
-        if (prog) {
-            auto it = std::find(ctx->owned_programs.begin(), ctx->owned_programs.end(), prog);
-            if (it != ctx->owned_programs.end()) {
-                ctx->owned_programs.erase(it);
-            }
-        }
-        if (ctx->arrays.count(rv)) rva = ctx->arrays.at(rv);
-        ctx->teardown();
-        contexts.pop_back();
-        ctx = &contexts.back();
-        if (rva.size()) {
-            return push_arr(rva);
-        } else if (prog) {
-            return preg(prog);
-        } else {
-            ctx->temps.push_back(rvp);
-            return ctx->temps.size() - 1;
-        }
+        return _call(p, a, pname);
     }
     tiny::ref convert(const std::string& value, tiny::token_type type, tiny::token_type restriction) override {
         Value v((int64_t)0);
@@ -561,14 +511,14 @@ struct env_t: public tiny::st_callback_table {
     tiny::ref arr_range(tiny::ref arrayref, int64_t is, int64_t ie) {
         auto arr = ctx->arrays.at(arrayref);
         is = range_chk(is, arr.size());
-        ie = range_chk(ie, arr.size() + 1);
+        ie = range_chk(ie, arr.size());
         std::vector<std::shared_ptr<var>> res;
         if (is > ie) {
-            for (size_t i = ie; i < is; ++i) {
+            for (size_t i = ie; i <= is; ++i) {
                 res.insert(res.begin(), arr[i]);
             }
         } else {
-            for (size_t i = is; i < ie; ++i) {
+            for (size_t i = is; i <= ie; ++i) {
                 res.push_back(arr[i]);
             }
         }
@@ -585,27 +535,27 @@ struct env_t: public tiny::st_callback_table {
         switch (v->data.type) {
         case Value::T_STRING:
             is = range_chk(is, v->data.str.length());
-            ie = range_chk(ie, v->data.str.length() + 1);
+            ie = range_chk(ie, v->data.str.length());
             r.type = Value::T_STRING;
             if (is > ie) {
-                r.str = v->data.str.substr(ie, is-ie);
+                r.str = v->data.str.substr(ie, 1+is-ie);
                 r.do_reverse();
             } else {
-                r.str = v->data.str.substr(is, ie-is);
+                r.str = v->data.str.substr(is, 1+ie-is);
             }
             break;
         case Value::T_DATA:
             is = range_chk(is, v->data.data.size());
-            ie = range_chk(ie, v->data.data.size() + 1);
+            ie = range_chk(ie, v->data.data.size());
             r.type = Value::T_DATA;
             if (is > ie) {
                 r.data.clear();
-                for (int64_t i = is; i > ie; --i) {
+                for (int64_t i = is; i >= ie; --i) {
                     r.data.push_back(v->data.data[i]);
                 }
             } else {
-                r.data.resize(ie - is);
-                memcpy(r.data.data(), &v->data.data[is], ie-is);
+                r.data.resize(1 + ie - is);
+                memcpy(r.data.data(), &v->data.data[is], 1+ie-is);
             }
             break;
         default:

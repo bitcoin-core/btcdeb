@@ -43,7 +43,7 @@ struct pws {
     uint64_t flag;
     token_t* mark = nullptr;
     pws(cache_t& pcache_in, uint64_t& flags_in, uint64_t flag_in = 0) : pcache(pcache_in), flags(flags_in), flag(flag_in) {
-        flags |= flag;
+        if (flags & flag) flag = 0; else flags |= flag;
     }
     pws(pws& ws, uint64_t flag_in) : pws(ws.pcache, ws.flags, flag_in) {}
     ~pws() { flags &= ~flag; }
@@ -71,6 +71,7 @@ st_t* parse_pcall(pws& ws, token_t** s);
 st_t* parse_fcall(pws& ws, token_t** s);
 st_t* parse_sequence(pws& ws, token_t** s);
 st_t* parse_preg(pws& ws, token_t** s);
+st_t* parse_spreg(pws& ws, token_t** s);
 st_t* parse_if(pws& ws, token_t** s);
 
 st_t* treeify(token_t* tokens);

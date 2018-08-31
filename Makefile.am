@@ -134,7 +134,8 @@ libecide_a_SOURCES = \
 	compiler/tinytokenizer.h \
 	compiler/tinytokenizer.cpp \
 	compiler/tinyparser.h \
-	compiler/tinyparser.cpp
+	compiler/tinyparser.cpp \
+	compiler/var.h
 endif
 
 # btcdeb binary #

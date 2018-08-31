@@ -97,4 +97,13 @@ static int secp256k1_eckey_pubkey_tweak_mul(const secp256k1_ecmult_context *ctx,
     return 1;
 }
 
+static int secp256k1_eckey_privkey_tweak_pow(secp256k1_scalar *key, const secp256k1_scalar *tweak) {
+    if (secp256k1_scalar_is_zero(tweak)) {
+        return 0;
+    }
+
+    secp256k1_scalar_pow(key, key, tweak);
+    return 1;
+}
+
 #endif /* SECP256K1_ECKEY_IMPL_H */

@@ -237,7 +237,7 @@ void Value::do_combine_privkeys() {
             // it is probably a WIF encoded key
             Value wif(args[i]);
             wif.str_value();
-            if (wif.str.length() != args[i].size()) abort("invalid input (private key %d must be 32 byte data or a WIF encoded privkey)\n", i);
+            if (wif.str.length() != args[i].size()) abort("invalid input to combine_privkeys (private key %d must be 32 byte data or a WIF encoded privkey)\n", i);
             wif.do_decode_wif();
             args[i] = wif.data;
         }
@@ -261,7 +261,7 @@ void Value::do_multiply_privkeys() {
             // it is probably a WIF encoded key
             Value wif(args[i]);
             wif.str_value();
-            if (wif.str.length() != args[i].size()) abort("invalid input (private key %d must be 32 byte data or a WIF encoded privkey)\n", i);
+            if (wif.str.length() != args[i].size()) abort("invalid input to multiply_privkeys (private key %d must be 32 byte data or a WIF encoded privkey)\n", i);
             wif.do_decode_wif();
             args[i] = wif.data;
         }
@@ -269,6 +269,36 @@ void Value::do_multiply_privkeys() {
 
     if (!secp256k1_ec_privkey_tweak_mul(secp256k1_context_sign, args[0].data(), args[1].data())) {
         abort("failed call to secp256k1_ec_privkey_tweak_add\n");
+    }
+
+    data = args[0];
+}
+
+void Value::do_pow_privkey() {
+    if (!secp256k1_context_sign) ECC_Start();
+
+    if (type != T_DATA) abort("invalid type (must be data)\n");
+    std::vector<std::vector<uint8_t>> args;
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two privkeys)\n");
+    for (int i = 0; i < 2; i++) {
+        if (args[i].size() != 32) {
+            // it is probably a WIF encoded key
+            Value wif(args[i]);
+            wif.str_value();
+            if (wif.str.length() != args[i].size()) {
+                if (i == 0) abort("invalid input to do_pow_privkey (private key %d must be 32 byte data or a WIF encoded privkey)\n", i);
+                // we are lenient about item 2; it can be anything
+                std::vector<uint8_t>& a = args[1];
+                while (a.size() < 32) a.insert(a.begin(), 0);
+            } else {
+                wif.do_decode_wif();
+                args[i] = wif.data;
+            }
+        }
+    }
+
+    if (!secp256k1_ec_privkey_tweak_pow(secp256k1_context_sign, args[0].data(), args[1].data())) {
+        abort("failed call to secp256k1_ec_privkey_tweak_pow\n");
     }
 
     data = args[0];

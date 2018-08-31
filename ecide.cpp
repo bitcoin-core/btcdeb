@@ -69,6 +69,10 @@ int main(int argc, char* const* argv)
     efun(jacobi);
     efun(point);
     efun(oncurve);
+    efun(size);
+    efun(map);
+    efun(reduce);
+    efun(array);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -253,6 +257,7 @@ int parse(const char* args_in)
 #define ARG1_NO_CURVE(vfun)             \
     ARG_CHK(1);                         \
     std::shared_ptr<var> v = args[0];   \
+    if (!v.get()) throw std::runtime_error("nil argument"); \
     if (v->pref) throw std::runtime_error("complex argument not allowed"); \
     NO_CURVE_CHK(v);                    \
     Value v2(v->data);                  \
@@ -263,6 +268,7 @@ int parse(const char* args_in)
     std::vector<std::shared_ptr<var>> res;                                              \
     if (args.size() == 1 && args[0]->pref) args = env.ctx->arrays.at(args[0]->pref);    \
     for (auto& v : args) {                                                              \
+        if (!v.get()) throw std::runtime_error("nil argument");                         \
         if (v->pref) {                                                                  \
             throw std::runtime_error("nested complex arguments not allowed");           \
         }                                                                               \
@@ -316,7 +322,8 @@ std::shared_ptr<var> e_bech32dec(std::vector<std::shared_ptr<var>> args) {
 
 void echo(std::vector<std::shared_ptr<var>>& args, bool& need_nl) {
     for (auto& v : args) {
-        if (v->pref) echo(env.ctx->arrays[v->pref], need_nl);
+        if (!v.get()) { need_nl = true; printf("nil"); }
+        else if (v->pref) echo(env.ctx->arrays[v->pref], need_nl);
         else if (v->data.type == Value::T_STRING) { need_nl = true; printf("%s", v->data.str.c_str()); }
         else { need_nl = true; v->data.print(); }
     }
@@ -423,4 +430,151 @@ std::shared_ptr<var> e_oncurve(std::vector<std::shared_ptr<var>> args) {
     secp256k1::num ny(HexStr(y));
     secp256k1::num p("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
     return (((ny * ny) % p) - ((((nx * nx) % p) * nx) % p)) % p == secp256k1::no7 ? env_true : env_false;
+}
+
+size_t _size(const std::shared_ptr<var>& v) {
+    if (v->pref) {
+        if (env.ctx->arrays.count(v->pref)) {
+            return env.ctx->arrays.at(v->pref).size();
+        }
+        if (env.ctx->programs.count(v->pref)) {
+            return env.ctx->programs.at(v->pref)->prog.r->ops();
+        }
+    }
+    switch (v->data.type) {
+    case Value::T_DATA: return v->data.data.size();
+    case Value::T_STRING: return v->data.str.length();
+    default: throw std::runtime_error("invalid type for size operation");
+    }
+}
+
+std::shared_ptr<var> e_size(std::vector<std::shared_ptr<var>> args) {
+    if (args.size() == 0) throw std::runtime_error("at least 1 argument required");
+    if (args.size() == 1) {
+        return std::make_shared<var>(Value((int64_t)_size(args[0])));
+    }
+    std::vector<std::shared_ptr<var>> res;
+    for (auto& arg : args) {
+        res.emplace_back(std::make_shared<var>(Value((int64_t)_size(arg))));
+    }
+    return env.pull(env.push_arr(res));
+}
+
+std::shared_ptr<var> e_array(std::vector<std::shared_ptr<var>> args) {
+    if (args.size() < 1 || args.size() > 2) throw std::runtime_error("1 or 2 arguments (length[, initfun]) required");
+    auto& len = args[0];
+    auto initfun = args.size() == 2 ? args[1] : std::shared_ptr<var>();
+
+    int num = len->data.int_value();
+    if (num < 0 || num > 10 * 1024 * 1024) throw std::runtime_error("out of bounds array() count (allowed: 0..10M)");
+
+    std::vector<std::shared_ptr<var>> res;
+    if (initfun.get()) {
+        if (initfun->data.type == Value::T_STRING) {
+            // built-in
+            if (!env.ctx->fmap.count(initfun->data.str)) throw std::runtime_error("not a function");
+            auto f = env.ctx->fmap.at(initfun->data.str);
+            for (int64_t i = 0; i < num; ++i) {
+                res.push_back(f(std::vector<std::shared_ptr<var>>{std::make_shared<var>(Value(i))}));
+            }
+        } else if (env.ctx->programs.count(initfun->pref)) {
+            auto f = env.ctx->programs.at(initfun->pref);
+            for (int64_t i = 0; i < num; ++i) {
+                auto rv = env._call(f, std::vector<std::shared_ptr<var>>{std::make_shared<var>(Value(i))});
+                res.push_back(env.pull(rv));
+            }
+        } else throw std::runtime_error("argument 1 must be a function");
+    } else {
+        for (int64_t i = 0; i < num; ++i) res.push_back(std::make_shared<var>(Value((int64_t)0)));
+    }
+
+    return env.pull(env.push_arr(res));
+}
+
+std::shared_ptr<var> e_map(std::vector<std::shared_ptr<var>> args) {
+    std::vector<std::shared_ptr<var>> res;
+    if (args.size() < 2) throw std::runtime_error("at least two arguments (function and array) required");
+    auto& progarg = *args[0];
+    // TODO: map over strings
+    size_t sz = 0;
+    std::vector<std::vector<std::shared_ptr<var>>> rargs;
+    for (auto& a : args) {
+        if (a == args[0]) continue;
+        if (!env.ctx->arrays.count(a->pref)) throw std::runtime_error("argument 2+ must be an array");
+        auto arr = env.ctx->arrays.at(a->pref);
+        if (!sz) sz = arr.size();
+        if (sz != arr.size()) throw std::runtime_error(strprintf("arrays of different size encountered (%zu vs %zu)", sz, arr.size()));
+        rargs.push_back(arr);
+    }
+    if (progarg.data.type == Value::T_STRING) {
+        // built-in
+        if (!env.ctx->fmap.count(progarg.data.str)) throw std::runtime_error("not a function");
+        auto f = env.ctx->fmap.at(progarg.data.str);
+        for (size_t i = 0; i < sz; ++i) {
+            std::vector<std::shared_ptr<var>> ca;
+            for (auto& arg : rargs) ca.push_back(arg[i]);
+            res.push_back(f(ca));
+        }
+    } else if (env.ctx->programs.count(progarg.pref)) {
+        auto f = env.ctx->programs.at(progarg.pref);
+        for (size_t i = 0; i < sz; ++i) {
+            std::vector<std::shared_ptr<var>> ca;
+            for (auto& arg : rargs) ca.push_back(arg[i]);
+            auto rv = env._call(f, ca);
+            res.push_back(env.pull(rv));
+        }
+    } else throw std::runtime_error("argument 1 must be a function");
+    return env.pull(env.push_arr(res));
+}
+
+std::shared_ptr<var> e_reduce(std::vector<std::shared_ptr<var>> args) {
+    if (args.size() < 2) throw std::runtime_error("at least two arguments (function and array) required");
+    auto& progarg = *args[0];
+    size_t sz = 0;
+    std::vector<std::vector<std::shared_ptr<var>>> rargs;
+    for (auto& a : args) {
+        if (a == args[0]) continue;
+        if (!env.ctx->arrays.count(a->pref)) throw std::runtime_error("argument 2+ must be an array");
+        auto arr = env.ctx->arrays.at(a->pref);
+        if (!sz) sz = arr.size();
+        if (sz != arr.size()) throw std::runtime_error(strprintf("arrays of different size encountered (%zu vs %zu)", sz, arr.size()));
+        rargs.push_back(arr);
+    }
+    if (sz == 0) return std::make_shared<var>(Value((int64_t)0));
+    std::shared_ptr<var> res = std::make_shared<var>(Value(std::vector<uint8_t>()));
+    if (rargs.size() == 1 && sz == 1) return res;
+    if (progarg.data.type == Value::T_STRING) {
+        // built-in
+        if (!env.ctx->fmap.count(progarg.data.str)) throw std::runtime_error("not a function");
+        auto f = env.ctx->fmap.at(progarg.data.str);
+        for (size_t i = 0; i < sz; ++i) {
+            std::vector<std::shared_ptr<var>> ca;
+            for (auto& arg : rargs) ca.push_back(arg[i]);
+            ca.push_back(res);
+            res = f(ca);
+        }
+        // for (size_t i = 1; i < arr.size(); ++i) {
+        //     auto arg = arr[i];
+        //     res = f(std::vector<std::shared_ptr<var>>{arg, res});
+        // }
+    } else if (env.ctx->programs.count(progarg.pref)) {
+        auto f = env.ctx->programs.at(progarg.pref);
+        for (size_t i = 0; i < sz; ++i) {
+            // printf("reduce(\n");
+            // for (auto& arg : rargs) env.printvar(env.refer(arg[i]));
+            // if (i > 0) env.printvar(env.refer(res)); else printf("nil");
+            // printf(")\n");
+            std::vector<std::shared_ptr<var>> ca;
+            for (auto& arg : rargs) ca.push_back(arg[i]);
+            ca.push_back(res);
+            auto rv = env._call(f, ca);
+            res = env.pull(rv);
+            // printf("= "); env.printvar(rv);
+        }
+        // for (size_t i = 1; i < arr.size(); ++i) {
+        //     auto arg = arr[i];
+        //     res = env.pull(env._call(f, std::vector<std::shared_ptr<var>>{arg, res}));
+        // }
+    } else throw std::runtime_error("argument 1 must be a function");
+    return res;
 }

@@ -38,11 +38,12 @@ enum token_type {
     tok_bin,
     tok_land, // logical and
     tok_lor, // logical or
-    tok_lxor, // logical xor
+    tok_pow, // power
     tok_eq, // ==
     tok_le, // <=
     tok_ge, // >=
     tok_ne, // !=
+    tok_arrow, // =>
     tok_consumable, // consumed by fulfilled token sequences
     tok_ws,
 };
@@ -79,6 +80,7 @@ static const char* token_type_str[] = {
     "<=",
     ">=",
     "!=",
+    "=>",
     "consumable",
     "ws",
 };
@@ -112,7 +114,7 @@ inline token_type determine_token(const char c, const char p, token_type restric
     }
     if (c == '|') return p == '|' ? tok_lor : tok_consumable;
     if (c == '&') return p == '&' ? tok_land : tok_consumable;
-    if (c == '^') return tok_lxor;
+    if (c == '^') return tok_pow;
     if (c == '-') return tok_minus;
     if (c == '*') return tok_mul;
     if (c == '/') return tok_div;
@@ -127,7 +129,10 @@ inline token_type determine_token(const char c, const char p, token_type restric
         return r;
     }
     if (c == '<') return tok_lt;
-    if (c == '>') return tok_gt;
+    if (c == '>') {
+        if (p == '=') { consumes = 1; return tok_arrow; }
+        return tok_gt;
+    }
     if (c == '!') return tok_not;
     if (c == ')') return tok_rparen;
     if (c == '}') return tok_rcurly;

@@ -74,6 +74,7 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     if (ws_.pcache.count(pcv)) return ws_.pcache.at(pcv)->hit(s);
     try(parse_ret);
     try(parse_unary_expr);
+    try(parse_spreg);
     try(parse_preg);
     try(parse_fcall);
     try(parse_parenthesized);
@@ -96,6 +97,15 @@ st_t* parse_variable(pws& ws, token_t** s) {
 
 st_t* parse_value(pws& ws, token_t** s, token_type restriction) {
     DEBUG_PARSER("value");
+    // ([tok_minus] tok_number)|tok_symbol|tok_string
+    if (restriction == tok_undef &&
+        (*s)->token == tok_minus &&
+        (*s)->next &&
+        (*s)->next->token == tok_number) {
+        value_t* t = new value_t((*s)->next->token, std::string("-") + (*s)->next->value, restriction);
+        *s = (*s)->next->next;
+        return t;
+    }
     if ((*s)->token == tok_symbol || (*s)->token == tok_number || (*s)->token == tok_string) {
         value_t* t = new value_t((*s)->token, (*s)->value, restriction);
         *s = (*s)->next;
@@ -157,7 +167,7 @@ st_t* parse_ret(pws& ws, token_t** s) {
 }
 
 st_t* parse_binset(pws& ws, token_t** s) {
-    // tok_symbol tok_plus|tok_minus|tok_mul|tok_div|tok_concat tok_set [expr]
+    // tok_symbol tok_plus|tok_minus|tok_mul|tok_div|tok_concat|tok_pow tok_set [expr]
     DEBUG_PARSER("binset");
     token_t* r = *s;
     var_t* var;
@@ -173,6 +183,7 @@ st_t* parse_binset(pws& ws, token_t** s) {
     case tok_mul:
     case tok_div:
     case tok_concat:
+    case tok_pow:
         break;
     default:
         delete var;
@@ -273,6 +284,7 @@ st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
     case tok_concat:
     case tok_mul:
     case tok_div:
+    case tok_pow:
         break;
     default:
         return nullptr;
@@ -281,7 +293,7 @@ st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
     r = r->next;
     if (!r) return nullptr;
     st_t* rhs;
-    if (op_token == tok_mul || op_token == tok_div) {
+    if (op_token == tok_mul || op_token == tok_div || op_token == tok_pow) {
         // prio left hand side, if this expression expands
         token_t* z = r;
         {
@@ -306,7 +318,7 @@ st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
 }
 
 st_t* parse_binary_expr(pws& ws, token_t** s) {
-    // [expr] tok_plus|tok_minus|tok_mul|tok_div [expr]
+    // [expr] tok_plus|tok_minus|tok_mul|tok_div|tok_pow [expr]
     token_t* r = *s;
     CLAIM(PWS_LOGICAL);
     DEBUG_PARSER("binary_expr");
@@ -342,13 +354,12 @@ st_t* parse_mod(pws& ws, token_t** s) {
 }
 
 st_t* parse_logical_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
-    // tok_plus|tok_minus|tok_mul|tok_div [expr]
+    // tok_land|tok_lor [expr]
     DEBUG_PARSER("logical_expr_post_lhs");
     token_t* r = *s;
     switch (r->token) {
     case tok_land:
     case tok_lor:
-    case tok_lxor:
         break;
     default:
         return nullptr;
@@ -382,7 +393,7 @@ st_t* parse_logical_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
 }
 
 st_t* parse_logical_expr(pws& ws, token_t** s) {
-    // [expr] tok_land|tok_lor|tok_lxor [expr]
+    // [expr] tok_land|tok_lor [expr]
     DEBUG_PARSER("logical_expr");
     token_t* r = *s;
     st_t* lhs;
@@ -548,8 +559,9 @@ st_t* parse_sequence(pws& ws, token_t** s) {
     return new sequence_t(sequence_list);
 }
 
-st_t* parse_preg(pws& ws, token_t** s) { DEBUG_PARSER("preg");
+st_t* parse_preg(pws& ws, token_t** s) {
     // lparen symbol [comma symbol [...]] rparen [sequence]
+    DEBUG_PARSER("preg");
     token_t* r = *s;
     if (!r->next || r->token != tok_lparen) return nullptr;
     r = r->next;
@@ -560,6 +572,52 @@ st_t* parse_preg(pws& ws, token_t** s) { DEBUG_PARSER("preg");
     }
     r = r->next;
     sequence_t* prog = (sequence_t*)parse_sequence(ws, &r);
+    if (!prog) {
+        if (argnames) delete argnames;
+        return nullptr;
+    }
+    std::vector<std::string> an;
+    if (argnames) {
+        for (const auto& c : argnames->values) {
+            an.push_back(((var_t*)c.r)->varname);
+        }
+    }
+    *s = r;
+    return new func_t(an, prog);
+}
+
+st_t* parse_spreg(pws& ws, token_t** s) {
+    // symbol|(lparen symbol [comma symbol [...]] rparen) arrow [expr]
+    DEBUG_PARSER("spreg");
+    token_t* r = *s;
+    list_t* argnames;
+    // single symbol followed by arrow:
+    //  var                         =>                                       expr
+    if (r->token == tok_symbol && r->next && r->next->token == tok_arrow && r->next->next) {
+        st_t* v = parse_variable(ws, &r);
+        argnames = new list_t(std::vector<st_c>{st_c(v)});
+        r = r->next;
+    } else {
+        if (!r->next || r->token != tok_lparen) return nullptr;
+        r = r->next;
+        argnames = (list_t*)parse_csv(ws, &r, tok_symbol);
+        if (!r || r->token != tok_rparen || !r->next || r->next->token != tok_arrow || !r->next->next) {
+            if (argnames) delete argnames;
+            return nullptr;
+        }
+        r = r->next->next;
+    }
+    sequence_t* prog;
+    if (r->token == tok_lcurly) {
+        prog = (sequence_t*)parse_sequence(ws, &r);
+    } else {
+        st_t* p = parse_expr(ws, &r);
+        if (!p) {
+            if (argnames) delete argnames;
+            return nullptr;
+        }
+        prog = new sequence_t(std::vector<st_c>{st_c(p)});
+    }
     if (!prog) {
         if (argnames) delete argnames;
         return nullptr;
