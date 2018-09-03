@@ -22,7 +22,15 @@ inline FILE* rpc_fetch(const char* cmd, const char* dst, bool abort_on_failure =
     if (rpc_call == "") {
         assert(!"no RPC call available");
     }
-    if (system(cmd)) { fprintf(stderr, "failed to run command: %s\n", cmd); exit(1); }
+    if (system(cmd)) {
+        fprintf(stderr, "failed to run command: %s\n", cmd);
+        if (abort_on_failure) {
+            exit(1);
+        }
+        fprintf(stderr, "waiting 5 seconds and trying again\n");
+        sleep(5);
+        return rpc_fetch(cmd, dst, true);
+    }
     FILE* fp = fopen(dst, "r");
     if (!fp) {
         fprintf(stderr, "RPC call failed: %s\n", cmd);
