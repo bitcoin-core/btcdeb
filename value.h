@@ -133,6 +133,7 @@ struct Value {
         insert(data, s);
     }
     Value(const char* v, size_t vlen = 0, bool non_numeric = false) {
+        if (!v) { type = T_DATA; return; } // null value
         if (!vlen) vlen = strlen(v);
         if (vlen == 2 && v[0] == '0' && v[1] == 'x') {
             type = T_DATA;

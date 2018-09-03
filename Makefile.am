@@ -126,6 +126,7 @@ if ENABLE_DANGEROUS
 libecide_a_CPPFLAGS = $(AM_CPPFLAGS) -Icompiler
 libecide_a_CFLAGS = -std=gnu99
 libecide_a_SOURCES = \
+	algo/gausselim.h \
 	compiler/env.h \
 	compiler/env.cpp \
 	compiler/secp256k1-bridge.h \

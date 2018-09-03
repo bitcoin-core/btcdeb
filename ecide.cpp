@@ -12,6 +12,8 @@ extern "C" {
 #include <kerl/kerl.h>
 }
 
+#include <algo/gausselim.h>
+
 #include <compiler/env.h>
 #include <compiler/secp256k1-bridge.h>
 
@@ -73,6 +75,7 @@ int main(int argc, char* const* argv)
     efun(map);
     efun(reduce);
     efun(array);
+    efun(solve);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -339,24 +342,26 @@ std::shared_ptr<var> e_echo(std::vector<std::shared_ptr<var>> args) {
     return std::shared_ptr<var>(nullptr);
 }
 
-std::shared_ptr<var> e_type(std::vector<std::shared_ptr<var>> args) {
-    Value w("string placeholder");
-    for (auto v : args) {
-        if (v->pref) {
-            if (env.ctx->arrays.count(v->pref)) {
-                w.str = "array";
-            } else if (env.ctx->programs.count(v->pref)) {
-                w.str = "function";
-            } else {
-                w.str = "????";
-            }
-        } else switch (v->data.type) {
-        case Value::T_STRING: w.str = "string"; break;
-        case Value::T_INT: w.str = "int"; break;
-        case Value::T_DATA: w.str = "data"; break;
-        case Value::T_OPCODE: w.str = "opcode"; break;
+std::string _type(const std::shared_ptr<var>& v) {
+    if (v->pref) {
+        if (env.ctx->arrays.count(v->pref)) {
+            return "array";
+        } else if (env.ctx->programs.count(v->pref)) {
+            return "function";
+        } else {
+            return "????";
         }
-        printf("%s\n", w.str.c_str());
+    } else switch (v->data.type) {
+    case Value::T_STRING: return "string";
+    case Value::T_INT: return "int";
+    case Value::T_DATA: return "data";
+    case Value::T_OPCODE: return "opcode";
+    }
+}
+
+std::shared_ptr<var> e_type(std::vector<std::shared_ptr<var>> args) {
+    for (auto v : args) {
+        printf("%s\n", _type(v).c_str());
     }
     return std::shared_ptr<var>(nullptr); //std::make_shared<var>(w);
 }
@@ -456,6 +461,46 @@ std::shared_ptr<var> e_size(std::vector<std::shared_ptr<var>> args) {
     std::vector<std::shared_ptr<var>> res;
     for (auto& arg : args) {
         res.emplace_back(std::make_shared<var>(Value((int64_t)_size(arg))));
+    }
+    return env.pull(env.push_arr(res));
+}
+
+std::shared_ptr<var> e_solve(std::vector<std::shared_ptr<var>> args) {
+    if (args.size() != 2) throw std::runtime_error("at least 2 arguments required");
+    auto A = args[0];
+    auto b = args[1];
+    if (!A->pref || !env.ctx->arrays.count(A->pref)) throw std::runtime_error("first argument must be a matrix");
+    auto& Aarr = env.ctx->arrays.at(A->pref);
+    // A is an array of arrays
+    size_t n = Aarr.size();
+    bool size_violation = false;
+    for (auto& v : Aarr) {
+        if (!v->pref || !env.ctx->arrays.count(v->pref)) throw std::runtime_error("first argument must be a matrix");
+        auto& varr = env.ctx->arrays.at(v->pref);
+        size_violation |= varr.size() != n;
+    }
+    if (size_violation) throw std::runtime_error("first argument must be an n-by-n matrix");
+    if (!b->pref || !env.ctx->arrays.count(b->pref)) throw std::runtime_error("second argument must be a vector");
+    auto& barr = env.ctx->arrays.at(b->pref);
+    if (barr.size() != n) throw std::runtime_error("first and second argument must be of the same length");
+    // convert to algo format
+    algo::vec line(n + 1, 0);
+    algo::mat aA(n, line);
+    for (size_t i = 0; i < n; ++i) {
+        auto& varr = env.ctx->arrays.at(Aarr[i]->pref);
+        for (size_t j = 0; j < n; ++j) {
+            if (varr[j]->pref) throw std::runtime_error(strprintf("invalid type %s", _type(varr[j])));
+            aA[i][j] = varr[j]->data.int_value();
+        }
+    }
+    for (size_t j = 0; j < n; ++j) {
+        aA[j][n] = barr[j]->data.int_value();
+    }
+    algo::gausselim_print(aA);
+    auto algo_res = algo::gausselim(aA);
+    std::vector<std::shared_ptr<var>> res(algo_res.size());
+    for (size_t i = 0; i < algo_res.size(); ++i) {
+        res[i] = std::make_shared<var>(Value((int64_t)std::round(algo_res[i])));
     }
     return env.pull(env.push_arr(res));
 }
