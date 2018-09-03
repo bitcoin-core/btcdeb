@@ -18,26 +18,28 @@ void push_purgable(const char* path) {
     }
 }
 
-inline FILE* rpc_fetch(const char* cmd, const char* dst, bool abort_on_failure = false) {
+inline FILE* rpc_fetch(const char* cmd, const char* dst, int attempt = 0) {
+    int leftover_tries = 10 - attempt;
+    int next_wait = (1 + attempt) * 5;
     if (rpc_call == "") {
         assert(!"no RPC call available");
     }
     if (system(cmd)) {
         fprintf(stderr, "failed to run command: %s\n", cmd);
-        if (abort_on_failure) {
+        if (!leftover_tries) {
             exit(1);
         }
-        fprintf(stderr, "waiting 5 seconds and trying again\n");
-        sleep(5);
-        return rpc_fetch(cmd, dst, true);
+        fprintf(stderr, "waiting %d seconds and trying again\n", next_wait);
+        sleep(next_wait);
+        return rpc_fetch(cmd, dst, attempt + 1);
     }
     FILE* fp = fopen(dst, "r");
     if (!fp) {
         fprintf(stderr, "RPC call failed: %s\n", cmd);
-        if (!abort_on_failure) {
-            fprintf(stderr, "waiting 5 seconds and trying again\n");
-            sleep(5);
-            return rpc_fetch(cmd, dst, true);
+        if (!leftover_tries) {
+            fprintf(stderr, "waiting %d seconds and trying again\n", next_wait);
+            sleep(next_wait);
+            return rpc_fetch(cmd, dst, attempt + 1);
         }
         assert(0);
     }
