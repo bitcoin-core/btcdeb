@@ -287,16 +287,16 @@ int main(int argc, const char** argv)
     nulldummy = DummyMultisigExceptTX;
     upgradablenop = UpgradableNOPExceptTX;
 
-    fp = fopen("exceptions.dat", "rb");
-    if (fp) {
-        CAutoFile af(fp, SER_DISK, 0);
-        af >> mindata >> nullfail >> nulldummy >> upgradablenop;
-        try {
-            af >> lows;
-            af >> strictencs;
-        } catch (...) {}
-        printf("loaded [ %zu, %zu, %zu, %zu, %zu, %zu ] exceptions\n", mindata.size(), nullfail.size(), nulldummy.size(), upgradablenop.size(), lows.size(), strictencs.size());
-    }
+    // fp = fopen("exceptions.dat", "rb");
+    // if (fp) {
+    //     CAutoFile af(fp, SER_DISK, 0);
+    //     af >> mindata >> nullfail >> nulldummy >> upgradablenop;
+    //     try {
+    //         af >> lows;
+    //         af >> strictencs;
+    //     } catch (...) {}
+    //     printf("loaded [ %zu, %zu, %zu, %zu, %zu, %zu ] exceptions\n", mindata.size(), nullfail.size(), nulldummy.size(), upgradablenop.size(), lows.size(), strictencs.size());
+    // }
 
     // below is no longer needed, as the data is duplicated in the exceptions.dat file
     // // append exceptions
@@ -481,11 +481,11 @@ int main(int argc, const char** argv)
             unlink("current-sync-state.dat");
             rename("current-sync-state.new", "current-sync-state.dat");
             printf("\n");
-            {
-                fp = fopen("exceptions.dat", "wb");
-                CAutoFile af(fp, SER_DISK, 0);
-                af << mindata << nullfail << nulldummy << upgradablenop << lows << strictencs;
-            }
+            // {
+            //     fp = fopen("exceptions.dat", "wb");
+            //     CAutoFile af(fp, SER_DISK, 0);
+            //     af << mindata << nullfail << nulldummy << upgradablenop << lows << strictencs;
+            // }
             static int milestones[] = {1000, 5000, 10000};
             bool update[] = {false, false, false};
             bool do_update = false;
