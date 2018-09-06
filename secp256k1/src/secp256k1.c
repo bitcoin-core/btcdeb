@@ -566,6 +566,24 @@ int secp256k1_ec_privkey_tweak_pow(const secp256k1_context* ctx, unsigned char *
     return ret;
 }
 
+int secp256k1_ec_privkey_tweak_inv(const secp256k1_context* ctx, unsigned char *seckey) {
+    secp256k1_scalar sec;
+    int ret = 0;
+    int overflow = 0;
+    VERIFY_CHECK(ctx != NULL);
+    ARG_CHECK(seckey != NULL);
+
+    secp256k1_scalar_set_b32(&sec, seckey, NULL);
+    ret = !overflow && secp256k1_eckey_privkey_tweak_inv(&sec);
+    memset(seckey, 0, 32);
+    if (ret) {
+        secp256k1_scalar_get_b32(seckey, &sec);
+    }
+
+    secp256k1_scalar_clear(&sec);
+    return ret;
+}
+
 int secp256k1_context_randomize(secp256k1_context* ctx, const unsigned char *seed32) {
     VERIFY_CHECK(ctx != NULL);
     ARG_CHECK(secp256k1_ecmult_gen_context_is_built(&ctx->ecmult_gen_ctx));

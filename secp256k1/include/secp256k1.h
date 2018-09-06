@@ -587,6 +587,17 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_privkey_tweak_pow(
     const unsigned char *tweak
 ) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
 
+/** Calculate the inverse of the given private key.
+ * Returns: 1: inverse operation succeeded
+ *          0: error
+ * Args:    ctx:    pointer to a context object (cannot be NULL)
+ * In/Out:  seckey: pointer to a 32-byte private key
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_privkey_tweak_inv(
+    const secp256k1_context* ctx,
+    unsigned char *seckey
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2);
+
 /** Updates the context randomization to protect against side-channel leakage.
  *  Returns: 1: randomization successfully updated
  *           0: error

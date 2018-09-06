@@ -510,6 +510,7 @@ struct Value {
     void do_multiply_privkeys();
     void do_pow_privkey();
     void do_negate_privkey();
+    void do_invert_privkey();
     void do_encode_wif() {
         data_value();
         data.insert(data.begin(), 0x80);    // main net

@@ -106,4 +106,9 @@ static int secp256k1_eckey_privkey_tweak_pow(secp256k1_scalar *key, const secp25
     return 1;
 }
 
+static int secp256k1_eckey_privkey_tweak_inv(secp256k1_scalar *key) {
+    secp256k1_scalar_inverse(key, key);
+    return 1;
+}
+
 #endif /* SECP256K1_ECKEY_IMPL_H */

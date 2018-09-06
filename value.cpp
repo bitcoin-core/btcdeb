@@ -314,6 +314,16 @@ void Value::do_negate_privkey() {
     }
 }
 
+void Value::do_invert_privkey() {
+    if (!secp256k1_context_sign) ECC_Start();
+
+    if (type != T_DATA) abort("invalid type (must be data)\n");
+
+    if (!secp256k1_ec_privkey_tweak_inv(secp256k1_context_sign, &data[0])) {
+        abort("failed to invert privkey");
+    }
+}
+
 void Value::do_get_pubkey() {
     if (!secp256k1_context_sign) ECC_Start();
 

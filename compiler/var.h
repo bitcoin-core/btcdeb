@@ -38,17 +38,44 @@ struct var {
         }
         return Value::prepare_extraction(data, other.data);
     }
+    std::shared_ptr<var> invert() const {
+        if (on_curve) throw std::runtime_error("cannot invert a curve point (not implemented)");
+        Value v(data);
+        v.do_invert_privkey();
+        return std::make_shared<var>(std::move(v), on_curve);
+    }
+    std::shared_ptr<var> negate(bool negneg = false) const {
+        if (!on_curve && data.type == Value::T_INT) {
+            if (data.int64 == 0) return shared_cp();
+            if (!negneg) {
+                Value v((int64_t)-data.int64);
+                return std::make_shared<var>(std::move(v));
+            }
+        }
+        if (negneg && on_curve) throw std::runtime_error("-- (negate negate) operator not viable for curve points");
+        if (negneg && data.type != Value::T_INT) throw std::runtime_error("-- (negate negate) operator not viable for non-int types");
+        Value v(negneg ? Value(-(int64_t)data.int64) : data);
+        v.data_value();
+        v.type = Value::T_DATA;
+        if (on_curve) v.do_negate_pubkey(); else v.do_negate_privkey();
+        return std::make_shared<var>(std::move(v), on_curve);
+    }
     std::shared_ptr<var> add(const var& other, const std::string& op = "addition") const {
+        if (data.type == Value::T_INT && other.data.type == Value::T_INT) {
+            Value v2(data.int64 + other.data.int64);
+            return std::make_shared<var>(v2, false);
+        }
+        if (data.type == Value::T_INT && data.int64 < 0) return negate(true)->add(other, op);
+        if (other.data.type == Value::T_INT && other.data.int64 < 0) {
+            auto v = other.negate();
+            return add(*v, op);
+        }
         if (data.is_null_or_int(0)) return other.shared_cp();
         if (other.data.is_null_or_int(0)) return shared_cp();
         if (data.type == Value::T_STRING && other.data.type == Value::T_STRING) {
             Value v2((int64_t)0);
             v2.type = Value::T_STRING;
             v2.str = data.str + other.data.str;
-            return std::make_shared<var>(v2, false);
-        }
-        if (data.type == Value::T_INT && other.data.type == Value::T_INT) {
-            Value v2(data.int64 + other.data.int64);
             return std::make_shared<var>(v2, false);
         }
         Value prep = curve_check_and_prep(other, op);
@@ -62,6 +89,10 @@ struct var {
             Value v2(data.int64 - other.data.int64);
             return std::make_shared<var>(v2, false);
         }
+        if (other.data.type == Value::T_INT && other.data.int64 < 0) {
+            auto v = other.negate();
+            return add(*v, "subtraction");
+        }
         Value x(other.data);
         if (other.on_curve) x.do_negate_pubkey(); else x.do_negate_privkey();
         return add(var(x, other.on_curve), "subtraction");
@@ -74,6 +105,14 @@ struct var {
         if (data.type == Value::T_INT && other.data.type == Value::T_INT) {
             Value v2(data.int64 * other.data.int64);
             return std::make_shared<var>(v2, false);
+        }
+        if (data.type == Value::T_INT && data.int64 < 0) {
+            return negate(true)->mul(other);
+        }
+        if (other.data.type == Value::T_INT && other.data.int64 < 0) {
+            // a*-x == -(a*x)
+            auto v = other.negate();
+            return mul(*v)->negate();
         }
         //              on curve        off curve
         // on curve     INVALID         tweak-pubkey
@@ -96,6 +135,13 @@ struct var {
         if (data.is_null_or_int(0)) return shared_cp();
         if (other.data.is_null_or_int(0)) return std::make_shared<var>(Value((int64_t)1));
         if (other.data.type == Value::T_INT && other.data.int64 == 1) return shared_cp();
+        if (data.type == Value::T_INT && data.int64 < 0) {
+            return negate(true)->pow(other);
+        }
+        if (other.data.type == Value::T_INT && other.data.int64 < 0) {
+            // a^(-x) = (a^(-1))^x
+            return invert()->pow(Value(-other.data.int64));
+        }
         //              on curve        off curve
         // on curve     INVALID         INVALID
         // off curve    INVALID         pow_privkey
@@ -107,14 +153,24 @@ struct var {
         return std::make_shared<var>(prep, false);
     }
     std::shared_ptr<var> div(const var& other) const {
-        if (data.is_null_or_int(0)) return shared_cp();
-        if (other.data.is_null_or_int(1)) return shared_cp();
-        if (other.data.type == Value::T_INT && other.data.int64 == 0) throw std::runtime_error("division by zero");
+        if (on_curve || other.on_curve) throw std::runtime_error("cannot divide curve points");
         if (data.type == Value::T_INT && other.data.type == Value::T_INT) {
             Value v2(data.int64 / other.data.int64);
             return std::make_shared<var>(v2, false);
         }
-        throw std::runtime_error("division not implemented");
+        if (data.is_null_or_int(0)) return shared_cp();
+        if (other.data.is_null_or_int(1)) return shared_cp();
+        if (other.data.type == Value::T_INT && other.data.int64 == 0) throw std::runtime_error("division by zero");
+        if (data.type == Value::T_INT && data.int64 < 0) {
+            return negate(true)->div(other);
+        }
+        if (other.data.type == Value::T_INT && other.data.int64 < 0) {
+            auto neg = other.negate(true);
+            return div(*neg);
+        }
+        // a/x = a / (x/1) = a*(1/x) = a*(x^-1)
+        auto v = other.invert();
+        return mul(*v);
     }
     std::shared_ptr<var> concat(const var& other) const {
         if (data.type == Value::T_DATA && data.data.size() == 0) return other.shared_cp();

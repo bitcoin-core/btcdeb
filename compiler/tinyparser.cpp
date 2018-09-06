@@ -97,15 +97,7 @@ st_t* parse_variable(pws& ws, token_t** s) {
 
 st_t* parse_value(pws& ws, token_t** s, token_type restriction) {
     DEBUG_PARSER("value");
-    // ([tok_minus] tok_number)|tok_symbol|tok_string
-    if (restriction == tok_undef &&
-        (*s)->token == tok_minus &&
-        (*s)->next &&
-        (*s)->next->token == tok_number) {
-        value_t* t = new value_t((*s)->next->token, std::string("-") + (*s)->next->value, restriction);
-        *s = (*s)->next->next;
-        return t;
-    }
+    // tok_number|tok_symbol|tok_string
     if ((*s)->token == tok_symbol || (*s)->token == tok_number || (*s)->token == tok_string) {
         value_t* t = new value_t((*s)->token, (*s)->value, restriction);
         *s = (*s)->next;
@@ -413,7 +405,12 @@ st_t* parse_unary_expr(pws& ws, token_t** s) {
     // tok_not [expr]
     DEBUG_PARSER("unary_expr");
     token_t* r = *s;
-    if (!r->next || r->token != tok_not) return nullptr;
+    if (!r->next) return nullptr;
+    switch (r->token) {
+    case tok_not:
+    case tok_minus: break;
+    default: return nullptr;
+    }
     token_type op_token = r->token;
     r = r->next;
     st_t* e = parse_expr(ws, &r);

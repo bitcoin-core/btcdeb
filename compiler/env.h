@@ -70,11 +70,18 @@ struct env_t: public tiny::st_callback_table {
         ctx->temps.push_back(env_false);
     }
 
+    inline tiny::ref refer(const std::shared_ptr<var>& v, bool created = false) {
+        if (!created) {
+            for (tiny::ref i = 0; i < ctx->temps.size(); ++i) {
+                if (ctx->temps[i] == v) return i;
+            }
+        }
+        ctx->temps.push_back(v);
+        return ctx->temps.size() - 1;
+    }
     tiny::ref load(const std::string& variable) override {
         if (ctx->fmap.count(variable)) {
-            auto v = std::make_shared<var>(variable);
-            ctx->temps.push_back(v);
-            return ctx->temps.size() - 1;
+            return refer(std::make_shared<var>(variable), true);
         }
         if (ctx->vars.count(variable) == 0) {
             // may be an opcode or something
@@ -83,9 +90,7 @@ struct env_t: public tiny::st_callback_table {
                 if (v.type != Value::T_OPCODE) {
                     printf("warning: ambiguous token '%s' is treated as a value, but could be a variable\n", variable.c_str());
                 }
-                std::shared_ptr<var> tmp = std::make_shared<var>(v);
-                ctx->temps.push_back(tmp);
-                return ctx->temps.size() - 1;
+                return refer(std::make_shared<var>(v), true);
             }
             throw std::runtime_error(strprintf("undefined variable: %s", variable.c_str()));
         }
@@ -100,8 +105,7 @@ struct env_t: public tiny::st_callback_table {
                 v = std::make_shared<var>(mv);
             }
         }
-        ctx->temps.push_back(v);
-        return ctx->temps.size() - 1;
+        return refer(v, true);
     }
     inline std::shared_ptr<var>& pull(tiny::ref r) {
         for (;;) {
@@ -109,13 +113,6 @@ struct env_t: public tiny::st_callback_table {
             if (v->pref && v->pref != r) { r = v->pref; continue; }
             return ctx->temps[r];
         }
-    }
-    inline tiny::ref refer(std::shared_ptr<var>& v) {
-        for (tiny::ref i = 0; i < ctx->temps.size(); ++i) {
-            if (ctx->temps[i] == v) return i;
-        }
-        ctx->temps.push_back(v);
-        return ctx->temps.size() - 1;
     }
     void save(const std::string& variable, const std::shared_ptr<var>& value) {
         // do not allow built-ins
@@ -295,6 +292,11 @@ struct env_t: public tiny::st_callback_table {
             z = Value(v->data);
             z.do_not_op();
             return z.int64 ? _true : _false;
+        case tiny::tok_minus:
+            ARRTHRU(val, refer(v->negate()));
+            if (ctx->programs.count(val)) throw std::runtime_error("cannot negate a program");
+            v = pull(val);
+            return refer(v->negate(), true);
         default: break;
         }
         throw std::runtime_error("not implemented");
