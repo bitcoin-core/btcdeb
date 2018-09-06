@@ -31,6 +31,17 @@ struct var {
     var(tiny::ref pref_in) : data((int64_t)0), pref(pref_in) {}
     var() : data((int64_t)0) {}
     std::shared_ptr<var> shared_cp() const { return std::make_shared<var>(data, on_curve); }
+    std::shared_ptr<var> encoded() const {
+        if (data.type == Value::T_DATA) return shared_cp();
+        if (on_curve) throw std::runtime_error("invalid var (on curve non-data)");
+        Value v(data);
+        v.data_value(); v.type = Value::T_DATA;
+        if (data.type == Value::T_INT) {
+            v.data.resize(32);
+            std::reverse(v.data.begin(), v.data.end());
+        }
+        return std::make_shared<var>(v);
+    }
     Value curve_check_and_prep(const var& other, const std::string& op) const {
         // only works if both are on the same curve
         if (on_curve != other.on_curve) {
@@ -40,9 +51,9 @@ struct var {
     }
     std::shared_ptr<var> invert() const {
         if (on_curve) throw std::runtime_error("cannot invert a curve point (not implemented)");
-        Value v(data);
-        v.do_invert_privkey();
-        return std::make_shared<var>(std::move(v), on_curve);
+        auto v = encoded();
+        v->data.do_invert_privkey();
+        return v;
     }
     std::shared_ptr<var> negate(bool negneg = false) const {
         if (!on_curve && data.type == Value::T_INT) {
@@ -76,21 +87,14 @@ struct var {
             Value v2((int64_t)0);
             v2.type = Value::T_STRING;
             v2.str = data.str + other.data.str;
-            return std::make_shared<var>(v2, false);
+            return std::make_shared<var>(v2);
         }
         if (data.type == Value::T_INT) {
-            Value v(data);
-            v.data_value(); v.type = Value::T_DATA;
-            v.data.resize(32);
-            std::reverse(v.data.begin(), v.data.end());
-            return var(v).add(other, op);
+            return encoded()->add(other, op);
         }
         if (other.data.type == Value::T_INT) {
-            Value v(other.data);
-            v.data_value(); v.type = Value::T_DATA;
-            v.data.resize(32);
-            std::reverse(v.data.begin(), v.data.end());
-            return add(var(v), op);
+            auto v = other.encoded();
+            return add(*v, op);
         }
         if (data.data == other.negate()->data.data) return std::make_shared<var>((int64_t)0);
         Value prep = curve_check_and_prep(other, op);
@@ -142,6 +146,12 @@ struct var {
             return std::make_shared<var>(prep, true);
         }
         if (on_curve) return other.mul(*this);
+        // we need both to be data types at this point
+        if (data.type != Value::T_DATA) return encoded()->mul(other);
+        if (other.data.type != Value::T_DATA) {
+            auto v = other.encoded();
+            return mul(*v);
+        }
         Value prep = Value::prepare_extraction(data, other.data);
         if (!other.on_curve) prep.do_multiply_privkeys();
         else prep.do_tweak_pubkey();
@@ -164,6 +174,12 @@ struct var {
         if (on_curve || other.on_curve) {
             throw std::runtime_error("invalid binary operation: variables cannot be curve points for pow operator");
         }
+        // we need both to be data types at this point
+        if (data.type != Value::T_DATA) return encoded()->pow(other);
+        if (other.data.type != Value::T_DATA) {
+            auto v = other.encoded();
+            return pow(*v);
+        }
         Value prep = Value::prepare_extraction(data, other.data);
         prep.do_pow_privkey();
         return std::make_shared<var>(prep, false);
@@ -183,6 +199,12 @@ struct var {
         if (other.data.type == Value::T_INT && other.data.int64 < 0) {
             auto neg = other.negate(true);
             return div(*neg);
+        }
+        // we need both to be data types at this point
+        if (data.type != Value::T_DATA) return encoded()->div(other);
+        if (other.data.type != Value::T_DATA) {
+            auto v = other.encoded();
+            return div(*v);
         }
         // a/x = a / (x/1) = a*(1/x) = a*(x^-1)
         auto v = other.invert();

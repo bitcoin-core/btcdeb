@@ -87,7 +87,7 @@ struct env_t: public tiny::st_callback_table {
             // may be an opcode or something
             Value v(variable.c_str(), variable.length());
             if (v.type != Value::T_STRING) {
-                if (v.type != Value::T_OPCODE) {
+                if (v.type != Value::T_OPCODE && (v.type != Value::T_DATA || v.data.size() != 32)) {
                     printf("warning: ambiguous token '%s' is treated as a value, but could be a variable\n", variable.c_str());
                 }
                 return refer(std::make_shared<var>(v), true);
