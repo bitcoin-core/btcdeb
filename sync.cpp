@@ -18,28 +18,43 @@ void push_purgable(const char* path) {
     }
 }
 
-inline FILE* rpc_fetch(const char* cmd, const char* dst, int attempt = 0) {
+inline std::string rpc_err() {
+    FILE* fp = fopen(".rpc_err", "r");
+    if (!fp) return "<no error stored in .rpc_err>";
+    fseek(fp, 0, SEEK_END);
+    long len = ftell(fp);
+    char* c = (char*)malloc(len);
+    fseek(fp, 0, SEEK_SET);
+    long r = fread(c, 1, len, fp);
+    if (r != len) { fprintf(stderr, "warning: read %ld / %ld bytes from error file. your hardware is broken\n", r, len); }
+    std::string res = c;
+    free(c);
+    return res;
+}
+
+inline FILE* rpc_fetch(const std::string& cmds, const char* dst, int attempt = 0) {
+    std::string cmd = cmds + " 2> .rpc_err";
     int leftover_tries = 10 - attempt;
     int next_wait = (1 + attempt) * 5;
     if (rpc_call == "") {
         assert(!"no RPC call available");
     }
-    if (system(cmd)) {
-        fprintf(stderr, "failed to run command: %s\n", cmd);
+    if (system(cmd.c_str())) {
+        fprintf(stderr, "failed to run command: %s\n%s\n", cmd.c_str(), rpc_err().c_str());
         if (!leftover_tries) {
             exit(1);
         }
         fprintf(stderr, "waiting %d seconds and trying again\n", next_wait);
         sleep(next_wait);
-        return rpc_fetch(cmd, dst, attempt + 1);
+        return rpc_fetch(cmds, dst, attempt + 1);
     }
     FILE* fp = fopen(dst, "r");
     if (!fp) {
-        fprintf(stderr, "RPC call failed: %s\n", cmd);
+        fprintf(stderr, "RPC call failed: %s\n%s\n", cmd.c_str(), rpc_err().c_str());
         if (!leftover_tries) {
             fprintf(stderr, "waiting %d seconds and trying again\n", next_wait);
             sleep(next_wait);
-            return rpc_fetch(cmd, dst, attempt + 1);
+            return rpc_fetch(cmds, dst, attempt + 1);
         }
         assert(0);
     }
@@ -78,8 +93,8 @@ void rpc_get_block(const uint256& blockhex, tiny::block& b, uint32_t& height) {
         }
         fclose(fphdr);                                      // closes fphdr
         std::string dstheight = std::string("blockdata/") + blockhex.ToString() + ".height";
-        std::string cmd = std::string("cat ") + dsthdr + " | jq -r .height > " + dstheight;
-        if (system(cmd.c_str())) { fprintf(stderr, "failed to run command: %s\n", cmd.c_str()); exit(1); }
+        std::string cmd = std::string("cat ") + dsthdr + " | jq -r .height > " + dstheight + " 2> .rpc_err";
+        if (system(cmd.c_str())) { fprintf(stderr, "failed to run command: %s\n%s\n", cmd.c_str(), rpc_err().c_str()); exit(1); }
         fphdr = fopen(dstheight.c_str(), "r");
         assert(1 == fscanf(fphdr, "%u", &height));
         fclose(fphdr);                                      // closes fphdr (.height open)
