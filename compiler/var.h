@@ -78,12 +78,28 @@ struct var {
             v2.str = data.str + other.data.str;
             return std::make_shared<var>(v2, false);
         }
+        if (data.type == Value::T_INT) {
+            Value v(data);
+            v.data_value(); v.type = Value::T_DATA;
+            v.data.resize(32);
+            std::reverse(v.data.begin(), v.data.end());
+            return var(v).add(other, op);
+        }
+        if (other.data.type == Value::T_INT) {
+            Value v(other.data);
+            v.data_value(); v.type = Value::T_DATA;
+            v.data.resize(32);
+            std::reverse(v.data.begin(), v.data.end());
+            return add(var(v), op);
+        }
+        if (data.data == other.negate()->data.data) return std::make_shared<var>((int64_t)0);
         Value prep = curve_check_and_prep(other, op);
         if (on_curve) prep.do_combine_pubkeys();
         else          prep.do_combine_privkeys();
         return std::make_shared<var>(prep, on_curve);
     }
     std::shared_ptr<var> sub(const var& other) const {
+        if (data.type == Value::T_DATA && other.data.type == Value::T_DATA && data.data == other.data.data) return std::make_shared<var>(Value((int64_t)0));
         if (other.data.is_null_or_int(0)) return shared_cp();
         if (data.type == Value::T_INT && other.data.type == Value::T_INT) {
             Value v2(data.int64 - other.data.int64);
