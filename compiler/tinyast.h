@@ -125,7 +125,7 @@ struct value_t: public st_t {
     token_type restriction; // tok_hex, tok_bin, tok_undef
     std::string value;
     value_t(token_type type_in, const std::string& value_in, token_type restriction_in) : type(type_in), restriction(restriction_in), value(value_in) {
-        if (type == tok_string && value.length() > 0 && value[0] == '"' && value[value.length()-1] == '"') {
+        if (type == tok_string && value.length() > 0 && (value[0] == '"' || value[0] == '\'') && value[value.length()-1] == value[0]) {
             // get rid of quotes
             value = value.substr(1, value.length() - 2);
         }
@@ -137,7 +137,7 @@ struct value_t: public st_t {
         return ct->convert(value, type, restriction);
     }
     virtual st_t* clone() override {
-        return new value_t(type, value, restriction);
+        return new value_t(type, type == tok_string ? "'" + value + "'" : value, restriction);
     }
 };
 

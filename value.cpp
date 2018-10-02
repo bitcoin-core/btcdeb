@@ -477,3 +477,10 @@ void Value::calc_point(std::vector<uint8_t>& x, std::vector<uint8_t>& y) {
     secp256k1_fe_get_b32(x.data(), &ge.x);
     secp256k1_fe_get_b32(y.data(), &ge.y);
 }
+
+void Value::set_point(const std::vector<uint8_t>& x, const bool y_pos) {
+    if (x.size() != 32) throw std::runtime_error("x point must be 32 bytes");
+    data = x;
+    data.insert(data.begin(), y_pos ? 0x03 : 0x04);
+    type = T_DATA;
+}

@@ -65,7 +65,7 @@ token_t* tokenize(const char* s) {
             }
             switch (token) {
             case tok_string:
-                finding = '"';
+                finding = s[i];
             case tok_symbol:
             case tok_number:
             case tok_consumable:

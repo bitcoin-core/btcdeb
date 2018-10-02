@@ -420,7 +420,7 @@ void calc_point(std::vector<std::shared_ptr<var>> args, std::vector<uint8_t>& x,
     v->data.calc_point(x, y);
 }
 
-std::shared_ptr<var> e_point(std::vector<std::shared_ptr<var>> args) {
+std::shared_ptr<var> e_coords(std::vector<std::shared_ptr<var>> args) {
     std::vector<uint8_t> x, y;
     calc_point(args, x, y);
     std::shared_ptr<var> vx = std::make_shared<var>(Value(x));
@@ -435,6 +435,18 @@ std::shared_ptr<var> e_oncurve(std::vector<std::shared_ptr<var>> args) {
     secp256k1::num ny(HexStr(y));
     secp256k1::num p("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
     return (((ny * ny) % p) - ((((nx * nx) % p) * nx) % p)) % p == secp256k1::no7 ? env_true : env_false;
+}
+
+std::shared_ptr<var> e_point(std::vector<std::shared_ptr<var>> args) {
+    // 1 arg (x point, with implicit y sign),
+    // 2 arg (x, and boolean y sign)
+    if (args.size() < 1 || args.size() > 2) throw std::runtime_error("need either x point (implicit y sign), or x point and y sign bool (true=positive)");
+    auto x = args[0];
+    NO_CURVE_CHK(x);
+    auto y_pos = args.size() == 1 || !args[1]->data.is_null_or_int(0);
+    Value v((int64_t)0);
+    v.set_point(x->data.data, y_pos);
+    return std::make_shared<var>(v, true);
 }
 
 size_t _size(const std::shared_ptr<var>& v) {

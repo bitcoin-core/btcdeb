@@ -164,7 +164,7 @@ inline token_type determine_token(const char c, const char p, token_type restric
     if ((c >= 'a' && c <= 'z') ||
         (c >= 'A' && c <= 'Z') ||
         c == '_') return tok_symbol;
-    if (c == '"') return tok_string;
+    if (c == '"' || c == '\'') return tok_string;
     if (c == '(') return tok_lparen;
     if (c == '{') return tok_lcurly;
     if (c == '[') return tok_lbracket;
