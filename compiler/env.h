@@ -477,7 +477,7 @@ struct env_t: public tiny::st_callback_table {
     inline int64_t range_chk(int64_t i, int64_t len) {
         if (i < -len) throw std::runtime_error(strprintf("index out of bounds (%ld < %ld)", (long)i, (long)-len));
         if (i >= len) throw std::runtime_error(strprintf("index out of bounds (%ld > %ld)", (long)i, (long)len - 1));
-        if (i < 0) i = len - i;
+        if (i < 0) i = len + i;
         return i;
     }
     tiny::ref arr_at(tiny::ref arrayref, int64_t i) {
