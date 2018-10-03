@@ -70,12 +70,15 @@ int main(int argc, char* const* argv)
     efun(random);
     efun(jacobi);
     efun(point);
+    efun(coords);
     efun(oncurve);
     efun(size);
     efun(map);
     efun(reduce);
     efun(array);
     efun(solve);
+    efun(max);
+    efun(min);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -475,6 +478,24 @@ std::shared_ptr<var> e_size(std::vector<std::shared_ptr<var>> args) {
         res.emplace_back(std::make_shared<var>(Value((int64_t)_size(arg))));
     }
     return env.pull(env.push_arr(res));
+}
+
+std::shared_ptr<var> e_max(std::vector<std::shared_ptr<var>> args) {
+    if (args.size() == 0) throw std::runtime_error("at least 1 argument required");
+    std::shared_ptr<var> max;
+    for (auto& arg : args) {
+        if (!max.get() || max->data < arg->data) max = arg;
+    }
+    return max;
+}
+
+std::shared_ptr<var> e_min(std::vector<std::shared_ptr<var>> args) {
+    if (args.size() == 0) throw std::runtime_error("at least 1 argument required");
+    std::shared_ptr<var> min;
+    for (auto& arg : args) {
+        if (!min.get() || arg->data < min->data) min = arg;
+    }
+    return min;
 }
 
 std::shared_ptr<var> e_solve(std::vector<std::shared_ptr<var>> args) {
