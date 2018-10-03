@@ -285,7 +285,7 @@ st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
     r = r->next;
     if (!r) return nullptr;
     st_t* rhs;
-    if (op_token == tok_mul || op_token == tok_div || op_token == tok_pow) {
+    if (op_token == tok_mul || op_token == tok_div || op_token == tok_pow || op_token == tok_minus) {
         // prio left hand side, if this expression expands
         token_t* z = r;
         {
@@ -402,7 +402,7 @@ st_t* parse_logical_expr(pws& ws, token_t** s) {
 }
 
 st_t* parse_unary_expr(pws& ws, token_t** s) {
-    // tok_not [expr]
+    // tok_not|tok_minus [expr]
     DEBUG_PARSER("unary_expr");
     token_t* r = *s;
     if (!r->next) return nullptr;
@@ -413,7 +413,13 @@ st_t* parse_unary_expr(pws& ws, token_t** s) {
     }
     token_type op_token = r->token;
     r = r->next;
-    st_t* e = parse_expr(ws, &r);
+    // we do not allow e.g. -1 * 38 to mean -(1 * 38) because that means
+    // we also allow -1 - 1 to mean -(1 - 1)
+    st_t* e;
+    {
+        CLAIM2(PWS_LOGICAL, PWS_BIN);
+        e = parse_expr(ws, &r);
+    }
     if (!e) return nullptr;
     *s = r;
     return new unary_t(op_token, e);

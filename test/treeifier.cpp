@@ -139,12 +139,14 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             "a *= 5",
             // "() {}",
             "a ++= 11",
+            "-1-1",
             nullptr,
         };
         tiny::st_t* expected[] = {
             SET("a", BIN(tiny::tok_mul, VAR("a"), VAL("5"))),
             // PREG(std::vector<std::string>(), SEQ(nullptr)),
             SET("a", BIN(tiny::tok_concat, VAR("a"), VAL("11"))),
+            BIN(tiny::tok_minus, new tiny::unary_t(tiny::tok_minus, VAL("1")), VAL("1")),
         };
         for (size_t i = 0; inputs[i]; ++i) {
             GIVEN(inputs[i]) {
@@ -166,6 +168,7 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             "2 * 3 ++ 5",
             // "() { 10 }",
             "a = a * 5",
+            "1 - 1 - 1",
             nullptr,
         };
         tiny::st_t* expected[] = {
@@ -175,6 +178,7 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             BIN(tiny::tok_concat, BIN(tiny::tok_mul, VAL("2"), VAL("3")), VAL("5")),
             // PREG(std::vector<std::string>(), SEQ(VAL("10"))),
             SET("a", BIN(tiny::tok_mul, VAR("a"), VAL("5"))),
+            BIN(tiny::tok_minus, BIN(tiny::tok_minus, VAL("1"), VAL("1")), VAL("1")),
         };
         for (size_t i = 0; inputs[i]; ++i) {
             GIVEN(inputs[i]) {
