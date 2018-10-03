@@ -606,7 +606,7 @@ std::shared_ptr<var> e_map(std::vector<std::shared_ptr<var>> args) {
 }
 
 std::shared_ptr<var> e_reduce(std::vector<std::shared_ptr<var>> args) {
-    if (args.size() < 2) throw std::runtime_error("at least two arguments (function and array) required");
+    if (args.size() < 2) throw std::runtime_error("at least two arguments (function and first array) required");
     auto& progarg = *args[0];
     size_t sz = 0;
     std::vector<std::vector<std::shared_ptr<var>>> rargs;
@@ -620,7 +620,6 @@ std::shared_ptr<var> e_reduce(std::vector<std::shared_ptr<var>> args) {
     }
     if (sz == 0) return std::make_shared<var>(Value((int64_t)0));
     std::shared_ptr<var> res = std::make_shared<var>(Value(std::vector<uint8_t>()));
-    if (rargs.size() == 1 && sz == 1) return res;
     if (progarg.data.type == Value::T_STRING) {
         // built-in
         if (!env.ctx->fmap.count(progarg.data.str)) throw std::runtime_error("not a function");
