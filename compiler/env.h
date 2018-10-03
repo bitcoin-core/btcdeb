@@ -582,8 +582,9 @@ struct env_t: public tiny::st_callback_table {
         }
         if (ctx->arrays.count(vref)) {
             printf("[");
+            bool first = true;
             for (auto& x : ctx->arrays.at(vref)) {
-                printf("%s", x == ctx->arrays.at(vref)[0] ? "" : ", ");
+                if (first) first = false; else printf(", ");
                 if (x->pref) {
                     printvar_(x->pref);
                 } else if (x->internal_function) {
