@@ -37,6 +37,7 @@ typedef struct {
   kerl_completor compl;/* Completion engine, or NULL if none. */
 } COMMAND;
 
+size_t lines = 0;
 int command_count = 0;
 int command_cap = 0;
 int repeat_empty;      /* Blank lines are interpreted as "repeat previous command". */
@@ -47,6 +48,7 @@ char* more_final = NULL;
 size_t more_final_cap = 0, more_final_pos = 0, more_final_lines = 0;
 char* history_file = NULL;
 kerl_bindable fallback = NULL;
+FILE* redirected_input = NULL;
 
 /* sensitivity */
 int skip_history = 0;
@@ -64,6 +66,10 @@ void kerl_set_enable_sensitivity() {
 void kerl_set_enable_whitespaced_sensitivity() {
     kerl_set_enable_sensitivity();
     whitespace_to_skip_history = 1;
+}
+
+void kerl_redirect_input(FILE* stream) {
+    redirected_input = stream;
 }
 
 /* Forward declarations. */
@@ -124,9 +130,10 @@ char *dupstr (char *s)
   return r;
 }
 
+static char buf[10240];
+
 #ifndef HAVE_LIBREADLINE
 char* readline(const char* prompt) {
-  static char buf[10240];
   fputs(prompt, stdout);
   char* pbuf = fgets(buf, 10240, stdin);
   if (!pbuf) return NULL;
@@ -136,6 +143,18 @@ char* readline(const char* prompt) {
 }
 #endif
 
+static inline char* kerl_readline(const char* prompt) {
+    if (redirected_input) {
+        if (!fgets(buf, 10240, redirected_input)) {
+            return NULL;
+        }
+        size_t len = strlen(buf);
+        while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r')) buf[--len] = 0;
+        return strdup(buf);
+    }
+    return readline(prompt);
+}
+
 void kerl_run(const char *prompt)
 {
   char *line, *pline = NULL, *s, *p = NULL, *sensitive_s;
@@ -144,7 +163,7 @@ void kerl_run(const char *prompt)
 
   /* Loop reading and executing lines until the user quits. */
   for ( ; done == 0; ) {
-    line = readline(prompt);
+    line = kerl_readline(prompt);
     if (line && comment_char) {
         // consume until we run into comment_char then term
         for (char* p = line; *p; ++p) {
@@ -164,6 +183,7 @@ void kerl_run(const char *prompt)
     if (s > line && whitespace_to_skip_history) skip_history = 1;
 
     if (*s) {
+      lines++;
       if (repeat_empty) {
         if (pline) free(pline);
         pline = strdup(line);
@@ -255,6 +275,7 @@ char* unescape(const char* input, int reuse)
 
 void kerl_add_history(const char *s)
 {
+  if (redirected_input) return; /* no history when reading from files */
 #ifdef HAVE_READLINE_HISTORY
   add_history(s);
 #endif // HAVE_READLINE_HISTORY
@@ -456,7 +477,7 @@ int kerl_make_argcv_escape(const char *argstring, size_t *argcOut, char ***argvO
     if (quot || esc) {
       int add_newline = quot && (j == 0 || buf[j-1] != '\n');
       if (add_newline) buf[j++] = '\n';
-      line = readline(quot == '"' ? "dquote> " : quot == '\'' ? "quote> " : "> ");
+      line = kerl_readline(quot == '"' ? "dquote> " : quot == '\'' ? "quote> " : "> ");
       if (!line) { printf("\n"); free(buf); *argcOut = 0; *argvOut = NULL; return -1; }
       _more_final_append(line, add_newline);
       argstring = line; // preserve whitespace as we are quoting
@@ -511,7 +532,7 @@ int kerl_process_citation(const char* argstring, size_t* bytesOut, char** argsOu
         if (quot) {
             int add_newline = (j == 0 || buf[j-1] != '\n');
             if (add_newline) buf[j++] = '\n';
-            line = readline(quot == '"' ? "dquote> " : quot == '\'' ? "quote> " : "> ");
+            line = kerl_readline(quot == '"' ? "dquote> " : quot == '\'' ? "quote> " : "> ");
             if (!line) { printf("\n"); free(buf); *bytesOut = 0; *argsOut = NULL; return -1; }
             _more_final_append(line, add_newline);
             argstring = line; // preserve whitespace as we are quoting
@@ -539,7 +560,7 @@ int kerl_more(size_t* capacity, size_t* position, char** argsOut, const char ter
         if (line) free(line);
 #ifdef HAVE_LIBREADLINE
         buf[j++] = '\n';
-        line = readline(quot == '"' ? "dquote: " : quot == '\'' ? "quote: " : ":  ");
+        line = kerl_readline(quot == '"' ? "dquote: " : quot == '\'' ? "quote: " : ":  ");
         if (!line) { printf("\n"); free(buf); *position = 0; *argsOut = NULL; return -1; }
         argstring = line; // preserve whitespace as we are quoting
 #else
@@ -617,8 +638,6 @@ char **kerl_completion(char *text, int start, int end)
       COMMAND *com = find_command(strcom);
       if (com && com->compl) {
         matches = rl_completion_matches(text, com->compl);
-        } else {
-            printf("no completion for command %s\n", strcom);
         }
         free(strcom);
     }
@@ -653,4 +672,8 @@ char *command_generator (const char *text, int state)
 
   /* If no names matched, then return NULL. */
   return (char *)NULL;
+}
+
+size_t kerl_get_count() {
+    return lines;
 }

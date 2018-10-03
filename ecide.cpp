@@ -21,6 +21,7 @@ int fn_help(const char* args);
 int fn_vars(const char* args);
 int fn_funs(const char* args);
 int fn_debug(const char* args);
+int fn_load(const char* args);
 
 int parse(const char* args);
 
@@ -87,6 +88,7 @@ int main(int argc, char* const* argv)
     kerl_register("vars", fn_vars, "Show variables.");
     kerl_register("funs", fn_funs, "Show built-in functions.");
     kerl_register("debug", fn_debug, "Toggle debug flags.");
+    kerl_register("load", fn_load, "Execute contents of a file.");
     kerl_register_fallback(parse);
     kerl_set_enable_whitespaced_sensitivity();
     kerl_run("> ");
@@ -160,6 +162,7 @@ int fn_debug(const char* args)
     }
     if (argc != 1) {
         fprintf(stderr, "Toggles debug options.\nAvailable options are: tokens, trees\n");
+        kerl_free_argcv(argc, argv);
         return -1;
     }
     if (!strcmp(argv[0], "tokens")) {
@@ -170,8 +173,8 @@ int fn_debug(const char* args)
         fprintf(stderr, "debug trees = %s\n", debug_trees ? "on" : "off");
     } else {
         fprintf(stderr, "unknown flag: %s\n", argv[0]);
-        return -1;
     }
+    kerl_free_argcv(argc, argv);
     return 0;
 }
 
@@ -189,6 +192,42 @@ int fn_funs(const char* args)
         fprintf(stderr, " %s", f.first.c_str());
     }
     fprintf(stderr, "\n");
+    return 0;
+}
+
+bool parse_quiet = false;
+
+int fn_load(const char* args)
+{
+    size_t argc;
+    char** argv;
+    if (kerl_make_argcv(args, &argc, &argv)) {
+        printf("user abort\n");
+        return -1;
+    }
+    if (argc != 1) {
+        fprintf(stderr, "Loads and executes the content of a file on disk.\n");
+        kerl_free_argcv(argc, argv);
+        return -1;
+    }
+    FILE* fp = fopen(argv[0], "r");
+    if (!fp) {
+        fprintf(stderr, "File not found or access denied: %s\n", argv[0]);
+        kerl_free_argcv(argc, argv);
+        return -1;
+    }
+    char* buf = (char*)malloc(1024);
+    size_t cap = 1024;
+    parse_quiet = true;
+    kerl_redirect_input(fp);
+    size_t ctr = kerl_get_count();
+    kerl_run("");
+    size_t line = kerl_get_count() - ctr;
+    kerl_redirect_input(NULL);
+    parse_quiet = false;
+    printf("[%zu lines parsed]\n", line);
+    fclose(fp);
+    kerl_free_argcv(argc, argv);
     return 0;
 }
 
@@ -246,13 +285,15 @@ int parse(const char* args_in)
         fprintf(stderr, "error: %s\n", ex.what());
         return -1;
     }
-    if (result) {
-        // std::shared_ptr<var> v = env.ctx->temps[result];
-        env.printvar(result);
-        // v->data.println();
-    } else if (env.ctx->last_saved != "") {
-        env.printvar(env.ctx->last_saved);
-        // env.ctx->vars[env.ctx->last_saved]->data.println();
+    if (!parse_quiet) {
+        if (result) {
+            // std::shared_ptr<var> v = env.ctx->temps[result];
+            env.printvar(result);
+            // v->data.println();
+        } else if (env.ctx->last_saved != "") {
+            env.printvar(env.ctx->last_saved);
+            // env.ctx->vars[env.ctx->last_saved]->data.println();
+        }
     }
     return 0;
 }

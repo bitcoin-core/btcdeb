@@ -173,6 +173,34 @@ inline token_type determine_token(const char c, const char p, token_type restric
 
 token_t* tokenize(const char* s);
 
+inline std::string indent(const char* data) {
+    size_t cap = strlen(data) + 10;
+    char* buf = (char*)malloc(cap);
+    char* p = buf;
+    bool indent = false;
+    for (size_t i = 0; data[i]; ++i) {
+        if (data[i] == '\n' || data[i] == '\r') {
+            indent = true;
+        } else if (indent) {
+            indent = false;
+            *(p++) = '\t';
+        }
+        *(p++) = data[i];
+        if (p - buf > cap - 3) {
+            cap <<= 1;
+            size_t pos = p - buf;
+            buf = (char*)realloc(buf, cap);
+            p = buf + pos;
+        }
+    }
+    *p = 0;
+    return buf;
+}
+
+inline std::string indent(const std::string& data) {
+    return indent(data.c_str());
+}
+
 } // namespace tiny
 
 #endif // included_tiny_tokenizer_h_

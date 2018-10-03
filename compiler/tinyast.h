@@ -287,7 +287,7 @@ struct sequence_t: public st_t {
     virtual std::string to_string() override {
         std::string s = std::string("{\n");
         for (const auto& x : sequence) {
-            s += "\t" + x.r->to_string() + ";\n";
+            s += "\t" + indent(x.r->to_string()) + ";\n";
         }
         return s + "}";
     }
@@ -322,9 +322,9 @@ struct program_t {
         return prog.r->eval(ct);
     }
     std::string to_string() {
-        std::string s = "[func](";
+        std::string s = "(";
         for (const auto& r : argnames) s += strprintf("%s%s", r == argnames[0] ? "" : ", ", r);
-        s += ") ";
+        s += ") => ";
         return s + prog.r->to_string();
     }
 };
@@ -337,9 +337,9 @@ struct func_t: public st_t {
     , sequence(sequence_in)
     {}
     virtual std::string to_string() override {
-        std::string s = "[func](";
+        std::string s = "(";
         for (const auto& r : argnames) s += strprintf("%s%s", r == argnames[0] ? "" : ", ", r);
-        s += ") ";
+        s += ") => ";
         return s + sequence.r->to_string();
     }
     virtual ref eval(st_callback_table* ct) override {
