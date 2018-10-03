@@ -250,6 +250,17 @@ struct Value {
              type == T_OPCODE ? opcode == other.opcode :
              data == other.data);
     }
+    bool operator<(const Value& other) const {
+        if (type == other.type) {
+            return  type == T_INT    ? int64 < other.int64 :
+                    type == T_STRING ? str < other.str :
+                    type == T_OPCODE ? opcode < other.opcode :
+                    data < other.data;
+        }
+        auto d1 = data_value();
+        auto d2 = other.data_value();
+        return d1 < d2;
+    }
 
     Value& operator=(const Value& other) {
         type = other.type;
