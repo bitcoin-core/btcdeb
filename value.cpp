@@ -331,6 +331,7 @@ void Value::do_get_pubkey() {
     if (type == T_STRING) {
         do_decode_wif();
     }
+    data_value();
     secp256k1_pubkey pubkey;
     size_t clen = CPubKey::PUBLIC_KEY_SIZE;
     CPubKey result;
