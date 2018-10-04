@@ -62,13 +62,13 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_IF)) { try(parse_if); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_MOD)) { try(parse_mod); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_LOGICAL)) { try(parse_logical_expr); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_COMP)) { try(parse_comp); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_BIN_LP)) { try(parse_binary_lowpri_expr); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_BIN)) { try(parse_binary_expr); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_SET)) {
         try(parse_set);
         try(parse_binset);
     }
-    if (!ws_.pcache.count(pcv) && ws.avail(PWS_COMP)) { try(parse_comp); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_PCALL)) { try(parse_pcall); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_RANGE)) { try(parse_range); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_AT)) { try(parse_at); }
