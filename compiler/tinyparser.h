@@ -21,6 +21,7 @@ const uint64_t PWS_RANGE = 1 << 5;
 const uint64_t PWS_LOGICAL = 1 << 6;
 const uint64_t PWS_IF = 1 << 7;
 const uint64_t PWS_MOD = 1 << 8;
+const uint64_t PWS_BIN_LP = 1 << 9;
 
 struct cache {
     st_t* val;
@@ -60,6 +61,7 @@ st_t* parse_binset(pws& ws, token_t** s);
 st_t* parse_comp(pws& ws, token_t** s);
 st_t* parse_parenthesized(pws& ws, token_t** s);
 st_t* parse_binary_expr(pws& ws, token_t** s);
+st_t* parse_binary_lowpri_expr(pws& ws, token_t** s);
 st_t* parse_unary_expr(pws& ws, token_t** s);
 st_t* parse_mod(pws& ws, token_t** s);
 st_t* parse_logical_expr(pws& ws, token_t** s);

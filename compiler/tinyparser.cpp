@@ -62,6 +62,7 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_IF)) { try(parse_if); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_MOD)) { try(parse_mod); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_LOGICAL)) { try(parse_logical_expr); }
+    if (!ws_.pcache.count(pcv) && ws.avail(PWS_BIN_LP)) { try(parse_binary_lowpri_expr); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_BIN)) { try(parse_binary_expr); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_SET)) {
         try(parse_set);
@@ -266,13 +267,11 @@ st_t* parse_parenthesized(pws& ws, token_t** s) {
 //
 
 st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
-    // tok_plus|tok_minus|tok_mul|tok_div [expr]
+    // tok_concat|tok_mul|tok_div|pow [expr]
     DEBUG_PARSER("binary_expr_post_lhs");
     token_t* r = *s;
     CLAIM(PWS_LOGICAL);
     switch (r->token) {
-    case tok_plus:
-    case tok_minus:
     case tok_concat:
     case tok_mul:
     case tok_div:
@@ -285,7 +284,7 @@ st_t* parse_binary_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
     r = r->next;
     if (!r) return nullptr;
     st_t* rhs;
-    if (op_token == tok_mul || op_token == tok_div || op_token == tok_pow || op_token == tok_minus) {
+    if (op_token == tok_mul || op_token == tok_div || op_token == tok_pow) {
         // prio left hand side, if this expression expands
         token_t* z = r;
         {
@@ -322,6 +321,64 @@ st_t* parse_binary_expr(pws& ws, token_t** s) {
     if (!lhs) return nullptr;
     if (!r) { delete lhs; return nullptr; }
     st_t* res = parse_binary_expr_post_lhs(ws, &r, lhs);
+    if (!res) return nullptr;
+    *s = r;
+    return res;
+}
+
+st_t* parse_binary_lowpri_expr_post_lhs(pws& ws, token_t** s, st_t* lhs) {
+    // tok_plus|tok_minus [expr]
+    DEBUG_PARSER("binary_lowpri_expr_post_lhs");
+    token_t* r = *s;
+    CLAIM(PWS_LOGICAL);
+    switch (r->token) {
+    case tok_plus:
+    case tok_minus:
+        break;
+    default:
+        return nullptr;
+    }
+    token_type op_token = r->token;
+    r = r->next;
+    if (!r) return nullptr;
+    st_t* rhs;
+    if (op_token == tok_minus) {
+        // prio left hand side, if this expression expands
+        token_t* z = r;
+        {
+            CLAIM(PWS_BIN_LP);
+            rhs = parse_expr(ws, &z);
+        }
+        if (rhs && z) {
+            bin_t* tmp = new bin_t(op_token, lhs, rhs);
+            bin_t* extension = (bin_t*)parse_binary_lowpri_expr_post_lhs(ws, &z, tmp);
+            if (extension) {
+                *s = z;
+                return extension;
+            }
+            tmp->lhs = new st_t(); // don't kill our lhs!
+            delete tmp;
+        }
+    }
+    rhs = parse_expr(ws, &r);
+    if (!rhs) { delete lhs; return nullptr; }
+    *s = r;
+    return new bin_t(op_token, lhs, rhs);
+}
+
+st_t* parse_binary_lowpri_expr(pws& ws, token_t** s) {
+    // [expr] tok_plus|tok_minus [expr]
+    token_t* r = *s;
+    CLAIM(PWS_LOGICAL);
+    DEBUG_PARSER("binary_lowpri_expr");
+    st_t* lhs;
+    {
+        CLAIM(PWS_BIN_LP);
+        lhs = parse_expr(ws, &r);
+    }
+    if (!lhs) return nullptr;
+    if (!r) { delete lhs; return nullptr; }
+    st_t* res = parse_binary_lowpri_expr_post_lhs(ws, &r, lhs);
     if (!res) return nullptr;
     *s = r;
     return res;
