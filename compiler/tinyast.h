@@ -38,7 +38,7 @@ struct st_callback_table {
 };
 
 struct st_t {
-    virtual std::string to_string() {
+    virtual std::string to_string(bool terse = false) {
         return "????";
     }
     virtual void print() {
@@ -109,7 +109,7 @@ struct st_c {
 struct var_t: public st_t {
     std::string varname;
     var_t(const std::string& varname_in) : varname(varname_in) {}
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return strprintf("'%s", varname);
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -130,7 +130,7 @@ struct value_t: public st_t {
             value = value.substr(1, value.length() - 2);
         }
     }
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return strprintf("%s", value);
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -144,7 +144,7 @@ struct value_t: public st_t {
 struct ret_t: public st_t {
     st_c value;
     ret_t(st_c value_in) : value(value_in) {}
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return "return " + value.r->to_string();
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -161,7 +161,7 @@ struct set_t: public st_t {
     std::string varname;
     st_c value;
     set_t(const std::string& varname_in, st_c value_in) : varname(varname_in), value(value_in) {}
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return "'" + varname + " = " + value.r->to_string();
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -183,12 +183,12 @@ struct list_t: public st_t {
     ~list_t() {
         free(listref);
     }
-    virtual std::string to_string() override {
-        std::string s = "[";
+    virtual std::string to_string(bool terse) override {
+        std::string s = terse ? "" : "[";
         for (size_t i = 0; i < values.size(); ++i) {
             s += strprintf("%s", i ? ", " : "") + values[i].r->to_string();
         }
-        return s + "]";
+        return s + (terse ? "" : "]");
     }
     virtual ref eval(st_callback_table* ct) override {
         for (size_t i = 0; i < values.size(); ++i) {
@@ -213,7 +213,7 @@ struct at_t: public st_t {
         delete array;
         delete index;
     }
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return array->to_string() + "[" + index->to_string() + "]";
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -234,7 +234,7 @@ struct range_t: public st_t {
         delete index_begin;
         delete index_end;
     }
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return array->to_string() + "[" + index_begin->to_string() + ":" + index_end->to_string() + "]";
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -252,8 +252,8 @@ struct call_t: public st_t {
     ~call_t() {
         delete args;
     }
-    virtual std::string to_string() override {
-        return fname + "(" + (args ? args->to_string() : "") + ")";
+    virtual std::string to_string(bool terse) override {
+        return fname + "(" + (args ? args->to_string(true) : "") + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->fcall(fname, args ? args->eval(ct) : nullref);
@@ -270,8 +270,8 @@ struct pcall_t: public st_t {
     ~pcall_t() {
         delete args;
     }
-    virtual std::string to_string() override {
-        return std::string("@") + pref.r->to_string() + "(" + args->to_string() + ")";
+    virtual std::string to_string(bool terse) override {
+        return std::string("@") + pref.r->to_string() + "(" + args->to_string(true) + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->pcall(pref.r->eval(ct), args ? args->eval(ct) : nullref);
@@ -284,7 +284,7 @@ struct pcall_t: public st_t {
 struct sequence_t: public st_t {
     std::vector<st_c> sequence;
     sequence_t(const std::vector<st_c>& sequence_in) : sequence(sequence_in) {}
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         std::string s = std::string("{\n");
         for (const auto& x : sequence) {
             s += "\t" + indent(x.r->to_string()) + ";\n";
@@ -336,7 +336,7 @@ struct func_t: public st_t {
     : argnames(argnames_in)
     , sequence(sequence_in)
     {}
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         std::string s = "(";
         for (const auto& r : argnames) s += strprintf("%s%s", r == argnames[0] ? "" : ", ", r);
         s += ") => ";
@@ -363,7 +363,7 @@ struct cmp_t: public st_t {
         delete lhs;
         delete rhs;
     }
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return "(" + lhs->to_string() + " " + token_type_str[op] + " " + rhs->to_string() + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -383,7 +383,7 @@ struct bin_t: public st_t {
         delete lhs;
         delete rhs;
     }
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return "(" + lhs->to_string() + " " + token_type_str[op_token] + " " + rhs->to_string() + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -402,7 +402,7 @@ struct mod_t: public st_t {
         delete value;
         delete modulo;
     }
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return "(" + value->to_string() + " mod " + modulo->to_string() + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -424,7 +424,7 @@ struct unary_t: public st_t {
     ~unary_t() {
         delete v;
     }
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return std::string() + token_type_str[op_token] + "(" + v->to_string() + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
@@ -448,7 +448,7 @@ struct if_t: public st_t {
         if (iftrue) delete iftrue;
         if (iffalse) delete iffalse;
     }
-    virtual std::string to_string() override {
+    virtual std::string to_string(bool terse) override {
         return "if (" + condition->to_string() + ") " + iftrue->to_string() + (iffalse ? " else " + iffalse->to_string() : "");
     }
     virtual ref eval(st_callback_table* ct) override {
