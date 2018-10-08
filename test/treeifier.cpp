@@ -11,6 +11,16 @@
 // }
 // #define LIST(vals...) _list((tiny::st_t*[]){vals, nullptr})
 
+inline tiny::bin_t* bin(tiny::st_t* lhs, char op, tiny::st_t* rhs) {
+    switch (op) {
+    case '+': return new tiny::bin_t(tiny::tok_plus, lhs, rhs);
+    case '-': return new tiny::bin_t(tiny::tok_minus, lhs, rhs);
+    case '*': return new tiny::bin_t(tiny::tok_mul, lhs, rhs);
+    case '/': return new tiny::bin_t(tiny::tok_div, lhs, rhs);
+    default: return new tiny::bin_t(tiny::tok_concat, lhs, rhs);
+    }
+}
+
 #define RVAL(str, r)    new tiny::value_t(tiny::tok_number, str, r)
 #define VAL(str)        RVAL(str, tiny::tok_undef)
 #define VAR(name)       new tiny::var_t(name)
@@ -20,6 +30,11 @@
 #define PREG(args, seq) new tiny::func_t(args, seq)
 #define SET(varname, val) new tiny::set_t(varname, val)
 // #define SEQ(vals...) new tiny::sequence_t(LIST(vals))
+
+#define A VAR("a")
+#define B VAR("b")
+#define C VAR("c")
+#define D VAR("d")
 
 TEST_CASE("Simple Treeify", "[treeify-simple]") {
     SECTION("1 entry") {
@@ -116,7 +131,7 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
         tiny::st_t* expected[] = {
             BIN(tiny::tok_plus, VAL("1"), VAL("1")),
             BIN(tiny::tok_minus, VAL("1"), VAL("1")),
-            BIN(tiny::tok_mul, VAR("a"), VAR("a")),
+            BIN(tiny::tok_mul, A, A),
             BIN(tiny::tok_div, VAL("10"), VAL("5")),
             BIN(tiny::tok_concat, VAL("hello"), VAL("world")),
             BIN(tiny::tok_concat, RVAL("ab", tiny::tok_hex), RVAL("cd", tiny::tok_hex)),
@@ -143,9 +158,9 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             nullptr,
         };
         tiny::st_t* expected[] = {
-            SET("a", BIN(tiny::tok_mul, VAR("a"), VAL("5"))),
+            SET("a", BIN(tiny::tok_mul, A, VAL("5"))),
             // PREG(std::vector<std::string>(), SEQ(nullptr)),
-            SET("a", BIN(tiny::tok_concat, VAR("a"), VAL("11"))),
+            SET("a", BIN(tiny::tok_concat, A, VAL("11"))),
             BIN(tiny::tok_minus, new tiny::unary_t(tiny::tok_minus, VAL("1")), VAL("1")),
         };
         for (size_t i = 0; inputs[i]; ++i) {
@@ -177,8 +192,81 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             BIN(tiny::tok_concat, VAL("2"), BIN(tiny::tok_mul, VAL("3"), VAL("5"))),
             BIN(tiny::tok_concat, BIN(tiny::tok_mul, VAL("2"), VAL("3")), VAL("5")),
             // PREG(std::vector<std::string>(), SEQ(VAL("10"))),
-            SET("a", BIN(tiny::tok_mul, VAR("a"), VAL("5"))),
+            SET("a", BIN(tiny::tok_mul, A, VAL("5"))),
             BIN(tiny::tok_minus, BIN(tiny::tok_minus, VAL("1"), VAL("1")), VAL("1")),
+        };
+        for (size_t i = 0; inputs[i]; ++i) {
+            GIVEN(inputs[i]) {
+                tiny::token_t* t = tiny::tokenize(inputs[i]);
+                tiny::st_t* tree = tiny::treeify(t);
+                REQUIRE(tree->to_string() == expected[i]->to_string());
+                delete t;
+                delete tree;
+                delete expected[i];
+            }
+        }
+    }
+
+    SECTION("7 token binary arithmetic priorities") {
+        const char* inputs[] = {
+            "a * b + c * d",
+            "a * b - c * d",
+            "a * b - c - d",
+            "a + b * c + d",
+            "a + b - c - d",
+            "a - b + c - d",
+            "a - b - c + d",
+            "a * b / c + d",
+            "a + b / c * d",
+            "a / b + c * d",
+            "a / b * c + d",
+            "a * b / c - d",
+            "a - b / c * d",
+            "a / b - c * d",
+            "a / b * c - d",
+            nullptr,
+        };
+        tiny::st_t* expected[] = {
+            /* a*b + c*d */ bin(bin(A, '*', B), '+', bin(C, '*', D)),
+            /* a*b - c*d */ bin(bin(A, '*', B), '-', bin(C, '*', D)),
+            /* (a*b - c) - d */ bin(bin(bin(A, '*', B), '-', C), '-', D),
+            /* a + (b*c + d)
+            -OR-
+               (a + b*c) + d
+             */ bin(A, '+', bin(bin(B, '*', C), '+', D)),
+            /* (a+b - c) - d
+            -OR-
+               a + ((b - c) - d)
+             */ // case 1: not the case now bin(bin(bin(A, '+', B), '-', C), '-', D),
+             bin(A, '+', bin(bin(B, '-', C), '-', D)),
+            /* a-b + c-d */ bin(bin(A, '-', B), '+', bin(C, '-', D)),
+            /* ((a - b) - c) + d */ bin(bin(bin(A, '-', B), '-', C), '+', D),
+            /* (a*b / c) + d
+            -OR-
+               (a * (b/c)) + d
+             */ bin(bin(bin(A, '*', B), '/', C), '+', D),
+            /* a + (b/c * d)
+            -OR-
+               a + (b / (c * d))
+             */ bin(A, '+', bin(bin(B, '/', C), '*', D)),
+            /* a/b + c*d */ bin(bin(A, '/', B), '+', bin(C, '*', D)),
+            /* (a/b * c) + d
+            -OR-
+               (a / (b*c)) + d
+             */ bin(bin(bin(A, '/', B), '*', C), '+', D),
+            /* (a*b / c) - d
+            -OR-
+               (a * (b/c)) - d
+             */ bin(bin(bin(A, '*', B), '/', C), '-', D),
+            /* a - (b/c * d)
+            -OR-
+               a - (b / c*d)
+             */ bin(A, '-', bin(bin(B, '/', C), '*', D)),
+            /* a/b - c*d */ bin(bin(A, '/', B), '-', bin(C, '*', D)),
+            /* (a/b * c) - d
+            -OR-
+               (a / b*c) - d
+             */ bin(bin(bin(A, '/', B), '*', C), '-', D),
         };
         for (size_t i = 0; inputs[i]; ++i) {
             GIVEN(inputs[i]) {
