@@ -26,7 +26,10 @@ const uint64_t PWS_BIN_LP = 1 << 9;
 struct cache {
     st_t* val;
     token_t* dst;
-    cache(st_t* val_in, token_t* dst_in) : val(val_in), dst(dst_in) {}
+    cache(st_t* val_in, token_t* dst_in)
+    : val(val_in)
+    , dst(dst_in)
+    {}
     ~cache() {
         delete val;
     }
@@ -36,18 +39,39 @@ struct cache {
     }
 };
 
-typedef std::map<token_t*,cache*> cache_t;
+struct cache_map {
+    std::map<token_t*,cache*> map;
+    uint8_t depth = 0;
+    ~cache_map() {
+        for (auto& v : map) delete v.second;
+    }
+    inline size_t count(token_t* v) const {
+        return map.count(v);
+    }
+    inline cache* at(token_t* v) const { return map.count(v) ? map.at(v) : nullptr; }
+    inline void set(token_t* v, cache* c) {
+        if (map.count(v)) delete map[v];
+        if (c) map[v] = c; else map.erase(v);
+    }
+};
 
 struct pws {
-    cache_t& pcache;
+    cache_map& pcache;
     uint64_t& flags;
     uint64_t flag;
     token_t* mark = nullptr;
-    pws(cache_t& pcache_in, uint64_t& flags_in, uint64_t flag_in = 0) : pcache(pcache_in), flags(flags_in), flag(flag_in) {
+    pws(cache_map& pcache_in, uint64_t& flags_in, uint64_t flag_in = 0)
+    : pcache(pcache_in)
+    , flags(flags_in)
+    , flag(flag_in) {
+        ++pcache.depth;
         if (flags & flag) flag = 0; else flags |= flag;
     }
     pws(pws& ws, uint64_t flag_in) : pws(ws.pcache, ws.flags, flag_in) {}
-    ~pws() { flags &= ~flag; }
+    ~pws() {
+        --pcache.depth;
+        flags &= ~flag;
+    }
     inline bool avail(uint64_t flag) { return !(flags & flag); }
 };
 

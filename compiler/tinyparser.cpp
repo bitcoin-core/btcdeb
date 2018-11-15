@@ -36,10 +36,9 @@ inline size_t count(token_t* head, token_t* t) {
     x = parser(ws, s); \
     /*indent = indent.substr(1);*/\
     if (x) {\
-        if (ws.pcache.count(pcv)) delete ws.pcache[pcv];\
-        ws.pcache[pcv] = new cache(x->clone(), *s);\
-        /*printf("#%zu [caching %s=%p(%s, %s)]\n", count(head, *s), x->to_string().c_str(), *s, *s ? token_type_str[(*s)->token] : "<null>", *s ? (*s)->value ?: "<nil>" : "<null>");*/\
-        /* printf("GOT " #parser ": %s\n", x->to_string().c_str());*/\
+        ws.pcache.set(pcv, new cache(x->clone(), *s));\
+        /*printf("#%zu [caching %s=%p(%s, %s)]\n", count(head, *s), x->to_string().c_str(), *s, *s ? token_type_str[(*s)->token] : "<null>", *s ? (*s)->value ?: "<nil>" : "<null>");\
+        printf("GOT " #parser ": %s\n", x->to_string().c_str());*/\
         return x;\
     }
 #define DEBUG_PARSER(s) //pdo __pdo(s) //printf("- %s\n", s)
@@ -51,12 +50,14 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     st_t* x;
     token_t* pcv = *s;
     // printf("parsing #%zu=%s (%s)\n", count(head, pcv), token_type_str[pcv->token], pcv->value ?: "<null>");
-    if (ws_.pcache.count(pcv)) return ws_.pcache.at(pcv)->hit(s);
+    if (ws_.pcache.count(pcv)) {
+        return ws_.pcache.at(pcv)->hit(s);
+    }
 
     uint64_t flags = 0;
     pws clean(ws_.pcache, flags);
     clean.mark = *s;
-    clean.flags |= ws_.flags & (PWS_LOGICAL | PWS_IF);
+    clean.flags |= ws_.flags & (PWS_IF);
     // if (ws_.mark != *s) printf("(clean)\n");
     pws& ws = ws_.mark == *s ? ws_ : clean;
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_IF)) { try(parse_if); }
@@ -714,7 +715,7 @@ st_t* parse_if(pws& ws, token_t** s) {
 
 st_t* treeify(token_t* tokens) {
     head = tokens;
-    cache_t pcache;
+    cache_map pcache;
     uint64_t flags = 0;
     pws ws(pcache, flags);
     token_t* s = tokens;
@@ -723,7 +724,6 @@ st_t* treeify(token_t* tokens) {
     if (!s && value) {
         value = value->clone();
     }
-    for (auto& v : pcache) delete v.second;
     if (s) {
         throw std::runtime_error(strprintf("failed to treeify tokens around token %s", s->value ?: token_type_str[s->token]));
         return nullptr;

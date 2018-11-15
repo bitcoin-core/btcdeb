@@ -26,7 +26,7 @@ EXTRA_LIBRARIES += \
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc test-btcdeb
+bin_PROGRAMS = btcdeb btcc test-btcdeb u3xo
 noinst_PROGRAMS =
 
 if ENABLE_DANGEROUS
@@ -152,6 +152,19 @@ btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
+	$(LIBBITCOIN_DEB) \
+	$(LIBBITCOIN) \
+	$(LIBSECP256K1) \
+	$(LIBKERL)
+
+# u3xo binary #
+u3xo_SOURCES = \
+	u3xo.cpp
+u3xo_CPPFLAGS = $(AM_CPPFLAGS)
+u3xo_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+u3xo_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
+
+u3xo_LDADD = \
 	$(LIBBITCOIN_DEB) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \

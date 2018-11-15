@@ -271,13 +271,13 @@ struct pcall_t: public st_t {
         delete args;
     }
     virtual std::string to_string(bool terse) override {
-        return std::string("@") + pref.r->to_string() + "(" + args->to_string(true) + ")";
+        return std::string("@") + pref.r->to_string() + "(" + (args ? args->to_string(true) : "") + ")";
     }
     virtual ref eval(st_callback_table* ct) override {
         return ct->pcall(pref.r->eval(ct), args ? args->eval(ct) : nullref);
     }
     virtual st_t* clone() override {
-        return new pcall_t(pref.r->clone(), (list_t*)args->clone());
+        return new pcall_t(pref.r->clone(), args ? (list_t*)args->clone() : nullptr);
     }
 };
 
