@@ -80,6 +80,8 @@ int main(int argc, char* const* argv)
     efun(solve);
     efun(max);
     efun(min);
+    efun(bits);
+    efun(tibs);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -537,6 +539,66 @@ std::shared_ptr<var> e_min(std::vector<std::shared_ptr<var>> args) {
         if (!min.get() || arg->data < min->data) min = arg;
     }
     return min;
+}
+
+std::shared_ptr<var> e_bits(std::vector<std::shared_ptr<var>> args) {
+    if (args.size() != 1) throw std::runtime_error("exactly 1 argument required");
+    std::vector<std::shared_ptr<var>> bit_array;
+    auto& v = args.at(0)->data;
+    switch (v.type) {
+    case Value::T_DATA: {
+        for (const char c : v.data) {
+            for (uint8_t x = 0; x < 8; ++x) {
+                bit_array.push_back(env_bool((c & (1 << x)) >> x));
+            }
+        }
+        break;
+    }
+    case Value::T_INT: {
+        int64_t i = v.int64;
+        if (i < 0) throw std::runtime_error("negative values are not supported");
+        for (uint8_t x = 0; x < 64; ++x) {
+            bit_array.push_back(env_bool((i & (1ULL << x)) >> x));
+        }
+        break;
+    }
+    default:
+        throw std::runtime_error("unsupported type");
+    }
+    return env.pull(env.push_arr(bit_array));
+}
+
+std::shared_ptr<var> e_tibs(std::vector<std::shared_ptr<var>> args) {
+    if (args.size() != 1) throw std::runtime_error("exactly 1 argument required");
+    auto& vref = args.at(0);
+    if (!env.ctx->arrays.count(vref->pref)) throw std::runtime_error("argument must be a bit array");
+    auto& arr = env.ctx->arrays.at(vref->pref);
+    if (arr.size() < 63) {
+        // return as int64_t
+        int64_t v = 0;
+        uint64_t x = 1;
+        for (const auto& b : arr) {
+            if (b == env_true) v |= x;
+            x <<= 1;
+        }
+        return std::make_shared<var>(Value(v));
+    }
+    Value val((int64_t)0);
+    val.type = Value::T_DATA;
+    auto& data = val.data;
+    uint8_t v = 0;
+    uint8_t x = 0;
+    for (const auto& b : arr) {
+        if (x == 8) {
+            data.push_back(v);
+            v = 0;
+            x = 0;
+        }
+        if (b == env_true) v |= 1 << x;
+        ++x;
+    }
+    data.push_back(v);
+    return std::make_shared<var>(val);
 }
 
 std::shared_ptr<var> e_solve(std::vector<std::shared_ptr<var>> args) {
