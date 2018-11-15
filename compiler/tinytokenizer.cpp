@@ -26,14 +26,14 @@ token_t* tokenize(const char* s) {
             open = false;
             continue; // we move one extra step, or "foo" will be read in as "foo
         }
-        auto token = determine_token(s[i], i ? s[i-1] : 0, restrict_type, spaced ? tok_ws : tail ? tail->token : tok_undef, consumes);
+        auto token = determine_token(s[i], i ? s[i-1] : 0, i - token_start, restrict_type, spaced ? tok_ws : tail ? tail->token : tok_undef, consumes);
         if (consumes) {
             // we only support 1 token consumption at this point
             tail->token = tok_consumable;
         }
         // printf("token = %s\n", token_type_str[token]);
         if (token == tok_consumable && tail->token == tok_consumable) {
-            throw std::runtime_error(strprintf("tokenization failure at character '%c'", s[i]));
+            throw std::runtime_error(strprintf("tokenization failure 0 at character '%c'", s[i]));
             delete head;
             return nullptr;
         }
@@ -117,7 +117,7 @@ token_t* tokenize(const char* s) {
             case tok_ws:
                 break;
             case tok_undef:
-                throw std::runtime_error(strprintf("tokenization failure at character '%c'", s[i]));
+                throw std::runtime_error(strprintf("tokenization failure 1 at character '%c'", s[i]));
                 delete head;
                 return nullptr;
             }

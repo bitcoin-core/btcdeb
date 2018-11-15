@@ -103,7 +103,7 @@ struct token_t {
     }
 };
 
-inline token_type determine_token(const char c, const char p, token_type restrict_type, token_type current, int& consumes) {
+inline token_type determine_token(const char c, const char p, size_t seqlen, token_type restrict_type, token_type current, int& consumes) {
     consumes = 0;
     if (c == '+') {
         if (p == '+') { 
@@ -155,8 +155,8 @@ inline token_type determine_token(const char c, const char p, token_type restric
         return tok_undef;
     }
 
-    if (c == 'x' && p == '0' && current == tok_number) return tok_hex;
-    if (c == 'b' && p == '0' && current == tok_number) return tok_bin;
+    if (seqlen == 1 && c == 'x' && p == '0' && current == tok_number) return tok_hex;
+    if (seqlen == 1 && c == 'b' && p == '0' && current == tok_number) return tok_bin;
     if (c >= '0' && c <= '9') return current == tok_symbol ? tok_symbol : tok_number;
     if (current == tok_number &&
         ((c >= 'a' && c <= 'f') ||

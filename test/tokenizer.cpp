@@ -33,6 +33,7 @@ TEST_CASE("Simple Tokenize", "[tokenize-simple]") {
             "0b",
             "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
             "aabbccddeeff00112233445566778899gaabbccddeeff0011223344556677889",
+            "000000000000000000000000000000014551231950b75fc4402da1732fc9bebf",
             nullptr,
         };
         tiny::token_t expected[] = {
@@ -50,6 +51,7 @@ TEST_CASE("Simple Tokenize", "[tokenize-simple]") {
             T(tiny::tok_bin),
             T(tiny::tok_symbol),
             T(tiny::tok_symbol),
+            T(tiny::tok_number),
         };
         for (size_t i = 0; inputs[i]; ++i) {
             GIVEN(inputs[i]) {
