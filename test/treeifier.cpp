@@ -187,6 +187,7 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             "a = a * 5",
             "1 - 1 - 1",
             "(1 && 2)",
+            "(1 + 2)",
             nullptr,
         };
         tiny::st_t* expected[] = {
@@ -198,6 +199,7 @@ TEST_CASE("Simple Treeify", "[treeify-simple]") {
             SET("a", BIN(tiny::tok_mul, A, VAL("5"))),
             BIN(tiny::tok_minus, BIN(tiny::tok_minus, VAL("1"), VAL("1")), VAL("1")),
             BIN(tiny::tok_land, VAL("1"), VAL("2")),
+            BIN(tiny::tok_plus, VAL("1"), VAL("2")),
         };
         for (size_t i = 0; inputs[i]; ++i) {
             GIVEN(inputs[i]) {
