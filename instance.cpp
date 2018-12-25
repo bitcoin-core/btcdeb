@@ -118,7 +118,7 @@ void Instance::parse_stack_args(size_t argc, char* const* argv, size_t starting_
 
 bool Instance::setup_environment(unsigned int flags) {
     if (tx) {
-        checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[0]);
+        checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[txin_index > -1 ? txin_index : 0]);
     } else {
         checker = new BaseSignatureChecker();
     }
@@ -186,7 +186,7 @@ bool Instance::eval(const size_t argc, char* const* argv) {
                 if (n < 16) {
                     if (VALUE_WARN) btc_logf("warning: ambiguous input %s is interpreted as a numeric value (%s), not as an opcode (OP_%s). Use OP_%s to force into op code interpretation\n", v, v, v, v);
                 }
-                
+
                 script << (int64_t)n;
                 continue;
             }
