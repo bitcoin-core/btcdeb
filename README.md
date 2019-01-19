@@ -93,7 +93,30 @@ btcdeb>
 
 ### Signature checking
 
-In order to run an OP_CHECKSIG command, the debugger needs to know about the transaction being checked, since it creates the signature hash from the transaction content. You can pass the transaction to `btcdeb` when you run it, using the `--tx=[amount1[,amount2[,...]]]:[hexdata]`, where `[amountN]` is the amount of the inputs of the transaction, and `[hexdata]` is the hexadecimal representation of the entire transaction (not just the transaction ID).
+In order to run an OP_CHECKSIG command, the debugger needs to know about the transaction being checked, since it creates the signature hash from the transaction content. You can pass the transaction to `btcdeb` when you run it, using the `--tx=amount1,amount2:hexdata`, where `amountN` is the amount of the inputs of the transaction, and `[hexdata]` is the hexadecimal representation of the entire transaction (not just the transaction ID). For example, to verify transaction ID c2fdfbcbef9acb6107eb5d18c172f234ee694254be1128d29b85b80b9bad9b3a, the following will produce an output of TRUE.
+
+```Bash
+> $ btcdeb --tx=0.3315983:02000000013a9bad9b0bb8859bd22811be544269ee34f272c1185deb0761cb9aefcbfbfdc2000000006a47304402200cc8b0471a38edad2ff9f9799521b7d948054817793c980eaf3a6637ddfb939702201c1a801461d4c3cf4de4e7336454dba0dd70b89d71f221e991cb6a79df1a860d012102ce9f5972fe1473c9b6948949f676bbf7893a03c5b4420826711ef518ceefd8dcfeffffff0226f20b00000000001976a914d138551aa10d1f891ba02689390f32ce09b71c1788ac28b0ed01000000001976a914870c7d8085e1712539d8d78363865c42d2b5f75a88ac5b880800 '[OP_DUP OP_HASH160 1290b657a78e201967c22d8022b348bd5e23ce17 OP_EQUALVERIFY OP_CHECKSIG ]' 304402200cc8b0471a38edad2ff9f9799521b7d948054817793c980eaf3a6637ddfb939702201c1a801461d4c3cf4de4e7336454dba0dd70b89d71f221e991cb6a79df1a860d01 02ce9f5972fe1473c9b6948949f676bbf7893a03c5b4420826711ef518ceefd8dc
+btcdeb -- type `btcdeb -h` for start up options
+got transaction 7aba9a51fa8d8441c3e46b76e7dfeef2363d89e1b64fed142632e043cef7e24f:
+CTransaction(hash=7aba9a51fa, ver=2, vin.size=1, vout.size=2, nLockTime=559195)
+    CTxIn(COutPoint(c2fdfbcbef, 0), scriptSig=47304402200cc8b0471a38ed, nSequence=4294967294)
+    CScriptWitness()
+    CTxOut(nValue=0.00782886, scriptPubKey=76a914d138551aa10d1f891ba02689)
+    CTxOut(nValue=0.32354344, scriptPubKey=76a914870c7d8085e1712539d8d783)
+
+valid script
+5 op script loaded. type `help` for usage information
+script                                   |                                                             stack
+-----------------------------------------+-------------------------------------------------------------------
+OP_DUP                                   | 02ce9f5972fe1473c9b6948949f676bbf7893a03c5b4420826711ef518ceefd8dc
+OP_HASH160                               | 304402200cc8b0471a38edad2ff9f9799521b7d948054817793c980eaf3a663...
+1290b657a78e201967c22d8022b348bd5e23ce17 |
+OP_EQUALVERIFY                           |
+OP_CHECKSIG                              |
+#0000 OP_DUP
+btcdeb>
+```
 
 Alternatively, you can pass both the transaction (using `--tx=`) and the input transaction (using `--txin=`). In this case, if you do not provide any other parameters (script/stack data), `btcdeb` will automatically figure out the script and stack content for verifying the input specified by the `txin` hex. You also do not need to include the amounts when passing the `txin` explicitly.
 
