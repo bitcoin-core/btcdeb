@@ -279,6 +279,8 @@ bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local
     auto& checker = env.checker;
     auto& sigversion = env.sigversion;
     auto& serror = env.serror;
+    auto& pretend_valid_map = env.pretend_valid_map;
+    auto& pretend_valid_pubkeys = env.pretend_valid_pubkeys;
 
     bool fExec = !count(vfExec.begin(), vfExec.end(), false);
 
@@ -906,11 +908,31 @@ bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local
                     return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
             }
 
-            if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
-                //serror is set
-                return false;
+            bool fSuccess;
+            std::string sig_str = HexStr(vchSig);
+            std::string pub_str = HexStr(vchPubKey);
+            if (pretend_valid_pubkeys.count(vchPubKey)) {
+                fSuccess = pretend_valid_map.count(vchSig) && pretend_valid_map.at(vchSig) == vchPubKey;
+                if (!fSuccess) {
+                    fprintf(stderr, "note: pretend signature mismatch: got %s=%s, expected %s=%s\n",
+                        sig_str.c_str(), pub_str.c_str(),
+                        pretend_valid_map.count(vchSig) ? HexStr(pretend_valid_map.at(vchSig)).c_str() : "<null>",
+                        pub_str.c_str()
+                    );
+                }
+            } else {
+                if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
+                    //serror is set
+                    if (pretend_valid_map.size() > 0) {
+                        fprintf(stderr, "note: pubkey not found in pretend set: %s not in (%s)\n", pub_str.c_str(), Join<std::set<valtype>,std::vector<unsigned char>>(pretend_valid_pubkeys, ", ", JoinHexStrFun).c_str());
+                    }
+                    return false;
+                }
+                fSuccess = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
+                if (!fSuccess && pretend_valid_map.size() > 0) {
+                    fprintf(stderr, "note: pubkey not found in pretend set: %s not in (%s)\n", pub_str.c_str(), Join<std::set<valtype>,std::vector<unsigned char>>(pretend_valid_pubkeys, ", ", JoinHexStrFun).c_str());
+                }
             }
-            bool fSuccess = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
 
             if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && vchSig.size())
                 return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);

@@ -278,9 +278,8 @@ struct Value {
             return HexStr(CScriptNum::serialize(int64));
         case T_DATA:
             return HexStr(data);
-        default:
-            fprintf(stderr, "cannot convert string into hex value: %s\n", str.c_str());
-            return "";
+        case T_STRING:
+            return HexStr(data_value());
         }
     }
     int64_t int_value() const {
