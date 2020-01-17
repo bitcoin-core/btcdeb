@@ -10,6 +10,8 @@
 
 #include <functions.h>
 
+#include <config/bitcoin-config.h>
+
 bool quiet = false;
 bool pipe_in = false;  // xxx | btcdeb
 bool pipe_out = false; // btcdeb xxx > file
@@ -99,11 +101,12 @@ int main(int argc, char* const* argv)
     ca.add_option("select", 's', req_arg);
     ca.add_option("pretend-valid", 'P', req_arg);
     ca.add_option("default-flags", 'd', no_arg);
+    ca.add_option("version", 'v', no_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q') || pipe_in || pipe_out;
 
     if (ca.m.count('h')) {
-        fprintf(stderr, "Syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [--pretend-valid=<sig>:<pubkey>[,<sig2>:<pubkey2>[,...]]|-P<sig>:<pubkey>[,...]] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
+        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [--pretend-valid=<sig>:<pubkey>[,<sig2>:<pubkey2>[,...]]|-P<sig>:<pubkey>[,...]] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
         fprintf(stderr, "If executed with no arguments, an empty script and empty stack is provided\n");
         fprintf(stderr, "To debug transaction signatures, you need to either provide the transaction hex (the WHOLE hex, not just the txid) "
             "as well as (SegWit only) every amount for the inputs, or provide (one or more) signature:pubkey pairs using --pretend-valid\n");
@@ -112,13 +115,16 @@ int main(int argc, char* const* argv)
         fprintf(stderr, "By providing a txin as well as a tx and no script or stack, btcdeb will attempt to set up a debug session for the verification of the given input by pulling the appropriate values out of the respective transactions. you do not need amounts for --tx in this case\n");
         fprintf(stderr, "You can modify verification flags using the --modify-flags command. separate flags using comma (,). prefix with + to enable, - to disable. e.g. --modify-flags=\"-NULLDUMMY,-MINIMALIF\"\n");
         fprintf(stderr, "You can set the environment variables DEBUG_SIGHASH, DEBUG_SIGNING, and DEBUG_SEGWIT to increase verbosity for the respective areas.\n");
-        fprintf(stderr, "The standard (enabled by default) flags can be reviewed by typing %s --default-flags or %s -d", argv[0], argv[0]);
-        return 1;
+        printf("The standard (enabled by default) flags can be reviewed by typing %s --default-flags or %s -d", argv[0], argv[0]);
+        return 0;
     } else if (ca.m.count('d')) {
-        fprintf(stderr, "The standard (enabled by default) flags are:\n・ %s\n", svf_string(STANDARD_SCRIPT_VERIFY_FLAGS, "\n・ ").c_str());
-        return 1;
+        printf("The standard (enabled by default) flags are:\n・ %s\n", svf_string(STANDARD_SCRIPT_VERIFY_FLAGS, "\n・ ").c_str());
+        return 0;
+    } else if (ca.m.count('v')) {
+        printf("btcdeb (\"The Bitcoin Script Debugger\") version %d.%d.%d\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION);
+        return 0;
     } else if (!quiet) {
-        btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
+        btc_logf("btcdeb %d.%d.%d -- type `%s -h` for start up options\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, argv[0]);
     }
 
     if (!pipe_in) {
