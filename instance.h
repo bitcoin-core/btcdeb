@@ -8,6 +8,7 @@
 #include <pubkey.h>
 #include <value.h>
 #include <vector>
+#include <map>
 
 typedef std::vector<unsigned char> valtype;
 
@@ -28,6 +29,15 @@ public:
     BaseSignatureChecker* checker;
     ScriptError error;
     std::string exception_string = "";
+    /**
+     * Mapping of pubkeys to signatures that should be considered cryptographically valid.
+     *
+     * For the keypair <key>=<value>, if a signature <value> is checked against a pubkey <key>
+     * for any signature hash <hash>, the cryptographic check is skipped and the signature is
+     * assumed to be valid.
+     */
+    std::map<valtype,valtype> pretend_valid_map;
+    std::set<valtype> pretend_valid_pubkeys;
 
     Instance()
     : env(nullptr)
@@ -51,6 +61,8 @@ public:
 
     void parse_stack_args(size_t argc, char* const* argv, size_t starting_index);
     void parse_stack_args(const std::vector<const char*> args);
+
+    bool parse_pretend_valid_expr(const char* expr);
 
     bool configure_tx_txin();
 

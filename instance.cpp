@@ -104,6 +104,41 @@ bool Instance::parse_script(const std::vector<uint8_t>& script_data) {
     return script.HasValidOps();
 }
 
+bool Instance::parse_pretend_valid_expr(const char* expr) {
+    const char* p = expr;
+    const char* c = p;
+    valtype key;
+    bool got_key = false;
+    while (*c) {
+        while (*c && *c != ',' && *c != ':') ++c;
+        char* cs = strndup(p, c-p);
+        valtype s = Value(cs).data_value();
+        free(cs);
+        switch (*c) {
+        case ':':
+            if (got_key) {
+                fprintf(stderr, "parse error (unexpected colon) near %s\n", p);
+                return false;
+            }
+            key = s;
+            got_key = true;
+            break;
+        case ',':
+        case 0:
+            if (!got_key) {
+                fprintf(stderr, "parse error (missing key) near %s\n", p);
+                return false;
+            }
+            got_key = false;
+            pretend_valid_map[key] = s;
+            pretend_valid_pubkeys.insert(s);
+            break;
+        }
+        p = c = c + (*c != 0);
+    }
+    return true;
+}
+
 void Instance::parse_stack_args(const std::vector<const char*> args) {
     for (auto& v : args) {
         stack.push_back(Value(v).data_value());
@@ -125,6 +160,8 @@ bool Instance::setup_environment(unsigned int flags) {
 
     env = new InterpreterEnv(stack, script, flags, *checker, sigver, &error);
     env->successor_script = successor_script;
+    env->pretend_valid_map = pretend_valid_map;
+    env->pretend_valid_pubkeys = pretend_valid_pubkeys;
     env->done &= successor_script.size() == 0;
 
     return env->operational;

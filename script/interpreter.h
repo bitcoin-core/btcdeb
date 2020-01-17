@@ -200,6 +200,8 @@ struct ScriptExecutionEnvironment {
     const BaseSignatureChecker& checker;
     SigVersion sigversion;
     ScriptError* serror;
+    std::map<std::vector<unsigned char>,std::vector<unsigned char>> pretend_valid_map;
+    std::set<std::vector<unsigned char>> pretend_valid_pubkeys;
     ScriptExecutionEnvironment(std::vector<std::vector<unsigned char> >& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in);
 };
 
