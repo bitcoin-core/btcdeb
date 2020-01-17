@@ -8,30 +8,11 @@
 
 #include <cliargs.h>
 
-extern "C" {
-#include <kerl/kerl.h>
-}
-
-int fn_step(const char*);
-int fn_rewind(const char*);
-int fn_exec(const char*);
-int fn_stack(const char*);
-int fn_altstack(const char*);
-int fn_vfexec(const char*);
-int fn_print(const char*);
-int fn_tf(const char*);
-char* compl_exec(const char*, int);
-char* compl_tf(const char*, int);
-int print_stack(std::vector<valtype>&, bool raw = false);
-int print_bool_stack(std::vector<valtype>&);
+#include <functions.h>
 
 bool quiet = false;
 bool pipe_in = false;  // xxx | btcdeb
 bool pipe_out = false; // btcdeb xxx > file
-int count = 0;
-char** script_lines;
-Instance instance;
-InterpreterEnv* env;
 
 struct script_verify_flag {
     std::string str;
@@ -103,8 +84,6 @@ static unsigned int svf_parse_flags(unsigned int in_flags, const char* mod) {
     return in_flags;
 }
 
-void print_dualstack();
-
 int main(int argc, char* const* argv)
 {
     pipe_in = !isatty(fileno(stdin)) || std::getenv("DEBUG_SET_PIPE_IN");
@@ -118,19 +97,24 @@ int main(int argc, char* const* argv)
     ca.add_option("txin", 'i', req_arg);
     ca.add_option("modify-flags", 'f', req_arg);
     ca.add_option("select", 's', req_arg);
+    ca.add_option("default-flags", 'd', no_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q') || pipe_in || pipe_out;
 
     if (ca.m.count('h')) {
-        fprintf(stderr, "syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
-        fprintf(stderr, "if executed with no arguments, an empty script and empty stack is provided\n");
-        fprintf(stderr, "to debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
+        fprintf(stderr, "Syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
+        fprintf(stderr, "If executed with no arguments, an empty script and empty stack is provided\n");
+        fprintf(stderr, "To debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
             "as well as (SegWit only) every amount for the inputs\n");
-        fprintf(stderr, "e.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
-        fprintf(stderr, "you do not need the amounts for non-SegWit transactions\n");
-        fprintf(stderr, "by providing a txin as well as a tx and no script or stack, btcdeb will attempt to set up a debug session for the verification of the given input by pulling the appropriate values out of the respective transactions. you do not need amounts for --tx in this case\n");
-        fprintf(stderr, "you can modify verification flags using the --modify-flags command. separate flags using comma (,). prefix with + to enable, - to disable. e.g. --modify-flags=\"-NULLDUMMY,-MINIMALIF\"\n");
-        fprintf(stderr, "the standard (enabled by default) flags are:\n・ %s\n", svf_string(STANDARD_SCRIPT_VERIFY_FLAGS, "\n・ ").c_str());
+        fprintf(stderr, "E.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
+        fprintf(stderr, "You do not need the amounts for non-SegWit transactions\n");
+        fprintf(stderr, "By providing a txin as well as a tx and no script or stack, btcdeb will attempt to set up a debug session for the verification of the given input by pulling the appropriate values out of the respective transactions. you do not need amounts for --tx in this case\n");
+        fprintf(stderr, "You can modify verification flags using the --modify-flags command. separate flags using comma (,). prefix with + to enable, - to disable. e.g. --modify-flags=\"-NULLDUMMY,-MINIMALIF\"\n");
+        fprintf(stderr, "You can set the environment variables DEBUG_SIGHASH, DEBUG_SIGNING, and DEBUG_SEGWIT to increase verbosity for the respective areas.\n");
+        fprintf(stderr, "The standard (enabled by default) flags can be reviewed by typing %s --default-flags or %s -d", argv[0], argv[0]);
+        return 1;
+    } else if (ca.m.count('d')) {
+        fprintf(stderr, "The standard (enabled by default) flags are:\n・ %s\n", svf_string(STANDARD_SCRIPT_VERIFY_FLAGS, "\n・ ").c_str());
         return 1;
     } else if (!quiet) {
         btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
@@ -297,386 +281,6 @@ int main(int argc, char* const* argv)
         }
         kerl_run("btcdeb> ");
     }
-}
-
-#define fail(msg...) do { fprintf(stderr, msg); return 0; } while (0)
-
-int fn_step(const char* arg) {
-    if (env->done) fail("at end of script\n");
-    if (!instance.step()) fail("error: %s\n", instance.error_string().c_str());
-    print_dualstack();
-    if (env->curr_op_seq < count) {
-        printf("%s\n", script_lines[env->curr_op_seq]);
-    }
-    return 0;
-}
-
-int fn_rewind(const char* arg) {
-    if (instance.at_start()) fail("error: no history to rewind\n");
-    if (!instance.rewind()) fail("error: failed to rewind; this is a bug\n");
-    print_dualstack();
-    if (env->curr_op_seq < count) {
-        printf("%s\n", script_lines[env->curr_op_seq]);
-    }
-    return 0;
-}
-
-inline void svprintscripts(std::vector<std::string>& l, int& lmax, std::vector<CScript*>& scripts, std::vector<std::string>& headers, CScriptIter it) {
-    char buf[1024];
-    opcodetype opcode;
-    valtype vchPushValue;
-    bool begun = false;
-    for (size_t siter = 0; siter < scripts.size(); ++siter) {
-        CScript* script = scripts[siter];
-
-        if (begun) {
-            if (headers[siter] != "") {
-                if (headers[siter].length() > lmax) lmax = headers[siter].length();
-                l.push_back(headers[siter]);
-            }
-            it = script->begin();
-        }
-
-        while (script->GetOp(it, opcode, vchPushValue)) {
-            begun = true;
-            char* pbuf = buf;
-            if (vchPushValue.size() > 0) {
-                sprintf(pbuf, "%s", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
-            } else {
-                sprintf(pbuf, "%s", GetOpName(opcode));
-            }
-            auto s = std::string(buf);
-            if (s.length() > lmax) lmax = s.length();
-            l.push_back(s);
-        }
-
-        if (it == script->end()) begun = true;
-    }
-}
-
-void print_dualstack() {
-    // generate lines for left and right hand side (stack vs script)
-    auto it = env->pc;
-    std::vector<std::string> l, r;
-    static int glmax = 7;
-    static int grmax = 7;
-    int lmax = 0;
-    int rmax = 0;
-    std::vector<CScript*> scripts;
-    std::vector<std::string> headers;
-    scripts.push_back(&env->script);
-    headers.push_back("");
-    CScript p2sh_script;
-    bool has_p2sh = false;
-    if (env->is_p2sh && env->p2shstack.size() > 0) {
-        has_p2sh = true;
-        const valtype& p2sh_script_val = env->p2shstack.back();
-        p2sh_script = CScript(p2sh_script_val.begin(), p2sh_script_val.end());
-    }
-    if (env->successor_script.size()) {
-        scripts.push_back(&env->successor_script);
-        headers.push_back("<<< scriptPubKey >>>");
-        if ((env->flags & SCRIPT_VERIFY_P2SH) && env->successor_script.IsPayToScriptHash()) {
-            has_p2sh = true;
-            CScriptIter it = env->script.begin();
-            opcodetype opcode;
-            valtype vchPushValue, p2sh_script_payload;
-            while (env->script.GetOp(it, opcode, vchPushValue)) { p2sh_script_payload = vchPushValue; }
-            p2sh_script = CScript(p2sh_script_payload.begin(), p2sh_script_payload.end());
-        }
-    }
-    if (has_p2sh) {
-        scripts.push_back(&p2sh_script);
-        headers.push_back("<<< P2SH script >>>");
-    }
-    svprintscripts(l, lmax, scripts, headers, it);
-
-    for (int j = env->stack.size() - 1; j >= 0; j--) {
-        auto& it = env->stack[j];
-        auto s = it.begin() == it.end() ? "0x" : HexStr(it.begin(), it.end());
-        if (s.length() > rmax) rmax = s.length();
-        r.push_back(s);
-    }
-    if (glmax < lmax) glmax = lmax;
-    if (grmax < rmax) grmax = rmax;
-    lmax = glmax; rmax = grmax;
-    int lcap = //66, rcap = 66; // 
-    lmax > 66 ? 66 : lmax, rcap = rmax > 66 ? 66 : rmax;
-    char lfmt[10], rfmt[10];
-    sprintf(lfmt, "%%-%ds", lcap + 1);
-    sprintf(rfmt, "%%%ds", rcap);
-    printf(lfmt, "script");
-    printf("| ");
-    printf(rfmt, "stack ");
-    printf("\n");
-    for (int i = 0; i < lcap; i++) printf("-");
-    printf("-+-");
-    for (int i = 0; i < rcap; i++) printf("-");
-    printf("\n");
-    int li = 0, ri = 0;
-    while (li < l.size() || ri < r.size()) {
-        if (li < l.size()) {
-            auto s = l[li++];
-            if (s.length() > lcap) s = s.substr(0, lcap-3) + "...";
-            printf(lfmt, s.c_str());
-        } else {
-            printf(lfmt, "");
-        }
-        printf("| ");
-        if (ri < r.size()) {
-            auto s = r[ri++];
-            if (s.length() > rcap) s = s.substr(0, rcap-3) + "...";
-            printf(rfmt, s.c_str());
-        }
-        printf("\n");
-    }
-}
-
-int print_stack(std::vector<valtype>& stack, bool raw) {
-    if (raw) {
-        for (auto& it : stack) printf("%s\n", HexStr(it.begin(), it.end()).c_str());
-    } else {
-        if (stack.size() == 0) printf("- empty stack -\n");
-        int i = 0;
-        for (int j = stack.size() - 1; j >= 0; j--) {
-            auto& it = stack[j];
-            i++;
-            printf("<%02d>\t%s%s\n", i, HexStr(it.begin(), it.end()).c_str(), i == 1 ? "\t(top)" : "");
-        }
-    }
-    return 0;
-}
-
-int print_bool_stack(std::vector<bool> stack) {
-    if (stack.size() == 0) printf("- empty stack -\n");
-
-    int i = 0;
-    for (int j = stack.size() - 1; j >= 0; j--) {
-        i++;
-        printf("<%02d>\t%02x\n", i, (unsigned int) stack[j]);
-    }
-
-    return 0;
-}
-
-int fn_stack(const char* arg) {
-    return print_stack(env->stack);
-}
-
-int fn_altstack(const char*) {
-    return print_stack(env->altstack);
-}
-
-int fn_vfexec(const char*) {
-    return print_bool_stack(env->vfExec);
-}
-
-static const char* tfs[] = {
-    "echo",
-    "hex",
-    "int",
-    "reverse",
-    "sha256",
-    "ripemd160",
-    "hash256",
-    "hash160",
-    "base58chk-encode",
-    "base58chk-decode",
-    "bech32-encode",
-    "bech32-decode",
-    "verify-sig",
-    "combine-pubkeys",
-    "tweak-pubkey",
-    "addr-to-scriptpubkey",
-    "scriptpubkey-to-addr",
-    "add",
-    "sub",
-#ifdef ENABLE_DANGEROUS
-    "encode-wif",
-    "decode-wif",
-    "sign",
-    "get-pubkey",
-    "combine-privkeys",
-    "multiply-privkeys",
-#endif // ENABLE_DANGEROUS
-    nullptr
-};
-
-static const char* tfsh[] = {
-    "[*]       show as-is serialized value",
-    "[*]       convert into a hex string",
-    "[arg]     convert into an integer",
-    "[arg]     reverse the value according to the type",
-    "[message] perform SHA256",
-    "[message] perform RIPEMD160",
-    "[message] perform HASH256 (SHA256(SHA256(message))",
-    "[message] perform HASH160 (RIPEMD160(SHA256(message))",
-    "[pubkey]  encode [pubkey] using base58 encoding (with checksum)",
-    "[string]  decode [string] into a pubkey using base58 encoding (with checksum)",
-    "[pubkey]  encode [pubkey] using bech32 encoding",
-    "[string]  decode [string] into a pubkey using bech32 encoding",
-    "[sighash] [pubkey] [signature] verify the given signature for the given sighash and pubkey",
-    "[pubkey1] [pubkey2] combine the two pubkeys into one pubkey",
-    "[value] [pubkey] multiply the pubkey with the given 32 byte value",
-    "[address] convert a base58 encoded address into its corresponding scriptPubKey",
-    "[script]  convert a scriptPubKey into its corresponding base58 encoded address",
-    "[value1] [value2] add two values together",
-    "[value1] [value2] subtract value2 from value1",
-#ifdef ENABLE_DANGEROUS
-    "[privkey] encode [privkey] using the Wallet Import Format",
-    "[string]  decode [string] into a private key using the Wallet Import Format",
-    "[sighash] [privkey] generate a signature for the given message (sighash) using the given private key",
-    "[privkey] get the public key corresponding to the given private key",
-    "[privkey1] [privkey2] combine the two private keys into one private key",
-    "[privkey1] [privkey2] multiply a privkey with another",
-#endif // ENABLE_DANGEROUS
-    nullptr
-};
-
-int _e_echo(Value&& pv)       { pv.println(); return 0; }
-int _e_hex(Value&& pv)        { printf("%s\n", pv.hex_str().c_str()); return 0; }
-int _e_int(Value&& pv)        { printf("%" PRId64 "\n", pv.int_value()); return 0; }
-int _e_reverse(Value&& pv)    { pv.do_reverse(); pv.println(); return 0; }
-int _e_sha256(Value&& pv)     { pv.do_sha256(); pv.println(); return 0; }
-int _e_ripemd160(Value&& pv)  { pv.do_ripemd160(); pv.println(); return 0; }
-int _e_hash256(Value&& pv)    { pv.do_hash256(); pv.println(); return 0; }
-int _e_hash160(Value&& pv)    { pv.do_hash160(); pv.println(); return 0; }
-int _e_b58ce(Value&& pv)      { pv.do_base58chkenc(); pv.println(); return 0; }
-int _e_b58cd(Value&& pv)      { pv.do_base58chkdec(); pv.println(); return 0; }
-int _e_b32e(Value&& pv)       { pv.do_bech32enc(); pv.println(); return 0; }
-int _e_b32d(Value&& pv)       { pv.do_bech32dec(); pv.println(); return 0; }
-int _e_verify_sig(Value&& pv) { pv.do_verify_sig(); pv.println(); return 0; }
-int _e_combine_pubkeys(Value&& pv) { pv.do_combine_pubkeys(); pv.println(); return 0; }
-int _e_tweak_pubkey(Value&& pv) { pv.do_tweak_pubkey(); pv.println(); return 0; }
-int _e_addr_to_spk(Value&& pv) { pv.do_addr_to_spk(); pv.println(); return 0; }
-int _e_spk_to_addr(Value&& pv) { pv.do_spk_to_addr(); pv.println(); return 0; }
-int _e_add(Value&& pv)         { pv.do_add(); pv.println(); return 0; }
-int _e_sub(Value&& pv)         { pv.do_sub(); pv.println(); return 0; }
-#ifdef ENABLE_DANGEROUS
-int _e_encode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_encode_wif(); pv.println(); return 0; }
-int _e_decode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_decode_wif(); pv.println(); return 0; }
-int _e_sign(Value&& pv)          { kerl_set_sensitive(true); pv.do_sign(); pv.println(); return 0; }
-int _e_get_pubkey(Value&& pv)    { kerl_set_sensitive(true); pv.do_get_pubkey(); pv.println(); return 0; }
-int _e_combine_privkeys(Value&& pv) { kerl_set_sensitive(true); pv.do_combine_privkeys(); pv.println(); return 0; }
-int _e_mul_privkeys(Value&& pv)  { kerl_set_sensitive(true); pv.do_multiply_privkeys(); pv.println(); return 0; }
-#endif // ENABLE_DANGEROUS
-
-typedef int (*btcdeb_tfun) (Value&&);
-static const btcdeb_tfun tffp[] = {
-    _e_echo,
-    _e_hex,
-    _e_int,
-    _e_reverse,
-    _e_sha256,
-    _e_ripemd160,
-    _e_hash256,
-    _e_hash160,
-    _e_b58ce,
-    _e_b58cd,
-    _e_b32e,
-    _e_b32d,
-    _e_verify_sig,
-    _e_combine_pubkeys,
-    _e_tweak_pubkey,
-    _e_addr_to_spk,
-    _e_spk_to_addr,
-    _e_add,
-    _e_sub,
-#ifdef ENABLE_DANGEROUS
-    _e_encode_wif,
-    _e_decode_wif,
-    _e_sign,
-    _e_get_pubkey,
-    _e_combine_privkeys,
-    _e_mul_privkeys,
-#endif // ENABLE_DANGEROUS
-    nullptr
-};
-
-int fn_tf(const char* arg) {
-    size_t argc;
-    char** argv;
-    if (kerl_make_argcv(arg, &argc, &argv)) {
-        printf("user abort\n");
-        return -1;
-    }
-    if (argc == 0) {
-        printf("syntax: tf <command> [<param1> [...]]\n");
-        printf("transform a value using some function\n");
-        printf("available functions are (tf -h for details):");
-        for (int i = 0; tfs[i]; i++) {
-            printf(" %s", tfs[i]);
-        }
-        printf("\nexample: tf hex 35        (output: 0x23)\n");
-        return 0;
-    }
-    if (argc == 1 && !strcmp("-h", argv[0])) {
-        for (int i = 0; tfs[i]; i++) {
-            printf("%-16s %s\n", tfs[i], tfsh[i]);
-        }
-        return 0;
-    }
-    int i;
-    for (i = 0; tfs[i] && strcmp(tfs[i], argv[0]); i++);
-    if (!tfs[i]) {
-        printf("unknown function: %s\n", argv[0]);
-        return -1;
-    }
-    if (argc == 1) {
-        puts(tfsh[i]);
-        return 0;
-    }
-    int rv = tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1), true));
-    kerl_free_argcv(argc, argv);
-    return rv;
-}
-
-char* compl_tf(const char* text, int continued) {
-    static int list_index, len;
-    const char *name;
-
-    /* If this is a new word to complete, initialize now.  This includes
-     saving the length of TEXT for efficiency, and initializing the index
-     variable to 0. */
-    if (!continued) {
-        list_index = -1;
-        len = strlen(text);
-    }
-
-    /* Return the next name which partially matches from the names list. */
-    while (tfs[++list_index]) {
-        name = tfs[list_index];
-
-        if (strncasecmp(name, text, len) == 0)
-            return strdup(name);
-    }
-
-    /* If no names matched, then return NULL. */
-    return (char *)NULL;
-}
-
-int fn_exec(const char* arg) {
-    size_t argc;
-    char** argv;
-    if (kerl_make_argcv(arg, &argc, &argv)) {
-        printf("user abort\n");
-        return -1;
-    }
-    if (argc < 1) {
-        printf("syntax: exec <op> [<op2> [...]]\n");
-        printf("to push to stack, simply execute the numeric or hexadecimal value\n");
-        kerl_free_argcv(argc, argv);
-        return 0;
-    }
-    instance.eval(argc, argv);
-    print_dualstack();
-    kerl_free_argcv(argc, argv);
-    return 0;
-}
-
-int fn_print(const char*) {
-    for (int i = 0; i < count; i++) printf("%s%s\n", i == env->curr_op_seq ? " -> " : "    ", script_lines[i]);
-    return 0;
 }
 
 static const char* opnames[] = {
