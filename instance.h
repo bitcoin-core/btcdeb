@@ -1,3 +1,6 @@
+#ifndef included_btcdeb_instance_h_
+#define included_btcdeb_instance_h_
+
 #include <debugger/interpreter.h>
 #include <utilstrencodings.h>
 #include <policy/policy.h>
@@ -63,3 +66,5 @@ public:
 
     bool eval(const size_t argc, char* const* argv);
 };
+
+#endif // included_btcdeb_instance_h_

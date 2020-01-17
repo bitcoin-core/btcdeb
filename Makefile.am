@@ -138,6 +138,8 @@ endif
 btcdeb_SOURCES = \
 	instance.h \
 	instance.cpp \
+	functions.h \
+	functions.cpp \
 	btcdeb.cpp \
 	cliargs.h
 btcdeb_CPPFLAGS = $(AM_CPPFLAGS)
@@ -200,6 +202,8 @@ btcc_LDADD = \
 test_btcdeb_SOURCES = \
 	instance.h \
 	instance.cpp \
+	functions.h \
+	functions.cpp \
 	test/catch.hpp \
 	test/signing.cpp \
 	test/test-btcdeb.cpp \
