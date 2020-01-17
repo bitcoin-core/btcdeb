@@ -322,6 +322,15 @@ int fn_tf(const char* arg) {
         for (int i = 0; tfs[i]; i++) {
             printf("%-16s %s\n", tfs[i], tfsh[i]);
         }
+        printf(
+            "\nThe inline operators have slightly different names; they are called: echo, hex, int, reverse, sha256"
+            ", ripemd160, hash256, hash160, base58chkenc, base58chkdec, bech32enc, bech32dec, verify_sig"
+            ", combine_pubkeys, tweak_pubkey, addr_to_spk, spk_to_addr, add, sub"
+#ifdef ENABLE_DANGEROUS
+            ", combine_privkeys, multiply_privkeys, nnegate_privkey, encode_wif, decode_wif, sign, get_pubkey"
+#endif // ENABLE_DANGEROUS
+            "\n"
+        );
         return 0;
     }
     int i;
