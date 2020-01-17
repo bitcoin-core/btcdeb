@@ -60,7 +60,25 @@ btcdeb>
 
 The example in the section above can now be done without calculating the hash first by doing:
 
-> btcdeb '[OP_2 OP_DROP sig1 pub1 OP_DUP OP_HASH160 hash160(pub1) OP_EQUALVERIFY OP_CHECKSIG]' --pretend-valid=sig1:pub1
+```bash
+$ btcdeb '[OP_2 OP_DROP sig1 pub1 OP_DUP OP_HASH160 hash160(pub1) OP_EQUALVERIFY OP_CHECKSIG]' --pretend-valid=sig1:pub1
+btcdeb 0.2.16 -- type `./btcdeb -h` for start up options
+valid script
+9 op script loaded. type `help` for usage information
+script                                   |  stack
+-----------------------------------------+--------
+2                                        |
+OP_DROP                                  |
+73696731                                 |
+70756231                                 |
+OP_DUP                                   |
+OP_HASH160                               |
+0c3071cf08289580e0e2030a388998460efd39e1 |
+OP_EQUALVERIFY                           |
+OP_CHECKSIG                              |
+#0000 2
+btcdeb>
+```
 
 The following inline operators are defined (but mostly untested at this point in time):
 
