@@ -132,7 +132,7 @@ struct Value {
         }
         insert(data, s);
     }
-    Value(const char* v, size_t vlen = 0, bool non_numeric = false) {//, bool pushed = false, bool stack = false) {
+    Value(const char* v, size_t vlen = 0, bool non_numeric = false) {
         if (!vlen) vlen = strlen(v);
         if (vlen == 2 && v[0] == '0' && v[1] == 'x') {
             type = T_DATA;
@@ -155,6 +155,25 @@ struct Value {
             DeserializeBool(&v[2], data);
             return;
         }
+        if (vlen > 3 && v[vlen-1] == ')') {
+            char fun[10];
+            size_t i;
+            for (i = 0; i < 9 && v[i] && v[i] != '('; ++i) {
+                fun[i] = v[i];
+            }
+            if (v[i] == '(') {
+                fun[i] = 0;
+                size_t funlen = ++i;
+                size_t vallen = vlen - i - 1;
+                char* val = strndup(&v[i], vallen);
+                *this = Value(val, vallen);
+                free(val);
+                if (!do_exec(fun)) {
+                    fprintf(stderr, "unknown function %s: expression left as is\n", fun);
+                } else return;
+            }
+        }
+
         int64 = non_numeric ? 0 : atoll(v);
         if (int64 != 0 || !strcmp(v, "0")) {
             // verify
@@ -229,6 +248,17 @@ struct Value {
              type == T_STRING ? str == other.str :
              type == T_OPCODE ? opcode == other.opcode :
              data == other.data);
+    }
+
+    Value& operator=(const Value& other) {
+        type = other.type;
+        switch (type) {
+        case T_INT: int64 = other.int64; break;
+        case T_STRING: str = other.str; break;
+        case T_OPCODE: opcode = other.opcode; break;
+        case T_DATA: data = other.data; break;
+        }
+        return *this;
     }
 
     std::vector<uint8_t> data_value() const { return const_cast<Value*>(this)->data_value(); }
@@ -512,6 +542,41 @@ struct Value {
     void do_sign();
     void do_get_pubkey();
 #endif // ENABLE_DANGEROUS
+
+    bool do_exec(const std::string& fun) {
+        if (fun == "echo") return true;
+        if (fun == "hex") { str = hex_str(); type = T_STRING; return true; }
+        if (fun == "int") { int64 = int_value(); type = T_INT; return true; }
+        #define DO(s) if (fun == #s) { do_##s(); return true; }
+        DO(reverse);
+        DO(sha256);
+        DO(ripemd160);
+        DO(hash256);
+        DO(hash160);
+        DO(base58chkenc);
+        DO(base58chkdec);
+        DO(bech32enc);
+        DO(bech32dec);
+        DO(verify_sig);
+        DO(combine_pubkeys);
+        DO(tweak_pubkey);
+        DO(addr_to_spk);
+        DO(spk_to_addr);
+        DO(add);
+        DO(sub);
+#ifdef ENABLE_DANGEROUS
+        DO(combine_privkeys);
+        DO(multiply_privkeys);
+        DO(negate_privkey);
+        DO(encode_wif);
+        DO(decode_wif);
+        DO(sign);
+        DO(get_pubkey);
+#endif // ENABLE_DANGEROUS
+        #undef DO
+        return false;
+    }
+
     void print() const {
         switch (type) {
         case T_INT:
