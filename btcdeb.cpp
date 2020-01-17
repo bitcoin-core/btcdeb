@@ -97,19 +97,24 @@ int main(int argc, char* const* argv)
     ca.add_option("txin", 'i', req_arg);
     ca.add_option("modify-flags", 'f', req_arg);
     ca.add_option("select", 's', req_arg);
+    ca.add_option("default-flags", 'd', no_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q') || pipe_in || pipe_out;
 
     if (ca.m.count('h')) {
-        fprintf(stderr, "syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
-        fprintf(stderr, "if executed with no arguments, an empty script and empty stack is provided\n");
-        fprintf(stderr, "to debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
+        fprintf(stderr, "Syntax: %s [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
+        fprintf(stderr, "If executed with no arguments, an empty script and empty stack is provided\n");
+        fprintf(stderr, "To debug transaction signatures, you need to provide the transaction hex (the WHOLE hex, not just the txid) "
             "as well as (SegWit only) every amount for the inputs\n");
-        fprintf(stderr, "e.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
-        fprintf(stderr, "you do not need the amounts for non-SegWit transactions\n");
-        fprintf(stderr, "by providing a txin as well as a tx and no script or stack, btcdeb will attempt to set up a debug session for the verification of the given input by pulling the appropriate values out of the respective transactions. you do not need amounts for --tx in this case\n");
-        fprintf(stderr, "you can modify verification flags using the --modify-flags command. separate flags using comma (,). prefix with + to enable, - to disable. e.g. --modify-flags=\"-NULLDUMMY,-MINIMALIF\"\n");
-        fprintf(stderr, "the standard (enabled by default) flags are:\n・ %s\n", svf_string(STANDARD_SCRIPT_VERIFY_FLAGS, "\n・ ").c_str());
+        fprintf(stderr, "E.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
+        fprintf(stderr, "You do not need the amounts for non-SegWit transactions\n");
+        fprintf(stderr, "By providing a txin as well as a tx and no script or stack, btcdeb will attempt to set up a debug session for the verification of the given input by pulling the appropriate values out of the respective transactions. you do not need amounts for --tx in this case\n");
+        fprintf(stderr, "You can modify verification flags using the --modify-flags command. separate flags using comma (,). prefix with + to enable, - to disable. e.g. --modify-flags=\"-NULLDUMMY,-MINIMALIF\"\n");
+        fprintf(stderr, "You can set the environment variables DEBUG_SIGHASH, DEBUG_SIGNING, and DEBUG_SEGWIT to increase verbosity for the respective areas.\n");
+        fprintf(stderr, "The standard (enabled by default) flags can be reviewed by typing %s --default-flags or %s -d", argv[0], argv[0]);
+        return 1;
+    } else if (ca.m.count('d')) {
+        fprintf(stderr, "The standard (enabled by default) flags are:\n・ %s\n", svf_string(STANDARD_SCRIPT_VERIFY_FLAGS, "\n・ ").c_str());
         return 1;
     } else if (!quiet) {
         btc_logf("btcdeb -- type `%s -h` for start up options\n", argv[0]);
