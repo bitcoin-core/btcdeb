@@ -1006,20 +1006,28 @@ bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local
                 btc_sign_logf("loop: sigs = %d, keys = %d\n", nSigsCount, nKeysCount);
                 valtype& vchSig    = stacktop(-isig);
                 valtype& vchPubKey = stacktop(-ikey);
-                btc_sign_logf("- got sig %s\n", HexStr(vchSig).c_str());
-                btc_sign_logf("- got key %s\n", HexStr(vchPubKey).c_str());
+                std::string sig_str = HexStr(vchSig);
+                std::string pub_str = HexStr(vchPubKey);
+                btc_sign_logf("- got sig %s\n", sig_str.c_str());
+                btc_sign_logf("- got key %s\n", pub_str.c_str());
 
-                // Note how this makes the exact order of pubkey/signature evaluation
-                // distinguishable by CHECKMULTISIG NOT if the STRICTENC flag is set.
-                // See the script_(in)valid tests for details.
-                if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
-                    // serror is set
-                    btc_sign_logf("! CheckSignatureEncoding() or CheckPubKeyEncoding() failed!\n");
-                    return false;
+                bool fOk;
+                if (pretend_valid_pubkeys.count(vchPubKey)) {
+                    fOk = pretend_valid_map.count(vchSig) && pretend_valid_map.at(vchSig) == vchPubKey;
+                    if (!fOk) btc_sign_logf("- [mock] wrong pubkey for sig; marking as failed\n");
+                } else {
+                    // Note how this makes the exact order of pubkey/signature evaluation
+                    // distinguishable by CHECKMULTISIG NOT if the STRICTENC flag is set.
+                    // See the script_(in)valid tests for details.
+                    if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
+                        // serror is set
+                        btc_sign_logf("! CheckSignatureEncoding() or CheckPubKeyEncoding() failed!\n");
+                        return false;
+                    }
+
+                    // Check signature
+                    fOk = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
                 }
-
-                // Check signature
-                bool fOk = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
                 btc_sign_logf("- sig check %s\n", fOk ? "succeeded" : "failed");
 
                 if (fOk) {
