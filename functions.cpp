@@ -29,7 +29,7 @@ int fn_rewind(const char* arg) {
     return 0;
 }
 
-inline void svprintscripts(std::vector<std::string>& l, int& lmax, std::vector<CScript*>& scripts, std::vector<std::string>& headers, CScriptIter it) {
+inline void svprintscripts(std::vector<std::string>& l, int& lmax, std::vector<CScript*>& scripts, std::vector<std::string>& headers, CScript::const_iterator it) {
     char buf[1024];
     opcodetype opcode;
     valtype vchPushValue;
@@ -86,7 +86,7 @@ void print_dualstack() {
         headers.push_back("<<< scriptPubKey >>>");
         if ((env->flags & SCRIPT_VERIFY_P2SH) && env->successor_script.IsPayToScriptHash()) {
             has_p2sh = true;
-            CScriptIter it = env->script.begin();
+            CScript::const_iterator it = env->script.begin();
             opcodetype opcode;
             valtype vchPushValue, p2sh_script_payload;
             while (env->script.GetOp(it, opcode, vchPushValue)) { p2sh_script_payload = vchPushValue; }

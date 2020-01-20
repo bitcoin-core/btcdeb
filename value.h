@@ -4,7 +4,7 @@
 #include <inttypes.h>
 #include <vector>
 #include <string>
-#include <utilstrencodings.h>
+#include <util/strencodings.h>
 #include <debugger/script.h>
 #include <tinyformat.h>
 #include <crypto/sha256.h>
@@ -437,7 +437,7 @@ struct Value {
     void do_bech32enc() {
         data_value();
         std::vector<unsigned char> tmp = {0};
-        ConvertBits<8, 5, true>(tmp, data.begin(), data.end());
+        ConvertBits<8, 5, true>([&](unsigned char c) { tmp.push_back(c); }, data.begin(), data.end());
         str = bech32::Encode("bc", tmp);
         type = T_STRING;
     }
@@ -458,7 +458,7 @@ struct Value {
         type = T_DATA;
         data.clear();
         // The rest of the symbols are converted witness program bytes.
-        if (ConvertBits<5, 8, false>(data, bech.second.begin() + 1, bech.second.end())) {
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin() + 1, bech.second.end())) {
             if (version == 0) {
                 {
                     if (data.size() == 20) {

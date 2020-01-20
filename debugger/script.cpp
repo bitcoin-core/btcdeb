@@ -4,7 +4,7 @@
 
 #include <debugger/script.h>
 
-// #include <utilstrencodings.h>
+// #include <util/strencodings.h>
 #include <cstdarg>
 
 void btc_logf_dummy(const char* fmt...) {}

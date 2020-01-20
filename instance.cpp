@@ -1,5 +1,5 @@
 #include <script/interpreter.h>
-#include <utilstrencodings.h>
+#include <util/strencodings.h>
 #include <policy/policy.h>
 #include <streams.h>
 #include <pubkey.h>
@@ -244,7 +244,7 @@ bool Instance::eval(const size_t argc, char* const* argv) {
         fprintf(stderr, "error: invalid opcode %s\n", v);
         return false;
     }
-    CScriptIter it = script.begin();
+    CScript::const_iterator it = script.begin();
     while (it != script.end()) {
         if (!StepScript(*env, it, &script)) {
             fprintf(stderr, "Error: %s\n", ScriptErrorString(*env->serror));
@@ -335,7 +335,7 @@ bool Instance::configure_tx_txin() {
             }
             validation = CScript(pushval.begin(), pushval.end());
             hashsrc = Value(pushval);
-            CScriptIter it = scriptPubKey.begin();
+            CScript::const_iterator it = scriptPubKey.begin();
             btc_segwit_logf("hash source = %s\n", hashsrc.hex_str().c_str());
             // TODO: run this using interpreter instead
             if (!scriptPubKey.GetOp(it, opcode, pushval)) {
@@ -374,7 +374,7 @@ bool Instance::configure_tx_txin() {
                 fprintf(stderr, "expected 22 or 34 byte script inside %s, but got %zu bytes\n", source.c_str(), pushval.size());
                 return false;
         }
-        CScriptIter it = validation.begin();
+        CScript::const_iterator it = validation.begin();
         if (!validation.GetOp(it, opcode, pushval)) {
             fprintf(stderr, "can't parse %s, or %s ended prematurely\n", source.c_str(), source.c_str());
             return false;
