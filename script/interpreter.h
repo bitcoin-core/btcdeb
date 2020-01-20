@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2009-2018 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -187,8 +187,8 @@ using MutableTransactionSignatureChecker = GenericTransactionSignatureChecker<CM
 
 struct ScriptExecutionEnvironment {
     CScript script;
-    CScriptIter pend;
-    CScriptIter pbegincodehash;
+    CScript::const_iterator pend;
+    CScript::const_iterator pbegincodehash;
     opcodetype opcode;
     std::vector<uint8_t> vchPushValue;
     std::vector<bool> vfExec;
@@ -205,7 +205,7 @@ struct ScriptExecutionEnvironment {
     ScriptExecutionEnvironment(std::vector<std::vector<unsigned char> >& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in);
 };
 
-bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local_script = nullptr);
+bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script = nullptr);
 
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* error = nullptr);
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror = nullptr);

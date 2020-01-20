@@ -2,7 +2,7 @@
 #define included_btcdeb_instance_h_
 
 #include <debugger/interpreter.h>
-#include <utilstrencodings.h>
+#include <util/strencodings.h>
 #include <policy/policy.h>
 #include <streams.h>
 #include <pubkey.h>

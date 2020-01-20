@@ -46,6 +46,7 @@ BITCOIN_CORE_H = \
 	$(LIBBITCOIN_DEB_H) \
 	amount.h \
 	arith_uint256.h \
+	attributes.h \
 	base58.h \
 	bech32.h \
 	compat.h \
@@ -75,7 +76,7 @@ BITCOIN_CORE_H = \
 	support/lockedpool.h \
 	tinyformat.h \
 	uint256.h \
-	utilstrencodings.h \
+	util/strencodings.h \
 	value.h
 
 # debugger #
@@ -111,7 +112,7 @@ libbitcoin_a_SOURCES = \
 	support/cleanse.cpp \
 	support/lockedpool.cpp \
 	uint256.cpp \
-	utilstrencodings.cpp \
+	util/strencodings.cpp \
 	value.cpp \
     $(BITCOIN_CORE_H)
 

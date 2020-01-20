@@ -6,7 +6,7 @@
 #define BITCOIN_BTCDEB_INTERPRETER_H
 
 #include <script/interpreter.h>
-#include <utilstrencodings.h> // HexStr
+#include <util/strencodings.h> // HexStr
 
 template <typename T, typename T2> static inline void print_vec(const T& v, T2 fun) {
     for (unsigned char c : v) fun("%02x", c);
@@ -50,10 +50,10 @@ static inline void _popstack(std::vector<valtype>& stack)
 #define pushstack(stack, v) do { stack.push_back(v); btc_logf("\t\t<> PUSH " #stack " %s\n", HexStr(stack.at(stack.size()-1)).c_str()); } while (0)
 
 struct InterpreterEnv : public ScriptExecutionEnvironment {
-    CScriptIter pc;
+    CScript::const_iterator pc;
     std::vector<stack_type> stack_history;
     std::vector<stack_type> altstack_history;
-    std::vector<CScriptIter> pc_history;
+    std::vector<CScript::const_iterator> pc_history;
     std::vector<int> nOpCount_history;
     std::vector<CScript> script_history;
     const CScript& scriptIn;

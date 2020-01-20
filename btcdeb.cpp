@@ -211,7 +211,7 @@ int main(int argc, char* const* argv)
 
     script_ptrs.push_back(&env->script);
     script_headers.push_back("");
-    CScriptIter it = env->script.begin();
+    CScript::const_iterator it = env->script.begin();
     opcodetype opcode;
     valtype vchPushValue, p2sh_script_payload;
     while (env->script.GetOp(it, opcode, vchPushValue)) { p2sh_script_payload = vchPushValue; ++count; }

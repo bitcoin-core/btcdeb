@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2016 The Bitcoin Core developers
+// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2017 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -32,25 +33,33 @@ public:
     /**
      * secp256k1:
      */
-    static const unsigned int PUBLIC_KEY_SIZE             = 65;
-    static const unsigned int COMPRESSED_PUBLIC_KEY_SIZE  = 33;
-    static const unsigned int SIGNATURE_SIZE              = 72;
-    static const unsigned int COMPACT_SIGNATURE_SIZE      = 65;
+    static constexpr unsigned int PUBLIC_KEY_SIZE             = 65;
+    static constexpr unsigned int COMPRESSED_PUBLIC_KEY_SIZE  = 33;
+    static constexpr unsigned int SIGNATURE_SIZE              = 72;
+    static constexpr unsigned int COMPACT_SIGNATURE_SIZE      = 65;
+    /**
+     * see www.keylength.com
+     * script supports up to 75 for single byte push
+     */
+    static_assert(
+        PUBLIC_KEY_SIZE >= COMPRESSED_PUBLIC_KEY_SIZE,
+        "COMPRESSED_PUBLIC_KEY_SIZE is larger than PUBLIC_KEY_SIZE");
 
 private:
+
     /**
      * Just store the serialized data.
      * Its length can very cheaply be computed from the first byte.
      */
-    unsigned char vch[65];
+    unsigned char vch[PUBLIC_KEY_SIZE];
 
     //! Compute the length of a pubkey with a given first byte.
     unsigned int static GetLen(unsigned char chHeader)
     {
         if (chHeader == 2 || chHeader == 3)
-            return 33;
+            return COMPRESSED_PUBLIC_KEY_SIZE;
         if (chHeader == 4 || chHeader == 6 || chHeader == 7)
-            return 65;
+            return PUBLIC_KEY_SIZE;
         return 0;
     }
 
@@ -61,6 +70,11 @@ private:
     }
 
 public:
+
+    bool static ValidSize(const std::vector<unsigned char> &vch) {
+      return vch.size() > 0 && GetLen(vch[0]) == vch.size();
+    }
+
     //! Construct an invalid public key.
     CPubKey()
     {
@@ -93,6 +107,7 @@ public:
 
     //! Simple read-only vector-like interface to the pubkey data.
     unsigned int size() const { return GetLen(vch[0]); }
+    const unsigned char* data() const { return vch; }
     const unsigned char* begin() const { return vch; }
     const unsigned char* end() const { return vch + size(); }
     const unsigned char& operator[](unsigned int pos) const { return vch[pos]; }
@@ -125,7 +140,7 @@ public:
     void Unserialize(Stream& s)
     {
         unsigned int len = ::ReadCompactSize(s);
-        if (len <= 65) {
+        if (len <= PUBLIC_KEY_SIZE) {
             s.read((char*)vch, len);
         } else {
             // invalid pubkey, skip available data
@@ -164,7 +179,7 @@ public:
     //! Check whether this is a compressed public key.
     bool IsCompressed() const
     {
-        return size() == 33;
+        return size() == COMPRESSED_PUBLIC_KEY_SIZE;
     }
 
     /**

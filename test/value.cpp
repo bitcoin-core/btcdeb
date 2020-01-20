@@ -23,7 +23,7 @@ TEST_CASE("Conversions", "[conversions]") {
             std::vector<uint8_t> data;
             CScript s;
             s << i;
-            CScriptIter pc = s.begin();
+            CScript::const_iterator pc = s.begin();
             opcodetype opcode;
             REQUIRE(s.GetOp(pc, opcode, data));
             // printf("%9lld: %-8s | %s\n", i, Value(i).hex_str().c_str(), HexStr(data).c_str());

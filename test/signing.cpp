@@ -29,7 +29,7 @@ TEST_CASE("Segwit Multisig Signing", "[signing-segwit-multisig]") {
         // script should have 6 entries
         {
             size_t count = 0;
-            CScriptIter it = instance.script.begin();
+            CScript::const_iterator it = instance.script.begin();
             opcodetype opcode;
             std::vector<uint8_t> pushval;
             while (instance.script.GetOp(it, opcode, pushval)) {

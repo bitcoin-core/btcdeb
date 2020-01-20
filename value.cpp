@@ -1,10 +1,12 @@
 #include <secp256k1.h>
 
-#include "value.h"
+#include <value.h>
 
 #include <support/allocators/secure.h>
 
+#include <uint256.h>
 #include <arith_uint256.h>
+#include <pubkey.h>
 
 static secp256k1_context* secp256k1_context_sign = nullptr;
 
@@ -21,7 +23,7 @@ Value Value::prepare_extraction(const Value& a, const Value& b) {
 bool Value::extract_values(std::vector<std::vector<uint8_t>>& values) {
     values.clear();
     CScript s(data.begin(), data.end());
-    CScriptIter pc = s.begin();
+    CScript::const_iterator pc = s.begin();
     opcodetype opcode;
     std::vector<uint8_t> vch;
     while (pc != s.end()) {

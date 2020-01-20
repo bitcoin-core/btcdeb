@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2009-2018 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +7,7 @@
 #include <debugger/interpreter.h>
 
 #include <inttypes.h> // PRId64 ...
+#include <util/strencodings.h> // for Join<>
 
 #include <crypto/ripemd160.h>
 #include <crypto/sha1.h>
@@ -233,7 +234,7 @@ int FindAndDelete(CScript& script, const CScript& b)
     if (b.empty())
         return nFound;
     CScript result;
-    CScriptIter pc = script.begin(), pc2 = script.begin(), end = script.end();
+    CScript::const_iterator pc = script.begin(), pc2 = script.begin(), end = script.end();
     opcodetype opcode;
     do
     {
@@ -255,7 +256,7 @@ int FindAndDelete(CScript& script, const CScript& b)
     return nFound;
 }
 
-bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local_script)
+bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script)
 {
     static const CScriptNum bnZero(0);
     static const CScriptNum bnOne(1);
@@ -311,7 +312,7 @@ bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local
         opcode == OP_MOD ||
         opcode == OP_LSHIFT ||
         opcode == OP_RSHIFT)
-        return set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes.
+        return set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
 
     // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR in non-segwit script is rejected even in an unexecuted branch
     if (opcode == OP_CODESEPARATOR && sigversion == SigVersion::BASE && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
@@ -903,7 +904,7 @@ bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local
 
             // Drop the signature in pre-segwit scripts but not segwit scripts
             if (sigversion == SigVersion::BASE) {
-                int found = FindAndDelete(scriptCode, CScript(vchSig));
+                int found = FindAndDelete(scriptCode, CScript() << vchSig);
                 if (found > 0 && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
                     return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
             }
@@ -992,7 +993,7 @@ bool StepScript(ScriptExecutionEnvironment& env, CScriptIter& pc, CScript* local
             {
                 valtype& vchSig = stacktop(-isig-k);
                 if (sigversion == SigVersion::BASE) {
-                    int found = FindAndDelete(scriptCode, CScript(vchSig));
+                    int found = FindAndDelete(scriptCode, CScript() << vchSig);
                     if (found > 0 && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
                         return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
                 }
@@ -1106,7 +1107,7 @@ ScriptExecutionEnvironment::ScriptExecutionEnvironment(std::vector<std::vector<u
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror)
 {
     ScriptExecutionEnvironment env(stack, script, flags, checker);
-    CScriptIter pc = env.script.begin();
+    CScript::const_iterator pc = env.script.begin();
     set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
     if (env.script.size() > MAX_SCRIPT_SIZE)
         return set_error(serror, SCRIPT_ERR_SCRIPT_SIZE);
@@ -1156,8 +1157,8 @@ public:
     /** Serialize the passed scriptCode, skipping OP_CODESEPARATORs */
     template<typename S>
     void SerializeScriptCode(S &s) const {
-        CScriptIter it = scriptCode.begin();
-        CScriptIter itBegin = it;
+        CScript::const_iterator it = scriptCode.begin();
+        CScript::const_iterator itBegin = it;
         opcodetype opcode;
         unsigned int nCodeSeparators = 0;
         while (scriptCode.GetOp(it, opcode)) {
@@ -1234,16 +1235,16 @@ public:
         btc_sign_logf(" << nInputs = %d [compact]\n", nInputs);
         ::WriteCompactSize(s, nInputs);
         for (unsigned int nInput = 0; nInput < nInputs; nInput++) {
-             btc_sign_logf("(serialize input %d)\n", nInput);
-             SerializeInput(s, nInput);
+            btc_sign_logf("(serialize input %d)\n", nInput);
+            SerializeInput(s, nInput);
         }
         // Serialize vout
         unsigned int nOutputs = fHashNone ? 0 : (fHashSingle ? nIn+1 : txTo.vout.size());
         btc_sign_logf(" << nOutputs = %d [compact]\n", nOutputs);
         ::WriteCompactSize(s, nOutputs);
         for (unsigned int nOutput = 0; nOutput < nOutputs; nOutput++) {
-             btc_sign_logf("(serialize output %d)\n", nOutput);
-             SerializeOutput(s, nOutput);
+            btc_sign_logf("(serialize output %d)\n", nOutput);
+            SerializeOutput(s, nOutput);
         }
         // Serialize nLockTime
         btc_sign_logf(" << txTo.nLockTime = %d [0x%x]\n", txTo.nLockTime, txTo.nLockTime);
@@ -1594,6 +1595,8 @@ bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const C
         return set_error(serror, SCRIPT_ERR_SIG_PUSHONLY);
     }
 
+    // scriptSig and scriptPubKey must be evaluated sequentially on the same stack
+    // rather than being simply concatenated (see CVE-2010-5141)
     std::vector<std::vector<unsigned char> > stack, stackCopy;
     if (!EvalScript(stack, scriptSig, flags, checker, SigVersion::BASE, serror))
         // serror is set
@@ -1699,7 +1702,7 @@ bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const C
     return set_success(serror);
 }
 
-size_t static WitnessSigOps(int witversion, const std::vector<unsigned char>& witprogram, const CScriptWitness& witness, int flags)
+size_t static WitnessSigOps(int witversion, const std::vector<unsigned char>& witprogram, const CScriptWitness& witness)
 {
     if (witversion == 0) {
         if (witprogram.size() == WITNESS_V0_KEYHASH_SIZE)
@@ -1727,11 +1730,11 @@ size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey,
     int witnessversion;
     std::vector<unsigned char> witnessprogram;
     if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
-        return WitnessSigOps(witnessversion, witnessprogram, witness ? *witness : witnessEmpty, flags);
+        return WitnessSigOps(witnessversion, witnessprogram, witness ? *witness : witnessEmpty);
     }
 
     if (scriptPubKey.IsPayToScriptHash() && scriptSig.IsPushOnly()) {
-        CScriptIter pc = scriptSig.begin();
+        CScript::const_iterator pc = scriptSig.begin();
         std::vector<unsigned char> data;
         while (pc < scriptSig.end()) {
             opcodetype opcode;
@@ -1739,7 +1742,7 @@ size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey,
         }
         CScript subscript(data.begin(), data.end());
         if (subscript.IsWitnessProgram(witnessversion, witnessprogram)) {
-            return WitnessSigOps(witnessversion, witnessprogram, witness ? *witness : witnessEmpty, flags);
+            return WitnessSigOps(witnessversion, witnessprogram, witness ? *witness : witnessEmpty);
         }
     }
 

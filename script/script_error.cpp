@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2009-2018 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -52,21 +52,21 @@ const char* ScriptErrorString(const ScriptError serror)
         case SCRIPT_ERR_UNSATISFIED_LOCKTIME:
             return "Locktime requirement not satisfied";
         case SCRIPT_ERR_SIG_HASHTYPE:
-            return "Signature hash type missing or not understood (is this transaction pre-BIP66? Try with --modify-flags=-STRICTENC)";
+            return "Signature hash type missing or not understood";
         case SCRIPT_ERR_SIG_DER:
-            return "Non-canonical DER signature (is this transaction pre-BIP66? Try with --modify-flags=-DERSIG and/or -LOW_S and/or -STRICTENC)";
+            return "Non-canonical DER signature";
         case SCRIPT_ERR_MINIMALDATA:
             return "Data push larger than necessary";
         case SCRIPT_ERR_SIG_PUSHONLY:
             return "Only non-push operators allowed in signatures";
         case SCRIPT_ERR_SIG_HIGH_S:
-            return "Non-canonical signature: S value is unnecessarily high (is this a historical transaction from before LOW_S enforcement? Try with --modify-flags=-LOW_S)";
+            return "Non-canonical signature: S value is unnecessarily high";
         case SCRIPT_ERR_SIG_NULLDUMMY:
-            return "Dummy CHECKMULTISIG argument must be zero (is this transcation pre-BIP66? Try with --modify-flags=-NULLDUMMY)";
+            return "Dummy CHECKMULTISIG argument must be zero";
         case SCRIPT_ERR_MINIMALIF:
             return "OP_IF/NOTIF argument must be minimal";
         case SCRIPT_ERR_SIG_NULLFAIL:
-            return "Signature must be zero for failed CHECK(MULTI)SIG operation (is this a historical transaction from before NULLFAIL enforcement? Try with --modify-flags=-NULLFAIL)";
+            return "Signature must be zero for failed CHECK(MULTI)SIG operation";
         case SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS:
             return "NOPx reserved for soft-fork upgrades";
         case SCRIPT_ERR_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM:
