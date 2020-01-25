@@ -33,14 +33,28 @@ extern "C" {
  *  verification).
  *
  *  A constructed context can safely be used from multiple threads
- *  simultaneously, but API call that take a non-const pointer to a context
+ *  simultaneously, but API calls that take a non-const pointer to a context
  *  need exclusive access to it. In particular this is the case for
- *  secp256k1_context_destroy and secp256k1_context_randomize.
+ *  secp256k1_context_destroy, secp256k1_context_preallocated_destroy,
+ *  and secp256k1_context_randomize.
  *
  *  Regarding randomization, either do it once at creation time (in which case
  *  you do not need any locking for the other calls), or use a read-write lock.
  */
 typedef struct secp256k1_context_struct secp256k1_context;
+
+/** Opaque data structure that holds rewriteable "scratch space"
+ *
+ *  The purpose of this structure is to replace dynamic memory allocations,
+ *  because we target architectures where this may not be available. It is
+ *  essentially a resizable (within specified parameters) block of bytes,
+ *  which is initially created either by memory allocation or TODO as a pointer
+ *  into some fixed rewritable space.
+ *
+ *  Unlike the context object, this cannot safely be shared between threads
+ *  without additional synchronization logic.
+ */
+typedef struct secp256k1_scratch_space_struct secp256k1_scratch_space;
 
 /** Opaque data structure that holds a parsed and valid public key.
  *
@@ -150,12 +164,13 @@ typedef int (*secp256k1_nonce_function)(
 #define SECP256K1_FLAGS_BIT_CONTEXT_SIGN (1 << 9)
 #define SECP256K1_FLAGS_BIT_COMPRESSION (1 << 8)
 
-/** Flags to pass to secp256k1_context_create. */
+/** Flags to pass to secp256k1_context_create, secp256k1_context_preallocated_size, and
+ *  secp256k1_context_preallocated_create. */
 #define SECP256K1_CONTEXT_VERIFY (SECP256K1_FLAGS_TYPE_CONTEXT | SECP256K1_FLAGS_BIT_CONTEXT_VERIFY)
 #define SECP256K1_CONTEXT_SIGN (SECP256K1_FLAGS_TYPE_CONTEXT | SECP256K1_FLAGS_BIT_CONTEXT_SIGN)
 #define SECP256K1_CONTEXT_NONE (SECP256K1_FLAGS_TYPE_CONTEXT)
 
-/** Flag to pass to secp256k1_ec_pubkey_serialize and secp256k1_ec_privkey_export. */
+/** Flag to pass to secp256k1_ec_pubkey_serialize. */
 #define SECP256K1_EC_COMPRESSED (SECP256K1_FLAGS_TYPE_COMPRESSION | SECP256K1_FLAGS_BIT_COMPRESSION)
 #define SECP256K1_EC_UNCOMPRESSED (SECP256K1_FLAGS_TYPE_COMPRESSION)
 
@@ -166,7 +181,18 @@ typedef int (*secp256k1_nonce_function)(
 #define SECP256K1_TAG_PUBKEY_HYBRID_EVEN 0x06
 #define SECP256K1_TAG_PUBKEY_HYBRID_ODD 0x07
 
-/** Create a secp256k1 context object.
+/** A simple secp256k1 context object with no precomputed tables. These are useful for
+ *  type serialization/parsing functions which require a context object to maintain
+ *  API consistency, but currently do not require expensive precomputations or dynamic
+ *  allocations.
+ */
+SECP256K1_API extern const secp256k1_context *secp256k1_context_no_precomp;
+
+/** Create a secp256k1 context object (in dynamically allocated memory).
+ *
+ *  This function uses malloc to allocate memory. It is guaranteed that malloc is
+ *  called at most once for every call of this function. If you need to avoid dynamic
+ *  memory allocation entirely, see the functions in secp256k1_preallocated.h.
  *
  *  Returns: a newly created context object.
  *  In:      flags: which parts of the context to initialize.
@@ -177,7 +203,11 @@ SECP256K1_API secp256k1_context* secp256k1_context_create(
     unsigned int flags
 ) SECP256K1_WARN_UNUSED_RESULT;
 
-/** Copies a secp256k1 context object.
+/** Copy a secp256k1 context object (into dynamically allocated memory).
+ *
+ *  This function uses malloc to allocate memory. It is guaranteed that malloc is
+ *  called at most once for every call of this function. If you need to avoid dynamic
+ *  memory allocation entirely, see the functions in secp256k1_preallocated.h.
  *
  *  Returns: a newly created context object.
  *  Args:    ctx: an existing context to copy (cannot be NULL)
@@ -186,10 +216,18 @@ SECP256K1_API secp256k1_context* secp256k1_context_clone(
     const secp256k1_context* ctx
 ) SECP256K1_ARG_NONNULL(1) SECP256K1_WARN_UNUSED_RESULT;
 
-/** Destroy a secp256k1 context object.
+/** Destroy a secp256k1 context object (created in dynamically allocated memory).
  *
  *  The context pointer may not be used afterwards.
- *  Args:   ctx: an existing context to destroy (cannot be NULL)
+ *
+ *  The context to destroy must have been created using secp256k1_context_create
+ *  or secp256k1_context_clone. If the context has instead been created using
+ *  secp256k1_context_preallocated_create or secp256k1_context_preallocated_clone, the
+ *  behaviour is undefined. In that case, secp256k1_context_preallocated_destroy must
+ *  be used instead.
+ *
+ *  Args:   ctx: an existing context to destroy, constructed using
+ *               secp256k1_context_create or secp256k1_context_clone
  */
 SECP256K1_API void secp256k1_context_destroy(
     secp256k1_context* ctx
@@ -209,11 +247,28 @@ SECP256K1_API void secp256k1_context_destroy(
  *  to cause a crash, though its return value and output arguments are
  *  undefined.
  *
+ *  When this function has not been called (or called with fn==NULL), then the
+ *  default handler will be used. The library provides a default handler which
+ *  writes the message to stderr and calls abort. This default handler can be
+ *  replaced at link time if the preprocessor macro
+ *  USE_EXTERNAL_DEFAULT_CALLBACKS is defined, which is the case if the build
+ *  has been configured with --enable-external-default-callbacks. Then the
+ *  following two symbols must be provided to link against:
+ *   - void secp256k1_default_illegal_callback_fn(const char* message, void* data);
+ *   - void secp256k1_default_error_callback_fn(const char* message, void* data);
+ *  The library can call these default handlers even before a proper callback data
+ *  pointer could have been set using secp256k1_context_set_illegal_callback or
+ *  secp256k1_context_set_error_callback, e.g., when the creation of a context
+ *  fails. In this case, the corresponding default handler will be called with
+ *  the data pointer argument set to NULL.
+ *
  *  Args: ctx:  an existing context object (cannot be NULL)
  *  In:   fun:  a pointer to a function to call when an illegal argument is
- *              passed to the API, taking a message and an opaque pointer
- *              (NULL restores a default handler that calls abort).
+ *              passed to the API, taking a message and an opaque pointer.
+ *              (NULL restores the default handler.)
  *        data: the opaque pointer to pass to fun above.
+ *
+ *  See also secp256k1_context_set_error_callback.
  */
 SECP256K1_API void secp256k1_context_set_illegal_callback(
     secp256k1_context* ctx,
@@ -233,14 +288,40 @@ SECP256K1_API void secp256k1_context_set_illegal_callback(
  *
  *  Args: ctx:  an existing context object (cannot be NULL)
  *  In:   fun:  a pointer to a function to call when an internal error occurs,
- *              taking a message and an opaque pointer (NULL restores a default
- *              handler that calls abort).
+ *              taking a message and an opaque pointer (NULL restores the
+ *              default handler, see secp256k1_context_set_illegal_callback
+ *              for details).
  *        data: the opaque pointer to pass to fun above.
+ *
+ *  See also secp256k1_context_set_illegal_callback.
  */
 SECP256K1_API void secp256k1_context_set_error_callback(
     secp256k1_context* ctx,
     void (*fun)(const char* message, void* data),
     const void* data
+) SECP256K1_ARG_NONNULL(1);
+
+/** Create a secp256k1 scratch space object.
+ *
+ *  Returns: a newly created scratch space.
+ *  Args: ctx:  an existing context object (cannot be NULL)
+ *  In:   size: amount of memory to be available as scratch space. Some extra
+ *              (<100 bytes) will be allocated for extra accounting.
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT secp256k1_scratch_space* secp256k1_scratch_space_create(
+    const secp256k1_context* ctx,
+    size_t size
+) SECP256K1_ARG_NONNULL(1);
+
+/** Destroy a secp256k1 scratch space.
+ *
+ *  The pointer may not be used afterwards.
+ *  Args:       ctx: a secp256k1 context object.
+ *          scratch: space to destroy
+ */
+SECP256K1_API void secp256k1_scratch_space_destroy(
+    const secp256k1_context* ctx,
+    secp256k1_scratch_space* scratch
 ) SECP256K1_ARG_NONNULL(1);
 
 /** Parse a variable-length public key into the pubkey object.
@@ -442,6 +523,18 @@ SECP256K1_API int secp256k1_ecdsa_signature_normalize(
  */
 SECP256K1_API extern const secp256k1_nonce_function secp256k1_nonce_function_rfc6979;
 
+/** An implementation of the nonce generation function as defined in BIP-schnorr.
+ *
+ * If a data pointer is passed, it is assumed to be a pointer to 32 bytes of
+ * extra entropy. If the data pointer is NULL and this function is used in
+ * schnorrsig_sign, it produces BIP-schnorr compliant signatures.
+ * When this function is used in ecdsa_sign, it generates a nonce using an
+ * analogue of the bip-schnorr nonce generation algorithm, but with tag
+ * "BIPSchnorrNULL" instead of "BIPSchnorrDerive".
+ * The attempt argument must be 0 or the function will fail and return 0.
+ */
+SECP256K1_API extern const secp256k1_nonce_function secp256k1_nonce_function_bipschnorr;
+
 /** A default safe nonce generation function (currently equal to secp256k1_nonce_function_rfc6979). */
 SECP256K1_API extern const secp256k1_nonce_function secp256k1_nonce_function_default;
 
@@ -498,7 +591,7 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_create(
  *
  *  Returns: 1 always
  *  Args:   ctx:        pointer to a context object
- *  In/Out: pubkey:     pointer to the public key to be negated (cannot be NULL)
+ *  In/Out: seckey:     pointer to the 32-byte private key to be negated (cannot be NULL)
  */
 SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_privkey_negate(
     const secp256k1_context* ctx,
@@ -565,7 +658,7 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_privkey_tweak_mul(
  *          uniformly random 32-byte arrays, or equal to zero. 1 otherwise.
  * Args:    ctx:    pointer to a context object initialized for validation
  *                 (cannot be NULL).
- * In/Out:  pubkey: pointer to a public key obkect.
+ * In/Out:  pubkey: pointer to a public key object.
  * In:      tweak:  pointer to a 32-byte tweak.
  */
 SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_tweak_mul(
@@ -575,7 +668,7 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_tweak_mul(
 ) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
 
 /** Updates the context randomization to protect against side-channel leakage.
- *  Returns: 1: randomization successfully updated
+ *  Returns: 1: randomization successfully updated or nothing to randomize
  *           0: error
  *  Args:    ctx:       pointer to a context object (cannot be NULL)
  *  In:      seed32:    pointer to a 32-byte random seed (NULL resets to initial state)
@@ -590,8 +683,14 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_tweak_mul(
  * that it does not affect function results, but shields against attacks which
  * rely on any input-dependent behaviour.
  *
+ * This function has currently an effect only on contexts initialized for signing
+ * because randomization is currently used only for signing. However, this is not
+ * guaranteed and may change in the future. It is safe to call this function on
+ * contexts not initialized for signing; then it will have no effect and return 1.
+ *
  * You should call this after secp256k1_context_create or
- * secp256k1_context_clone, and may call this repeatedly afterwards.
+ * secp256k1_context_clone (and secp256k1_context_preallocated_create or
+ * secp256k1_context_clone, resp.), and you may call this repeatedly afterwards.
  */
 SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_context_randomize(
     secp256k1_context* ctx,
@@ -613,6 +712,170 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_ec_pubkey_combine(
     const secp256k1_pubkey * const * ins,
     size_t n
 ) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+
+/** Opaque data structure that holds a parsed and valid "x-only" public key.
+ *  An x-only pubkey encodes a point whose Y coordinate is square. It is
+ *  serialized using only its X coordinate (32 bytes). See bip-schnorr for more
+ *  information about x-only pubkeys.
+ *
+ *  The exact representation of data inside is implementation defined and not
+ *  guaranteed to be portable between different platforms or versions. It is
+ *  however guaranteed to be 64 bytes in size, and can be safely copied/moved.
+ *  If you need to convert to a format suitable for storage, transmission, or
+ *  comparison, use secp256k1_xonly_pubkey_serialize and
+ *  secp256k1_xonly_pubkey_parse.
+ */
+typedef struct {
+    unsigned char data[64];
+} secp256k1_xonly_pubkey;
+
+/** Parse a 32-byte public key into a xonly_pubkey object.
+ *
+ *  Returns: 1 if the public key was fully valid.
+ *           0 if the public key could not be parsed or is invalid.
+ *
+ *  Args:   ctx: a secp256k1 context object.
+ *  Out: pubkey: pointer to a pubkey object. If 1 is returned, it is set to a
+ *               parsed version of input. If not, its value is undefined.
+ *  In: input32: pointer to a serialized xonly public key
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_xonly_pubkey_parse(
+    const secp256k1_context* ctx,
+    secp256k1_xonly_pubkey* pubkey,
+    const unsigned char *input32
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+
+
+/** Serialize an xonly_pubkey object into a 32-byte sequence.
+ *
+ *  Returns: 1 always.
+ *
+ *  Args:     ctx: a secp256k1 context object.
+ *  Out: output32: a pointer to a 32-byte array to place the serialized key in.
+ *  In:    pubkey: a pointer to a secp256k1_xonly_pubkey containing an
+ *                 initialized public key.
+ */
+SECP256K1_API int secp256k1_xonly_pubkey_serialize(
+    const secp256k1_context* ctx,
+    unsigned char *output32,
+    const secp256k1_xonly_pubkey* pubkey
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+
+/** Compute the xonly public key for a secret key. Same as ec_pubkey_create, but
+ *  for xonly public keys.
+ *
+ *  Returns: 1 if secret was valid, public key stores
+ *           0 if secret was invalid, try again
+ *
+ *  Args:   ctx: pointer to a context object, initialized for signing (cannot be NULL)
+ *  Out: pubkey: pointer to the created xonly public key (cannot be NULL)
+ *  In:  seckey: pointer to a 32-byte private key (cannot be NULL)
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_xonly_pubkey_create(
+    const secp256k1_context* ctx,
+    secp256k1_xonly_pubkey *pubkey,
+    const unsigned char *seckey
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+
+/** Converts a secp256k1_pubkey into a secp256k1_xonly_pubkey.
+ *
+ *  Returns: 1 if the public key was successfully converted
+ *           0 otherwise
+ *
+ *  Args:         ctx: pointer to a context object
+ *  Out: xonly_pubkey: pointer to an x-only public key object for placing the
+ *                     converted public key (cannot be NULL)
+ *         is_negated: pointer to an integer that will be set to 1 if the point
+ *                     encoded by `xonly_pubkey` is the negation of `pubkey`
+ *                     and set to 0 otherwise. (can be NULL)
+ *  In:       pubkey: pointer to a public key that is converted (cannot be
+ *                    NULL)
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_xonly_pubkey_from_pubkey(
+    const secp256k1_context* ctx,
+    secp256k1_xonly_pubkey *xonly_pubkey,
+    int *is_negated,
+    const secp256k1_pubkey *pubkey
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(4);
+
+/** Tweak the secret key of an x-only pubkey by adding a tweak to it. The public
+ *  key of the resulting secret key will be the same as the output of
+ *  secp256k1_xonly_pubkey_tweak_add called with the same tweak and corresponding
+ *  input public key.
+ *
+ *  If the public key corresponds to a point with square Y, tweak32 is added to
+ *  the seckey (modulo the group order). Otherwise, tweak32 is added to the
+ *  negation of the seckey (modulo the group order).
+ *
+ *  Returns: 1 if the tweak was successfully added to seckey
+ *           0 if the tweak was out of range or the resulting secret key would be
+ *             invalid (only when the tweak is the complement of the secret key) or
+ *             seckey is 0.
+ *
+ *  Args:      ctx: pointer to a context object, initialized for signing (cannot be NULL)
+ *  In/Out: seckey: pointer to a 32-byte secret key
+ *  In:    tweak32: pointer to a 32-byte tweak
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_xonly_seckey_tweak_add(
+    const secp256k1_context* ctx,
+    unsigned char *seckey,
+    const unsigned char *tweak32
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+
+/** Tweak an x-only public key (in place) by adding tweak times the generator to it.
+ *
+ *  Because the resulting point may have a non-square Y coordinate, it may not
+ *  be representable by an x-only pubkey. Instead, `output_pubkey` will be set
+ *  to the negation of that point. Therefore this function outputs `is_negated`
+ *  which is required for `xonly_pubkey_tweak_test`.
+ *
+ *  Returns: 1 if tweak times the generator was successfully added to pubkey
+ *           0 if the tweak was out of range or the resulting public key would be
+ *             invalid (only when the tweak is the complement of the corresponding
+ *             private key).
+ *
+ *  Args:       ctx: pointer to a context object initialized for validation
+ *                   (cannot be NULL)
+ *  In/Out:  pubkey: pointer to an x-only public key object to apply the tweak to
+ *                   (cannot be NULL)
+ *  Out: is_negated: pointer to an integer that will be set to 1 if
+ *                   `output_pubkey` is the negation of the point that resulted
+ *                   from adding the tweak. (cannot be NULL)
+ *  In:         tweak32: pointer to a 32-byte tweak (cannot be NULL)
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_xonly_pubkey_tweak_add(
+    const secp256k1_context* ctx,
+    secp256k1_xonly_pubkey *pubkey,
+    int *is_negated,
+    const unsigned char *tweak32
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
+
+/** Tests that output_pubkey and is_negated are the result of calling
+ *  secp256k1_xonly_pubkey_tweak_add with internal_pubkey and tweak32. Note
+ *  that this alone does _not_ verify that output_pubkey is a commitment. If the
+ *  tweak is not chosen in a specific way, the output_pubkey can easily be the
+ *  result of a different internal_pubkey and tweak.
+ *
+ *  Returns: 1 if output_pubkey is the result of tweaking the internal_pubkey with
+ *             tweak32
+ *           0 otherwise
+ *
+ *  Args:           ctx: pointer to a context object initialized for validation
+ *                       (cannot be NULL)
+ *  In:   output_pubkey: pointer to a public key object (cannot be NULL)
+ *           is_negated: 1 if `output_pubkey is the negation of the point that
+ *                       resulted from adding the tweak and 0 otherwise.
+ *      internal_pubkey: pointer to an x-only public key object to apply the
+ *                       tweak to (cannot be NULL)
+ *              tweak32: pointer to a 32-byte tweak (cannot be NULL)
+ */
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_xonly_pubkey_tweak_test(
+    const secp256k1_context* ctx,
+    const secp256k1_xonly_pubkey *output_pubkey,
+    int is_negated,
+    const secp256k1_xonly_pubkey *internal_pubkey,
+    const unsigned char *tweak32
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(4) SECP256K1_ARG_NONNULL(5);
 
 #ifdef __cplusplus
 }
