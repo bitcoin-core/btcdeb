@@ -155,18 +155,6 @@ int print_stack(std::vector<valtype>& stack, bool raw) {
     return 0;
 }
 
-int print_bool_stack(std::vector<bool> stack) {
-    if (stack.size() == 0) printf("- empty stack -\n");
-
-    int i = 0;
-    for (int j = stack.size() - 1; j >= 0; j--) {
-        i++;
-        printf("<%02d>\t%02x\n", i, (unsigned int) stack[j]);
-    }
-
-    return 0;
-}
-
 int fn_stack(const char* arg) {
     return print_stack(env->stack);
 }
@@ -176,7 +164,7 @@ int fn_altstack(const char*) {
 }
 
 int fn_vfexec(const char*) {
-    return print_bool_stack(env->vfExec);
+    return env->vfExec.println();
 }
 
 static const char* tfs[] = {
@@ -204,6 +192,7 @@ static const char* tfs[] = {
     "decode-wif",
     "sign",
     "get-pubkey",
+    "get-xpubkey",
     "combine-privkeys",
     "multiply-privkeys",
 #endif // ENABLE_DANGEROUS
@@ -235,6 +224,7 @@ static const char* tfsh[] = {
     "[string]  decode [string] into a private key using the Wallet Import Format",
     "[sighash] [privkey] generate a signature for the given message (sighash) using the given private key",
     "[privkey] get the public key corresponding to the given private key",
+    "[privkey] get the x-only public key corresponding to the given private key",
     "[privkey1] [privkey2] combine the two private keys into one private key",
     "[privkey1] [privkey2] multiply a privkey with another",
 #endif // ENABLE_DANGEROUS
@@ -265,6 +255,7 @@ int _e_encode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_encode_wif();
 int _e_decode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_decode_wif(); pv.println(); return 0; }
 int _e_sign(Value&& pv)          { kerl_set_sensitive(true); pv.do_sign(); pv.println(); return 0; }
 int _e_get_pubkey(Value&& pv)    { kerl_set_sensitive(true); pv.do_get_pubkey(); pv.println(); return 0; }
+int _e_get_xpubkey(Value&& pv)   { kerl_set_sensitive(true); pv.do_get_xpubkey(); pv.println(); return 0; }
 int _e_combine_privkeys(Value&& pv) { kerl_set_sensitive(true); pv.do_combine_privkeys(); pv.println(); return 0; }
 int _e_mul_privkeys(Value&& pv)  { kerl_set_sensitive(true); pv.do_multiply_privkeys(); pv.println(); return 0; }
 #endif // ENABLE_DANGEROUS
@@ -295,6 +286,7 @@ static const btcdeb_tfun tffp[] = {
     _e_decode_wif,
     _e_sign,
     _e_get_pubkey,
+    _e_get_xpubkey,
     _e_combine_privkeys,
     _e_mul_privkeys,
 #endif // ENABLE_DANGEROUS
@@ -327,7 +319,7 @@ int fn_tf(const char* arg) {
             ", ripemd160, hash256, hash160, base58chkenc, base58chkdec, bech32enc, bech32dec, verify_sig"
             ", combine_pubkeys, tweak_pubkey, addr_to_spk, spk_to_addr, add, sub"
 #ifdef ENABLE_DANGEROUS
-            ", combine_privkeys, multiply_privkeys, nnegate_privkey, encode_wif, decode_wif, sign, get_pubkey"
+            ", combine_privkeys, multiply_privkeys, nnegate_privkey, encode_wif, decode_wif, sign, get_pubkey, get_xpubkey"
 #endif // ENABLE_DANGEROUS
             "\n"
         );

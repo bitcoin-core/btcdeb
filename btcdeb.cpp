@@ -86,6 +86,11 @@ static unsigned int svf_parse_flags(unsigned int in_flags, const char* mod) {
     return in_flags;
 }
 
+inline bool checkenv(const std::string& flag, bool fallback = false) {
+    const auto& v = std::getenv(flag.c_str());
+    return v ? strcmp("0", v) : fallback;
+}
+
 int main(int argc, char* const* argv)
 {
     pipe_in = !isatty(fileno(stdin)) || std::getenv("DEBUG_SET_PIPE_IN");
@@ -128,9 +133,15 @@ int main(int argc, char* const* argv)
     }
 
     if (!pipe_in) {
-        if (std::getenv("DEBUG_SIGHASH")) btc_sighash_logf = btc_logf_stderr;
-        if (std::getenv("DEBUG_SIGNING")) btc_sign_logf = btc_logf_stderr;
-        if (std::getenv("DEBUG_SEGWIT"))  btc_segwit_logf = btc_logf_stderr;
+        // temporarily defaulting all to ON
+        if (checkenv("DEBUG_SIGHASH", true)) btc_sighash_logf = btc_logf_stderr;
+        if (checkenv("DEBUG_SIGNING", true)) btc_sign_logf = btc_logf_stderr;
+        if (checkenv("DEBUG_SEGWIT", true))  btc_segwit_logf = btc_logf_stderr;
+        if (checkenv("DEBUG_TAPROOT", true)) btc_taproot_logf = btc_logf_stderr;
+        btc_sighash_logf("LOG: sighash\n");
+        btc_sign_logf("LOG: sign\n");
+        btc_segwit_logf("LOG: segwit\n");
+        btc_taproot_logf("LOG: taproot\n");
     }
 
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;

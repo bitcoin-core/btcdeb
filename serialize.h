@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,7 +9,6 @@
 #include <compat/endian.h>
 
 #include <algorithm>
-#include <assert.h>
 #include <ios>
 #include <limits>
 #include <map>
@@ -199,6 +198,30 @@ template<typename X> const X& ReadWriteAsHelper(const X& x) { return x; }
     void Unserialize(Stream& s) {                                     \
         SerializationOp(s, CSerActionUnserialize());                  \
     }
+
+/**
+ * Implement the Serialize and Unserialize methods by delegating to a single templated
+ * static method that takes the to-be-(de)serialized object as a parameter. This approach
+ * has the advantage that the constness of the object becomes a template parameter, and
+ * thus allows a single implementation that sees the object as const for serializing
+ * and non-const for deserializing, without casts.
+ */
+#define SERIALIZE_METHODS(cls, obj)                                                 \
+    template<typename Stream>                                                       \
+    void Serialize(Stream& s) const                                                 \
+    {                                                                               \
+        static_assert(std::is_same<const cls&, decltype(*this)>::value, "Serialize type mismatch"); \
+        SerializationOps(*this, s, CSerActionSerialize());                          \
+    }                                                                               \
+    template<typename Stream>                                                       \
+    void Unserialize(Stream& s)                                                     \
+    {                                                                               \
+        static_assert(std::is_same<cls&, decltype(*this)>::value, "Unserialize type mismatch"); \
+        SerializationOps(*this, s, CSerActionUnserialize());                        \
+    }                                                                               \
+    template<typename Stream, typename Type, typename Operation>                    \
+    static inline void SerializationOps(Type& obj, Stream& s, Operation ser_action) \
+
 
 #ifndef CHAR_EQUALS_INT8
 template<typename Stream> inline void Serialize(Stream& s, char a    ) { ser_writedata8(s, a); } // TODO Get rid of bare char
@@ -419,26 +442,48 @@ I ReadVarInt(Stream& is)
     }
 }
 
-#define VARINT(obj, ...) WrapVarInt<__VA_ARGS__>(REF(obj))
+/** Simple wrapper class to serialize objects using a formatter; used by Using(). */
+template<typename Formatter, typename T>
+class Wrapper
+{
+    static_assert(std::is_lvalue_reference<T>::value, "Wrapper needs an lvalue reference type T");
+protected:
+    T m_object;
+public:
+    explicit Wrapper(T obj) : m_object(obj) {}
+    template<typename Stream> void Serialize(Stream &s) const { Formatter().Ser(s, m_object); }
+    template<typename Stream> void Unserialize(Stream &s) { Formatter().Unser(s, m_object); }
+};
+
+/** Cause serialization/deserialization of an object to be done using a specified formatter class.
+ *
+ * To use this, you need a class Formatter that has public functions Ser(stream, const object&) for
+ * serialization, and Unser(stream, object&) for deserialization. Serialization routines (inside
+ * READWRITE, or directly with << and >> operators), can then use Using<Formatter>(object).
+ *
+ * This works by constructing a Wrapper<Formatter, T>-wrapped version of object, where T is
+ * const during serialization, and non-const during deserialization, which maintains const
+ * correctness.
+ */
+template<typename Formatter, typename T>
+static inline Wrapper<Formatter, T&> Using(T&& t) { return Wrapper<Formatter, T&>(t); }
+
+#define VARINT(obj, ...) Using<VarIntFormatter<__VA_ARGS__>>(obj)
 #define COMPACTSIZE(obj) CCompactSize(REF(obj))
 #define LIMITED_STRING(obj,n) LimitedString< n >(REF(obj))
 
-template<VarIntMode Mode, typename I>
-class CVarInt
+/** Serialization wrapper class for integers in VarInt format. */
+template<VarIntMode Mode=VarIntMode::DEFAULT>
+struct VarIntFormatter
 {
-protected:
-    I &n;
-public:
-    explicit CVarInt(I& nIn) : n(nIn) { }
-
-    template<typename Stream>
-    void Serialize(Stream &s) const {
-        WriteVarInt<Stream,Mode,I>(s, n);
+    template<typename Stream, typename I> void Ser(Stream &s, I v)
+    {
+        WriteVarInt<Stream,Mode,typename std::remove_cv<I>::type>(s, v);
     }
 
-    template<typename Stream>
-    void Unserialize(Stream& s) {
-        n = ReadVarInt<Stream,Mode,I>(s);
+    template<typename Stream, typename I> void Unser(Stream& s, I& v)
+    {
+        v = ReadVarInt<Stream,Mode,typename std::remove_cv<I>::type>(s);
     }
 };
 
@@ -522,9 +567,6 @@ public:
             s.write((char*)string.data(), string.size());
     }
 };
-
-template<VarIntMode Mode=VarIntMode::DEFAULT, typename I>
-CVarInt<Mode, I> WrapVarInt(I& n) { return CVarInt<Mode, I>{n}; }
 
 template<typename I>
 BigEndian<I> WrapBigEndian(I& n) { return BigEndian<I>(n); }

@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -137,6 +137,9 @@ const char* GetOpName(opcodetype opcode)
     case OP_NOP8                   : return "OP_NOP8";
     case OP_NOP9                   : return "OP_NOP9";
     case OP_NOP10                  : return "OP_NOP10";
+
+    // Opcode added by BIP 342 (Tapscript)
+    case OP_CHECKSIGADD            : return "OP_CHECKSIGADD";
 
     case OP_INVALIDOPCODE          : return "OP_INVALIDOPCODE";
 
@@ -325,4 +328,12 @@ bool GetScriptOp(CScriptBase::const_iterator& pc, CScriptBase::const_iterator en
 
     opcodeRet = static_cast<opcodetype>(opcode);
     return true;
+}
+
+bool IsOpSuccess(const opcodetype& opcode)
+{
+    return (opcode == 0x50 || opcode == 0x62 || opcode == 0x89 ||
+            opcode == 0x8a || opcode == 0x8d || opcode == 0x8e ||
+            (opcode >= 0x7e && opcode <= 0x81) || (opcode >= 0x83 && opcode <= 0x86) ||
+            (opcode >= 0x95 && opcode <= 0x99) || (opcode >= 0xbb && opcode <= 0xfe));
 }

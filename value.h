@@ -384,7 +384,7 @@ struct Value {
             fprintf(stderr, "cannot base58-decode non-string value\n");
             return;
         }
-        if (!DecodeBase58(str, data)) {
+        if (!DecodeBase58(str, data, 65536)) {
             fprintf(stderr, "decode failed\n");
         }
         type = T_DATA;
@@ -399,7 +399,7 @@ struct Value {
             fprintf(stderr, "cannot base58-decode non-string value\n");
             return;
         }
-        if (!DecodeBase58Check(str, data)) {
+        if (!DecodeBase58Check(str, data, 65536)) {
             fprintf(stderr, "decode failed\n");
         }
         type = T_DATA;
@@ -499,6 +499,13 @@ struct Value {
     void do_negate_pubkey();
     void do_not_op();
     void do_boolify();
+    void do_taproot_tagged_hash();
+    void do_taproot_tweak_pubkey();
+    void do_taproot_tweak_seckey();
+    void do_taproot_tree_helper();
+    void do_taproot_output_script();
+    void do_taproot_sign_key();
+    void do_taproot_sign_script();
 #ifdef ENABLE_DANGEROUS
     void do_combine_privkeys();
     void do_multiply_privkeys();
@@ -541,6 +548,7 @@ struct Value {
     }
     void do_sign();
     void do_get_pubkey();
+    void do_get_xpubkey();
 #endif // ENABLE_DANGEROUS
 
     bool do_exec(const std::string& fun) {

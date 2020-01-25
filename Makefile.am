@@ -51,6 +51,7 @@ BITCOIN_CORE_H = \
 	bech32.h \
 	compat.h \
 	compat/byteswap.h \
+	compat/cpuid.h \
 	compat/endian.h \
 	crypto/common.h \
 	crypto/hmac_sha512.h \
@@ -77,6 +78,8 @@ BITCOIN_CORE_H = \
 	tinyformat.h \
 	uint256.h \
 	util/strencodings.h \
+	util/string.h \
+	util/vector.h \
 	value.h
 
 # debugger #
@@ -113,6 +116,7 @@ libbitcoin_a_SOURCES = \
 	support/lockedpool.cpp \
 	uint256.cpp \
 	util/strencodings.cpp \
+	util/string.cpp \
 	value.cpp \
     $(BITCOIN_CORE_H)
 

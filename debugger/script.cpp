@@ -18,6 +18,7 @@ btc_logf_t btc_logf = btc_logf_stderr;
 btc_logf_t btc_sighash_logf = btc_logf_dummy;
 btc_logf_t btc_sign_logf = btc_logf_dummy;
 btc_logf_t btc_segwit_logf = btc_logf_dummy;
+btc_logf_t btc_taproot_logf = btc_logf_dummy;
 
 opcodetype GetOpCode(const char* name)
 {

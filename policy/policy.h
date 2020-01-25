@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -51,6 +51,11 @@ static constexpr unsigned int STANDARD_SCRIPT_VERIFY_FLAGS = MANDATORY_SCRIPT_VE
                                                              SCRIPT_VERIFY_WITNESS |
                                                              SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM |
                                                              SCRIPT_VERIFY_WITNESS_PUBKEYTYPE |
-                                                             SCRIPT_VERIFY_CONST_SCRIPTCODE;
+                                                             SCRIPT_VERIFY_CONST_SCRIPTCODE |
+                                                             SCRIPT_VERIFY_TAPROOT |
+                                                             SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_TAPROOT_VERSION |
+                                                             SCRIPT_VERIFY_DISCOURAGE_UNKNOWN_ANNEX |
+                                                             SCRIPT_VERIFY_DISCOURAGE_OP_SUCCESS |
+                                                             SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_PUBKEYTYPE;
 
 #endif // BITCOIN_POLICY_POLICY_H
