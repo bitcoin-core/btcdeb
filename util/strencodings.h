@@ -16,8 +16,6 @@
 #include <string>
 #include <vector>
 
-#include <functional>
-
 #define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
 
 /** Used by SanitizeString() */
@@ -172,18 +170,6 @@ bool TimingResistantEqual(const T& a, const T& b)
  * @note The result must be in the range (-10^18,10^18), otherwise an overflow error will trigger.
  */
 NODISCARD bool ParseFixedPoint(const std::string &val, int decimals, int64_t *amount_out);
-
-template <typename Tset, typename Tel>
-inline std::string Join(const Tset& iterable, const std::string& sep,
-        std::function<std::string(const Tel&)> strfun) {
-    std::string rv = "";
-    for (const Tel& el : iterable) {
-        rv += (rv[0] ? ", " : "") + strfun(el);
-    }
-    return rv;
-}
-
-inline std::string JoinHexStrFun(const std::vector<unsigned char>& t) { return HexStr(t); }
 
 /** Convert from one power-of-2 number base to another. */
 template<int frombits, int tobits, bool pad, typename O, typename I>
