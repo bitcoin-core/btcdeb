@@ -1011,7 +1011,6 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                 std::string pub_str = HexStr(vchPubKey);
                 btc_sign_logf("- got sig %s\n", sig_str.c_str());
                 btc_sign_logf("- got key %s\n", pub_str.c_str());
-
                 bool fOk;
                 if (pretend_valid_pubkeys.count(vchPubKey)) {
                     fOk = pretend_valid_map.count(vchSig) && pretend_valid_map.at(vchSig) == vchPubKey;
@@ -1086,9 +1085,9 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
             return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
     }
 
-    // Size limits
-    if (stack.size() + altstack.size() > MAX_STACK_SIZE)
-        return set_error(serror, SCRIPT_ERR_STACK_SIZE);
+            // Size limits
+            if (stack.size() + altstack.size() > MAX_STACK_SIZE)
+                return set_error(serror, SCRIPT_ERR_STACK_SIZE);
 
     return true;
 }
@@ -1193,8 +1192,8 @@ public:
         // Serialize the script
         if (nInput != nIn) {
             // Blank out other inputs' signatures
-            btc_sign_logf(" << [empty script] (reason: nInput != nIn)\n");
             ::Serialize(s, CScript());
+            btc_sign_logf(" << [empty script] (reason: nInput != nIn)\n");
         } else {
             btc_sign_logf("(SerializeScriptCode)\n");
             SerializeScriptCode(s);
@@ -1213,14 +1212,11 @@ public:
     /** Serialize an output of txTo */
     template<typename S>
     void SerializeOutput(S &s, unsigned int nOutput) const {
-        if (fHashSingle && nOutput != nIn) {
+        if (fHashSingle && nOutput != nIn)
             // Do not lock-in the txout payee at other indices as txin
-            btc_sign_logf(" << [empty txout] (reason: fHashSingle && nOutput=%d != nIn=%d)\n", nOutput, nIn);
             ::Serialize(s, CTxOut());
-        } else {
-            btc_sign_logf(" << txTo.vout[nOutput] = %s\n", txTo.vout[nOutput].ToString().c_str());
+        else
             ::Serialize(s, txTo.vout[nOutput]);
-        }
     }
 
     /** Serialize txTo */
@@ -1370,7 +1366,6 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
         CHashWriter::debug = false;
         uint256 sighash = ss.GetHash();
         btc_sign_logf("RESULTING HASH = %s\n", sighash.ToString().c_str());
-
         return sighash;
     }
     btc_sign_logf("- sigversion = SIGVERSION_BASE (non-segwit style)\n");
