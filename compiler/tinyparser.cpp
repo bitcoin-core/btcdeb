@@ -60,6 +60,7 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     clean.flags |= ws_.flags & (PWS_IF);
     // if (ws_.mark != *s) printf("(clean)\n");
     pws& ws = ws_.mark == *s ? ws_ : clean;
+    try(parse_comment);
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_IF)) { try(parse_if); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_MOD)) { try(parse_mod); }
     if (!ws_.pcache.count(pcv) && ws.avail(PWS_LOGICAL)) { try(parse_logical_expr); }
@@ -84,6 +85,15 @@ st_t* parse_expr(pws& ws_, token_t** s) {
     try(parse_variable);
     try(parse_restricted);
     try(parse_value);
+    return nullptr;
+}
+
+st_t* parse_comment(pws& ws, token_t** s) {
+    DEBUG_PARSER("comment");
+    if ((*s)->token == tok_sharp) {
+        *s = (*s)->next;
+        return parse_expr(ws, s);
+    }
     return nullptr;
 }
 
@@ -609,7 +619,7 @@ st_t* parse_sequence(pws& ws, token_t** s) {
         uint64_t flags = 0;
         pws sub_ws(ws.pcache, flags);
         st_t* e = parse_expr(sub_ws, &r);
-        sequence_list.emplace_back(e);
+        if (e) sequence_list.emplace_back(e);
         if (r && r->token == tok_semicolon) {
             r = r->next;
         } else break;

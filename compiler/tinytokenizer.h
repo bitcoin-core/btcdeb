@@ -44,6 +44,7 @@ enum token_type {
     tok_ge, // >=
     tok_ne, // !=
     tok_arrow, // =>
+    tok_sharp,  // #
     tok_consumable, // consumed by fulfilled token sequences
     tok_ws,
 };
@@ -55,7 +56,7 @@ static const char* token_type_str[] = {
     "equal",
     "<",
     ">",
-    "exclaim",
+    "!",
     "lparen",
     "rparen",
     "string",
@@ -81,6 +82,7 @@ static const char* token_type_str[] = {
     ">=",
     "!=",
     "=>",
+    "sharp",
     "consumable",
     "ws",
 };
@@ -112,6 +114,7 @@ inline token_type determine_token(const char c, const char p, size_t seqlen, tok
         }
         return tok_plus;
     }
+    if (c == '#') return tok_sharp;
     if (c == '|') return p == '|' ? tok_lor : tok_consumable;
     if (c == '&') return p == '&' ? tok_land : tok_consumable;
     if (c == '^') return tok_pow;

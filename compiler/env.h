@@ -460,7 +460,7 @@ struct env_t: public tiny::st_callback_table {
         default:
             throw std::runtime_error(strprintf("unknown restriction token %s", tiny::token_type_str[restriction]));
         }
-        auto tmp = std::make_shared<var>(v, v.is_pubkey());
+        auto tmp = std::make_shared<var>(v, v.is_pubkey() ? var_type::curve_point : var_type::privkey);
         ctx->temps.push_back(tmp);
         return ctx->temps.size() - 1;
     }

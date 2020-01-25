@@ -283,7 +283,9 @@ struct pcall_t: public st_t {
 
 struct sequence_t: public st_t {
     std::vector<st_c> sequence;
-    sequence_t(const std::vector<st_c>& sequence_in) : sequence(sequence_in) {}
+    sequence_t(const std::vector<st_c>& sequence_in) : sequence(sequence_in) {
+        for (const auto& x : sequence) assert(x.r != nullptr);
+    }
     virtual std::string to_string(bool terse) override {
         std::string s = std::string("{\n");
         for (const auto& x : sequence) {

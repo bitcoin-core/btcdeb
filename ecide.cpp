@@ -46,7 +46,7 @@ int main(int argc, char* const* argv)
     VALUE_WARN = false;
 
     // Set G
-    env.ctx->vars["G"] = std::make_shared<var>(Value("0x0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798"), true);
+    env.ctx->vars["G"] = std::make_shared<var>(Value("0x0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798"), var_type::curve_point);
     G = env.ctx->vars["G"].get();
     Gx = new var(Value("0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798"));
     Gy = new var(Value("0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8"));
@@ -82,6 +82,10 @@ int main(int argc, char* const* argv)
     efun(min);
     efun(bits);
     efun(tibs);
+    efun(is_point);
+    efun(is_infinite);
+    efun(scalar);
+    efun(privkey);
 
     kerl_set_history_file(".ecide_history");
     kerl_set_repeat_on_empty(false);
@@ -301,17 +305,10 @@ int parse(const char* args_in)
 }
 
 #define ARG_CHK(count) if (args.size() != count) throw std::runtime_error(strprintf("invalid number of arguments (" #count " expected, got %zu)", args.size()))
-#define CURVE_CHK(v) if (!v->on_curve) throw std::runtime_error("invalid argument (curve point required)");
-#define NO_CURVE_CHK(v) if (v->on_curve) throw std::runtime_error("invalid argument (curve points not allowed)");
-#define ARG1_NO_CURVE(vfun)             \
-    ARG_CHK(1);                         \
-    std::shared_ptr<var> v = args[0];   \
-    if (!v.get()) throw std::runtime_error("nil argument"); \
-    if (v->pref) throw std::runtime_error("complex argument not allowed"); \
-    NO_CURVE_CHK(v);                    \
-    Value v2(v->data);                  \
-    v2.vfun();                          \
-    return std::make_shared<var>(v2, false)
+#define CURVE_CHK(v) if (v->type != var_type::curve_point) throw std::runtime_error("invalid argument (curve point required)");
+#define PRIVKEY_CHK(v) if (v->type != var_type::privkey) throw std::runtime_error("invalid argument (privkey required)");
+#define SCALAR_CHK(v) if (v->type != var_type::scalar) throw std::runtime_error("invalid argument (scalar required; scalars are similar to privkeys, but are not limited to modulo n)");
+#define NON_CURVE_CHK(v) if (v->type == var_type::curve_point) throw std::runtime_error("invalid argument (curve points not supported)");
 
 #define ARGx_NO_CURVE(vfun)                                                             \
     std::vector<std::shared_ptr<var>> res;                                              \
@@ -321,7 +318,7 @@ int parse(const char* args_in)
         if (v->pref) {                                                                  \
             throw std::runtime_error("nested complex arguments not allowed");           \
         }                                                                               \
-        NO_CURVE_CHK(v);                                                                \
+        PRIVKEY_CHK(v);                                                                 \
         Value v2(v->data);                                                              \
         v2.vfun();                                                                      \
         res.push_back(std::make_shared<var>(v2));                                       \
@@ -419,6 +416,20 @@ std::shared_ptr<var> e_int(std::vector<std::shared_ptr<var>> args) {
     return std::make_shared<var>(w);
 }
 
+std::shared_ptr<var> e_scalar(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    NON_CURVE_CHK(v);
+    return v->convert_cp(var_type::scalar);
+}
+
+std::shared_ptr<var> e_privkey(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    NON_CURVE_CHK(v);
+    return v->convert_cp(var_type::privkey);
+}
+
 std::shared_ptr<var> e_hex(std::vector<std::shared_ptr<var>> args) {
     ARG_CHK(1);
     auto v = args[0];
@@ -447,7 +458,7 @@ std::shared_ptr<var> e_jacobi(std::vector<std::shared_ptr<var>> args) {
     ARG_CHK(1);
     auto v = args[0];
     if (v->pref) throw std::runtime_error("complex argument not allowed");
-    NO_CURVE_CHK(v);
+    PRIVKEY_CHK(v);
 
     v->data.data_value();
     v->data.type = Value::T_DATA;
@@ -483,16 +494,31 @@ std::shared_ptr<var> e_oncurve(std::vector<std::shared_ptr<var>> args) {
     return (((ny * ny) % p) - ((((nx * nx) % p) * nx) % p)) % p == secp256k1::no7 ? env_true : env_false;
 }
 
+std::shared_ptr<var> e_is_point(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    return v->type == var_type::curve_point ? env_true : env_false;
+}
+
+std::shared_ptr<var> e_is_infinite(std::vector<std::shared_ptr<var>> args) {
+    ARG_CHK(1);
+    auto v = args[0];
+    CURVE_CHK(v);
+
+    bool is_infinite = v->data.is_null_or_int(0);
+    return is_infinite ? env_true : env_false;
+}
+
 std::shared_ptr<var> e_point(std::vector<std::shared_ptr<var>> args) {
     // 1 arg (x point, with implicit y sign),
     // 2 arg (x, and boolean y sign)
     if (args.size() < 1 || args.size() > 2) throw std::runtime_error("need either x point (implicit y sign), or x point and y sign bool (true=positive)");
     auto x = args[0];
-    NO_CURVE_CHK(x);
+    PRIVKEY_CHK(x);
     auto y_pos = args.size() == 1 || !args[1]->data.is_null_or_int(0);
     Value v((int64_t)0);
     v.set_point(x->data.data, y_pos);
-    return std::make_shared<var>(v, true);
+    return std::make_shared<var>(v, var_type::curve_point);
 }
 
 size_t _size(const std::shared_ptr<var>& v) {

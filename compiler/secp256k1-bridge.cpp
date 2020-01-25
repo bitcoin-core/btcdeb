@@ -3,7 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "secp256k1-bridge.h"
-#include <utilstrencodings.h>
+#include <util/strencodings.h>
 #include <tinyformat.h>
 
 #undef HAVE_CONFIG_H

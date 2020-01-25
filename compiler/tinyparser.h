@@ -75,6 +75,7 @@ struct pws {
     inline bool avail(uint64_t flag) { return !(flags & flag); }
 };
 
+st_t* parse_comment(pws& ws, token_t** s);
 st_t* parse_variable(pws& ws, token_t** s);
 st_t* parse_value(pws& ws, token_t** s, token_type restriction = tok_undef);
 st_t* parse_restricted(pws& ws, token_t** s);
