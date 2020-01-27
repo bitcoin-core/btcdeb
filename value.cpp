@@ -14,7 +14,7 @@ static secp256k1_context* secp256k1_context_sign = nullptr;
 
 void ECC_Start();
 
-#define abort(msg...) do { fprintf(stderr, msg); return; } while (0)
+#define abort(msg...) do { fprintf(stderr, msg); fputc('\n', stderr); return; } while (0)
 
 Value Value::prepare_extraction(const Value& a, const Value& b) {
     CScript s;
@@ -38,16 +38,16 @@ bool Value::extract_values(std::vector<std::vector<uint8_t>>& values) {
 
 void Value::do_verify_sig() {
     // the value is a script-style push of the sighash, pubkey, and signature
-    if (type != T_DATA) abort("invalid type (must be data)\n");
+    if (type != T_DATA) abort("invalid type (must be data)");
     std::vector<std::vector<uint8_t>> args;
-    if (!extract_values(args) || args.size() != 3) abort("invalid input (needs a sighash, a pubkey, and a signature)\n");
-    if (args[0].size() != 32) abort("invalid input (sighash must be 32 bytes)\n");
+    if (!extract_values(args) || args.size() != 3) abort("invalid input (needs a sighash, a pubkey, and a signature)");
+    if (args[0].size() != 32) abort("invalid input (sighash must be 32 bytes)");
     const uint256 sighash(args[0]);
 
     if (args[1].size() == 32) {
         // new style pubkey, so use schnorr validation
         XOnlyPubKey pubkey((uint256(args[1])));
-        if (!pubkey.IsValid()) abort("invalid x only pubkey\n");
+        if (!pubkey.IsValid()) abort("invalid x only pubkey");
         int64 = pubkey.VerifySchnorr(sighash, args[2]);
         if (int64 == 0) {
             uint256 sh2;
@@ -67,7 +67,7 @@ void Value::do_verify_sig() {
         }
     } else {
         CPubKey pubkey(args[1]);
-        if (!pubkey.IsValid()) abort("invalid pubkey\n");
+        if (!pubkey.IsValid()) abort("invalid pubkey");
         int64 = pubkey.Verify(sighash, args[2]);
     }
     type = T_INT;
@@ -76,27 +76,27 @@ void Value::do_verify_sig() {
 void Value::do_combine_pubkeys() {
     if (!secp256k1_context_sign) ECC_Start();
 
-    if (type != T_DATA) abort("invalid type (must be data)\n");
+    if (type != T_DATA) abort("invalid type (must be data)");
     std::vector<std::vector<uint8_t>> args;
-    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two pubkeys)\n");
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two pubkeys)");
     CPubKey pubkey1(args[0]);
     CPubKey pubkey2(args[1]);
-    if (!pubkey1.IsValid()) abort("invalid pubkey (first)\n");
-    if (!pubkey2.IsValid()) abort("invalid pubkey (second)\n");
+    if (!pubkey1.IsValid()) abort("invalid pubkey (first)");
+    if (!pubkey2.IsValid()) abort("invalid pubkey (second)");
 
     const secp256k1_pubkey* d[2];
     secp256k1_pubkey pks[2];
     if (!secp256k1_ec_pubkey_parse(secp256k1_context_sign, &pks[0], &pubkey1[0], pubkey1.size())) {
-        abort("failed to parse pubkey 1\n");
+        abort("failed to parse pubkey 1");
     }
     d[0] = &pks[0];
     if (!secp256k1_ec_pubkey_parse(secp256k1_context_sign, &pks[1], &pubkey2[0], pubkey2.size())) {
-        abort("failed to parse pubkey 2\n");
+        abort("failed to parse pubkey 2");
     }
     d[1] = &pks[1];
     secp256k1_pubkey result;
     if (!secp256k1_ec_pubkey_combine(secp256k1_context_sign, &result, d, 2)) {
-        abort("failed to combine pubkeys\n");
+        abort("failed to combine pubkeys");
     }
     data.resize(33);
     size_t publen = 33;
@@ -106,16 +106,16 @@ void Value::do_combine_pubkeys() {
 void Value::do_tweak_pubkey() {
     if (!secp256k1_context_sign) ECC_Start();
 
-    if (type != T_DATA) abort("invalid type (must be data)\n");
+    if (type != T_DATA) abort("invalid type (must be data)");
     std::vector<std::vector<uint8_t>> args;
-    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs a 32 byte value and a public key)\n");
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs a 32 byte value and a public key)");
     auto tweak = args[0];
     CPubKey pubkey1(args[1]);
     if (tweak.size() != 32) abort("invalid tweak value (32 byte value required)");
     if (!pubkey1.IsValid()) abort("invalid pubkey");
     secp256k1_pubkey pk1;
     if (!secp256k1_ec_pubkey_parse(secp256k1_context_sign, &pk1, &pubkey1[0], pubkey1.size())) {
-        abort("failed to parse pubkey\n");
+        abort("failed to parse pubkey");
     }
 
     if (!secp256k1_ec_pubkey_tweak_mul(secp256k1_context_sign, &pk1, tweak.data())) {
@@ -130,12 +130,12 @@ void Value::do_tweak_pubkey() {
 void Value::do_negate_pubkey() {
     if (!secp256k1_context_sign) ECC_Start();
 
-    if (type != T_DATA) abort("invalid type (must be data)\n");
+    if (type != T_DATA) abort("invalid type (must be data)");
     CPubKey pubkey(data);
     if (!pubkey.IsValid()) abort("invalid pubkey");
     secp256k1_pubkey pk;
     if (!secp256k1_ec_pubkey_parse(secp256k1_context_sign, &pk, &pubkey[0], pubkey.size())) {
-        abort("failed to parse pubkey\n");
+        abort("failed to parse pubkey");
     }
 
     if (!secp256k1_ec_pubkey_negate(secp256k1_context_sign, &pk)) {
@@ -261,43 +261,60 @@ void Value::do_taproot_tagged_hash() {
 }
 
 void Value::do_taproot_tweak_pubkey() {
-    // def taproot_tweak_pubkey(pubkey, h):
-    //     t = int_from_bytes(tagged_hash("TapTweak", pubkey + h))
-    //     if t >= SECP256K1_ORDER:
-    //         raise ValueError
-    //     Q = point_add(point(pubkey), point_mul(G, t))
-    //     is_negated = not has_square_y(Q)
-    //     return bytes_from_int(x(Q)), is_negated
-
     std::vector<std::vector<uint8_t>> args;
-    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two values)");
-    arith_uint256 pubkey, h;
-    if (!get_arith_uint256(Value(args[0]), pubkey)) return;
-    if (!get_arith_uint256(Value(args[1]), h)) return;
-    std::vector<uint8_t> pubkey_h = args[0];
-    pubkey_h.insert(pubkey_h.end(), args[1].begin(), args[1].end());
-    auto t = gen_taproot_tagged_hash("TapTweak", pubkey_h);
-    // check if t >= SECP256K1_ORDER
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two values: pubkey, tweak)");
+    if (args[0].size() != 32) abort("invalid input: first argument must be an x-only 32 byte pubkey");
+    if (args[1].size() != 32) abort("invalid input: second argument must be a 32 byte tweak");
+    secp256k1_xonly_pubkey pubkey;
+    if (!secp256k1_xonly_pubkey_parse(secp256k1_context_sign, &pubkey, args[0].data())) {
+        abort("invalid input: pubkey invalid (parse failed)");
+    }
+    int is_negated;
+    if (!secp256k1_xonly_pubkey_tweak_add(secp256k1_context_sign, &pubkey, &is_negated, args[1].data())) {
+        abort("failure: secp256k1_xonly_pubkey_tweak_add call failed");
+    }
+    data.resize(33);
+    data[0] = is_negated;
+    if (!secp256k1_xonly_pubkey_serialize(secp256k1_context_sign, &data.data()[1], &pubkey)) {
+        abort("failed to serialize pubkey");
+    }
+    fprintf(stderr, "non-standard warning: btcdeb serializes pubkey tweaks as (negated)(pubkey), i.e. pubkeys are 00<32 bytes> for non-negated and 01<32 bytes> for negated");
+}
+
+void Value::do_taproot_tweak_seckey() {
+    std::vector<std::vector<uint8_t>> args;
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two values: privkey, tweak)");
+    if (args[0].size() != 32) abort("invalid input: first argument must be a 32 byte private key");
+    if (args[1].size() != 32) abort("invalid input: second argument must be a 32 byte tweak");
+    data = args[0];
+    if (!secp256k1_xonly_seckey_tweak_add(secp256k1_context_sign, data.data(), args[1].data())) {
+        abort("failure: secp256k1_xonly_seckey_tweak_add call failed");
+    }
+}
+
+void Value::do_taproot_tree_helper() {
+    // def taproot_tree_helper(script_tree):
+    //     if isinstance(script_tree, tuple):
+    //         leaf_version, script = script_tree
+    //         h = tagged_hash("TapLeaf", bytes([leaf_version]) + ser_script(script))
+    //         return ([((leaf_version, script), bytes())], h)
+    //     left, left_h = taproot_tree_helper(script_tree[0])
+    //     right, right_h = taproot_tree_helper(script_tree[1])
+    //     ret = [(l, c + right_h) for l, c in left] + [(l, c + left_h) for l, c in right]
+    //     if right_h < left_h:
+    //         left_h, right_h = right_h, left_h
+    //     return (ret, tagged_hash("TapBranch", left_h + right_h))
+}
+
+void Value::do_taproot_output_script() {
 
 }
 
-void Value::do_taproot_tweak_seckey(){
+void Value::do_taproot_sign_key() {
 
 }
 
-void Value::do_taproot_tree_helper(){
-
-}
-
-void Value::do_taproot_output_script(){
-
-}
-
-void Value::do_taproot_sign_key(){
-
-}
-
-void Value::do_taproot_sign_script(){
+void Value::do_taproot_sign_script() {
 
 }
 
@@ -306,22 +323,22 @@ void Value::do_taproot_sign_script(){
 void Value::do_combine_privkeys() {
     if (!secp256k1_context_sign) ECC_Start();
 
-    if (type != T_DATA) abort("invalid type (must be data)\n");
+    if (type != T_DATA) abort("invalid type (must be data)");
     std::vector<std::vector<uint8_t>> args;
-    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two privkeys)\n");
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two privkeys)");
     for (int i = 0; i < 2; i++) {
         if (args[i].size() != 32) {
             // it is probably a WIF encoded key
             Value wif(args[i]);
             wif.str_value();
-            if (wif.str.length() != args[i].size()) abort("invalid input (private key %d must be 32 byte data or a WIF encoded privkey)\n", i);
+            if (wif.str.length() != args[i].size()) abort("invalid input (private key %d must be 32 byte data or a WIF encoded privkey)", i);
             wif.do_decode_wif();
             args[i] = wif.data;
         }
     }
 
     if (!secp256k1_ec_privkey_tweak_add(secp256k1_context_sign, args[0].data(), args[1].data())) {
-        abort("failed call to secp256k1_ec_privkey_tweak_add\n");
+        abort("failed call to secp256k1_ec_privkey_tweak_add");
     }
 
     data = args[0];
@@ -330,22 +347,22 @@ void Value::do_combine_privkeys() {
 void Value::do_multiply_privkeys() {
     if (!secp256k1_context_sign) ECC_Start();
 
-    if (type != T_DATA) abort("invalid type (must be data)\n");
+    if (type != T_DATA) abort("invalid type (must be data)");
     std::vector<std::vector<uint8_t>> args;
-    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two privkeys)\n");
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two privkeys)");
     for (int i = 0; i < 2; i++) {
         if (args[i].size() != 32) {
             // it is probably a WIF encoded key
             Value wif(args[i]);
             wif.str_value();
-            if (wif.str.length() != args[i].size()) abort("invalid input (private key %d must be 32 byte data or a WIF encoded privkey)\n", i);
+            if (wif.str.length() != args[i].size()) abort("invalid input (private key %d must be 32 byte data or a WIF encoded privkey)", i);
             wif.do_decode_wif();
             args[i] = wif.data;
         }
     }
 
     if (!secp256k1_ec_privkey_tweak_mul(secp256k1_context_sign, args[0].data(), args[1].data())) {
-        abort("failed call to secp256k1_ec_privkey_tweak_add\n");
+        abort("failed call to secp256k1_ec_privkey_tweak_add");
     }
 
     data = args[0];
@@ -354,7 +371,7 @@ void Value::do_multiply_privkeys() {
 void Value::do_negate_privkey() {
     if (!secp256k1_context_sign) ECC_Start();
 
-    if (type != T_DATA) abort("invalid type (must be data)\n");
+    if (type != T_DATA) abort("invalid type (must be data)");
 
     if (!secp256k1_ec_privkey_negate(secp256k1_context_sign, &data[0])) {
         abort("failed to negate privkey");
@@ -388,11 +405,11 @@ void Value::do_get_xpubkey() {
     }
     secp256k1_xonly_pubkey pubkey;
     if (!secp256k1_xonly_pubkey_create(secp256k1_context_sign, &pubkey, data.data())) {
-        abort("failed to create x-only pubkey\n");
+        abort("failed to create x-only pubkey");
     }
     data.resize(32);
     if (!secp256k1_xonly_pubkey_serialize(secp256k1_context_sign, data.data(), &pubkey)) {
-        abort("failed to serialize x-only pubkey\n");
+        abort("failed to serialize x-only pubkey");
     }
 }
 
@@ -400,41 +417,41 @@ void Value::do_sign() {
     if (!secp256k1_context_sign) ECC_Start();
 
     // the value is a script-style push of the private key followed by the sighash
-    if (type != T_DATA) abort("invalid type (must be data)\n");
+    if (type != T_DATA) abort("invalid type (must be data)");
     std::vector<std::vector<uint8_t>> args;
-    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs a sighash and a private key)\n");
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs a sighash and a private key)");
     auto& sighash_input = args[0];
     auto& privkey_input = args[1];
     if (privkey_input.size() != 32) {
         // it is probably a WIF encoded key
         Value wif(privkey_input);
         wif.str_value();
-        if (wif.str.length() != privkey_input.size()) abort("invalid input (private key must be 32 byte data or a WIF encoded privkey)\n");
+        if (wif.str.length() != privkey_input.size()) abort("invalid input (private key must be 32 byte data or a WIF encoded privkey)");
         wif.do_decode_wif();
         privkey_input = wif.data;
     }
-    if (privkey_input.size() != 32) abort("invalid input (private key must be 32 bytes)\n");
+    if (privkey_input.size() != 32) abort("invalid input (private key must be 32 bytes)");
     data = privkey_input;
-    if (sighash_input.size() != 32) abort("invalid input (sighash must be 32 bytes)\n");
+    if (sighash_input.size() != 32) abort("invalid input (sighash must be 32 bytes)");
     const uint256 sighash(sighash_input);
 
     // use schnorr! TODO: make this selectable
     secp256k1_schnorrsig sig;
     secp256k1_xonly_pubkey pubkey;
     if (!secp256k1_xonly_pubkey_create(secp256k1_context_sign, &pubkey, privkey_input.data())) {
-        abort("failed to derive pubkey\n");
+        abort("failed to derive pubkey");
     }
 
     // int secp256k1_schnorrsig_sign(const secp256k1_context* ctx, secp256k1_schnorrsig *sig, const unsigned char *msg32, const unsigned char *seckey, secp256k1_nonce_function noncefp, void *ndata) {
     if (!secp256k1_schnorrsig_sign(secp256k1_context_sign, &sig, sighash.begin(), privkey_input.data(), NULL, NULL)) {
-        abort("failed to create signature\n");
+        abort("failed to create signature");
     }
     if (!secp256k1_schnorrsig_verify(secp256k1_context_sign, &sig, sighash.begin(), &pubkey)) {
-        abort("failed to veriy signature\n");
+        abort("failed to veriy signature");
     }
     data.resize(64);
     if (!secp256k1_schnorrsig_serialize(secp256k1_context_sign, data.data(), &sig)) {
-        abort("failed to serialize signature\n");
+        abort("failed to serialize signature");
     }
     uint256 pk;
     if (!secp256k1_xonly_pubkey_serialize(secp256k1_context_sign, pk.begin(), &pubkey)) assert(0);

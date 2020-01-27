@@ -436,9 +436,9 @@ struct Value {
     }
     void do_bech32enc() {
         data_value();
-        std::vector<unsigned char> tmp = {0};
+        std::vector<unsigned char> tmp = {1 /* temporary; this should be configurable (wit ver) */};
         ConvertBits<8, 5, true>([&](unsigned char c) { tmp.push_back(c); }, data.begin(), data.end());
-        str = bech32::Encode("bc", tmp);
+        str = bech32::Encode("sb", tmp);
         type = T_STRING;
     }
     void do_bech32dec() {
