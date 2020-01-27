@@ -255,6 +255,7 @@ void GetStackFeatures(opcodetype opcode, size_t& spawns, size_t& slays)
     case OP_CHECKSIGVERIFY         : _(0, 2);
     case OP_CHECKMULTISIG          : _(1, 3); // this depends on k-of-n's k and n
     case OP_CHECKMULTISIGVERIFY    : _(0, 3); // -'-
+    case OP_CHECKSIGADD            : _(1, 3);
 
     // expansion
     case OP_NOP1                   : _(0, 0);
