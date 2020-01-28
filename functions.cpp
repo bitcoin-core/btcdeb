@@ -356,7 +356,13 @@ int fn_tf(const char* arg) {
         puts(tfsh[i]);
         return 0;
     }
-    int rv = tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1), true));
+    int rv;
+    try {
+        rv = tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1), true));
+    } catch (std::exception const& ex) {
+        fprintf(stderr, "exception: %s\n", ex.what());
+        rv = -1;
+    }
     kerl_free_argcv(argc, argv);
     return rv;
 }
