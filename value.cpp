@@ -247,16 +247,14 @@ void Value::do_not_op() {
 }
 
 std::vector<uint8_t> gen_taproot_tagged_hash(const std::string& tag, const std::vector<uint8_t>& msg) {
-    // def tagged_hash(tag, msg):
-    //     tag_hash = hashlib.sha256(tag.encode()).digest()
-    //     return hashlib.sha256(tag_hash + tag_hash + msg).digest()
     CHashWriter tagged_writer = TaggedHash(tag);
-    tagged_writer << msg;
+    // we do not use the << operator is the std::vector serializer pushes a compact-size prefix
+    tagged_writer.write((const char*)msg.data(), msg.size());
     auto r = tagged_writer.GetSHA256();
     return std::vector<uint8_t>(r.begin(), r.end());
 }
 
-void Value::do_taproot_tagged_hash() {
+void Value::do_tagged_hash() {
     std::vector<std::vector<uint8_t>> args;
     if (!extract_values(args) || args.size() != 2) abort("invalid input (need two values: tag, msg)");
     data = gen_taproot_tagged_hash(std::string(args[0].begin(), args[0].end()), args[1]);
@@ -292,32 +290,6 @@ void Value::do_taproot_tweak_seckey() {
     if (!secp256k1_xonly_seckey_tweak_add(secp256k1_context_sign, data.data(), args[1].data())) {
         abort("failure: secp256k1_xonly_seckey_tweak_add call failed");
     }
-}
-
-void Value::do_taproot_tree_helper() {
-    // def taproot_tree_helper(script_tree):
-    //     if isinstance(script_tree, tuple):
-    //         leaf_version, script = script_tree
-    //         h = tagged_hash("TapLeaf", bytes([leaf_version]) + ser_script(script))
-    //         return ([((leaf_version, script), bytes())], h)
-    //     left, left_h = taproot_tree_helper(script_tree[0])
-    //     right, right_h = taproot_tree_helper(script_tree[1])
-    //     ret = [(l, c + right_h) for l, c in left] + [(l, c + left_h) for l, c in right]
-    //     if right_h < left_h:
-    //         left_h, right_h = right_h, left_h
-    //     return (ret, tagged_hash("TapBranch", left_h + right_h))
-}
-
-void Value::do_taproot_output_script() {
-
-}
-
-void Value::do_taproot_sign_key() {
-
-}
-
-void Value::do_taproot_sign_script() {
-
 }
 
 // #ifdef ENABLE_DANGEROUS

@@ -499,14 +499,15 @@ struct Value {
     void do_negate_pubkey();
     void do_not_op();
     void do_boolify();
-    void do_taproot_tagged_hash();
+    void do_tagged_hash();
     void do_taproot_tweak_pubkey();
     void do_taproot_tweak_seckey();
-    void do_taproot_tree_helper();
-    void do_taproot_output_script();
-    void do_taproot_sign_key();
-    void do_taproot_sign_script();
-#ifdef ENABLE_DANGEROUS
+    // void do_taproot_tree_helper();
+    // void do_taproot_output_script();
+    // void do_taproot_sign_key();
+    // void do_taproot_sign_script();
+    void do_jacobi_symbol();
+// #ifdef ENABLE_DANGEROUS
     void do_combine_privkeys();
     void do_multiply_privkeys();
     void do_negate_privkey();
@@ -549,8 +550,7 @@ struct Value {
     void do_sign();
     void do_get_pubkey();
     void do_get_xpubkey();
-    void do_jacobi_symbol();
-#endif // ENABLE_DANGEROUS
+// #endif // ENABLE_DANGEROUS
 
     bool do_exec(const std::string& fun) {
         if (fun == "echo") return true;
@@ -574,6 +574,9 @@ struct Value {
         DO(add);
         DO(sub);
         if (fun == "jacobi") { do_jacobi_symbol(); return true; }
+        DO(tagged_hash);
+        DO(taproot_tweak_pubkey);
+        DO(taproot_tweak_seckey);
 #ifdef ENABLE_DANGEROUS
         DO(combine_privkeys);
         DO(multiply_privkeys);

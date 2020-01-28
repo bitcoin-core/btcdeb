@@ -188,7 +188,10 @@ static const char* tfs[] = {
     "add",
     "sub",
     "jacobi-symbol",
-#ifdef ENABLE_DANGEROUS
+    "tagged-hash",
+    "taproot-tweak-pubkey",
+    "taproot-tweak-seckey",
+// #ifdef ENABLE_DANGEROUS
     "encode-wif",
     "decode-wif",
     "sign",
@@ -196,7 +199,7 @@ static const char* tfs[] = {
     "get-xpubkey",
     "combine-privkeys",
     "multiply-privkeys",
-#endif // ENABLE_DANGEROUS
+// #endif // ENABLE_DANGEROUS
     nullptr
 };
 
@@ -221,7 +224,10 @@ static const char* tfsh[] = {
     "[value1] [value2] add two values together",
     "[value1] [value2] subtract value2 from value1",
     "[n] ([k]) calculate the Jacobi symbol for n modulo k, where k defaults to the secp256k1 field size",
-#ifdef ENABLE_DANGEROUS
+    "[tag] [message]",
+    "[pubkey] [tweak]",
+    "[privkey] [tweak]",
+// #ifdef ENABLE_DANGEROUS
     "[privkey] encode [privkey] using the Wallet Import Format",
     "[string]  decode [string] into a private key using the Wallet Import Format",
     "[sighash] [privkey] generate a signature for the given message (sighash) using the given private key",
@@ -229,7 +235,7 @@ static const char* tfsh[] = {
     "[privkey] get the x-only public key corresponding to the given private key",
     "[privkey1] [privkey2] combine the two private keys into one private key",
     "[privkey1] [privkey2] multiply a privkey with another",
-#endif // ENABLE_DANGEROUS
+// #endif // ENABLE_DANGEROUS
     nullptr
 };
 
@@ -253,7 +259,11 @@ int _e_spk_to_addr(Value&& pv) { pv.do_spk_to_addr(); pv.println(); return 0; }
 int _e_add(Value&& pv)         { pv.do_add(); pv.println(); return 0; }
 int _e_sub(Value&& pv)         { pv.do_sub(); pv.println(); return 0; }
 int _e_jacobi_sym(Value&& pv)  { pv.do_jacobi_symbol(); pv.println(); return 0; }
-#ifdef ENABLE_DANGEROUS
+int _e_tagged_hash(Value&& pv) { pv.do_tagged_hash(); pv.println(); return 0; }
+int _e_taproot_tweak_pubkey(Value&& pv) { pv.do_taproot_tweak_pubkey(); pv.println(); return 0; }
+int _e_taproot_tweak_seckey(Value&& pv) { pv.do_taproot_tweak_seckey(); pv.println(); return 0; }
+
+// #ifdef ENABLE_DANGEROUS
 int _e_encode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_encode_wif(); pv.println(); return 0; }
 int _e_decode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_decode_wif(); pv.println(); return 0; }
 int _e_sign(Value&& pv)          { kerl_set_sensitive(true); pv.do_sign(); pv.println(); return 0; }
@@ -261,7 +271,7 @@ int _e_get_pubkey(Value&& pv)    { kerl_set_sensitive(true); pv.do_get_pubkey();
 int _e_get_xpubkey(Value&& pv)   { kerl_set_sensitive(true); pv.do_get_xpubkey(); pv.println(); return 0; }
 int _e_combine_privkeys(Value&& pv) { kerl_set_sensitive(true); pv.do_combine_privkeys(); pv.println(); return 0; }
 int _e_mul_privkeys(Value&& pv)  { kerl_set_sensitive(true); pv.do_multiply_privkeys(); pv.println(); return 0; }
-#endif // ENABLE_DANGEROUS
+// #endif // ENABLE_DANGEROUS
 
 typedef int (*btcdeb_tfun) (Value&&);
 static const btcdeb_tfun tffp[] = {
@@ -285,6 +295,9 @@ static const btcdeb_tfun tffp[] = {
     _e_add,
     _e_sub,
     _e_jacobi_sym,
+    _e_tagged_hash,
+    _e_taproot_tweak_pubkey,
+    _e_taproot_tweak_seckey,
 #ifdef ENABLE_DANGEROUS
     _e_encode_wif,
     _e_decode_wif,
@@ -321,10 +334,10 @@ int fn_tf(const char* arg) {
         printf(
             "\nThe inline operators have slightly different names; they are called: echo, hex, int, reverse, sha256"
             ", ripemd160, hash256, hash160, base58chkenc, base58chkdec, bech32enc, bech32dec, verify_sig"
-            ", combine_pubkeys, tweak_pubkey, addr_to_spk, spk_to_addr, add, sub, jacobi"
-#ifdef ENABLE_DANGEROUS
+            ", combine_pubkeys, tweak_pubkey, addr_to_spk, spk_to_addr, add, sub, jacobi, tagged_hash, taproot_tweak_pubkey, taproot_tweak_seckey"
+// #ifdef ENABLE_DANGEROUS
             ", combine_privkeys, multiply_privkeys, nnegate_privkey, encode_wif, decode_wif, sign, get_pubkey, get_xpubkey"
-#endif // ENABLE_DANGEROUS
+// #endif // ENABLE_DANGEROUS
             "\n"
         );
         return 0;
