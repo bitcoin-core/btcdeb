@@ -549,6 +549,7 @@ struct Value {
     void do_sign();
     void do_get_pubkey();
     void do_get_xpubkey();
+    void do_jacobi_symbol();
 #endif // ENABLE_DANGEROUS
 
     bool do_exec(const std::string& fun) {
@@ -572,6 +573,7 @@ struct Value {
         DO(spk_to_addr);
         DO(add);
         DO(sub);
+        if (fun == "jacobi") { do_jacobi_symbol(); return true; }
 #ifdef ENABLE_DANGEROUS
         DO(combine_privkeys);
         DO(multiply_privkeys);

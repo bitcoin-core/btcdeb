@@ -10,6 +10,8 @@
 #include <arith_uint256.h>
 #include <pubkey.h>
 
+const uint256 SECP256K1_FIELD_SIZE = uint256S("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
+
 static secp256k1_context* secp256k1_context_sign = nullptr;
 
 void ECC_Start();
@@ -411,6 +413,43 @@ void Value::do_get_xpubkey() {
     if (!secp256k1_xonly_pubkey_serialize(secp256k1_context_sign, data.data(), &pubkey)) {
         abort("failed to serialize x-only pubkey");
     }
+}
+
+void Value::do_jacobi_symbol() {
+    if (type != T_DATA) abort("invalid type (must be data)");
+
+    arith_uint256 n, k, t(0);
+
+    std::vector<std::vector<uint8_t>> args;
+    if (!extract_values(args)) {
+        // user omitting k value; use secp256k1 field
+        if (data.size() != 32) abort("n must be 32 bytes (not %zu)", data.size());
+        n = UintToArith256(uint256(data));
+        k = UintToArith256(SECP256K1_FIELD_SIZE);
+    } else if (args.size() != 2) {
+        abort("invalid input (needs n and optional k)");
+    } else {
+        if (args[0].size() != 32) abort("n must be 32 bytes (not %zu)", args[0].size());
+        if (args[1].size() != 32) abort("k must be 32 bytes (not %zu)", args[1].size());
+        n = UintToArith256(uint256(args[0]));
+        k = UintToArith256(uint256(args[1]));
+    }
+
+    n = n % k;
+    while (n.bits() > 0) {
+        while ((n & 1) == 0) {
+            n >>= 1;
+            uint64_t r = k.GetLow64() & 7;
+            t ^= (r == 3 || r == 5);
+        }
+        arith_uint256 tmp = n;
+        n = k;
+        k = tmp;
+        t ^= ((n & k & 3) == 3);
+        n = n % k;
+    }
+    int64 = k == 1 ? (t.bits() > 0) ? -1 : 1 : 0;
+    type = T_INT;
 }
 
 void Value::do_sign() {
