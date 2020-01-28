@@ -279,6 +279,8 @@ void Value::do_tagged_hash() {
 }
 
 void Value::do_taproot_tweak_pubkey() {
+    if (!secp256k1_context_sign) ECC_Start();
+
     std::vector<std::vector<uint8_t>> args;
     if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two values: pubkey, tweak)");
     if (args[0].size() != 32) abort("invalid input: first argument must be an x-only 32 byte pubkey");
@@ -300,6 +302,8 @@ void Value::do_taproot_tweak_pubkey() {
 }
 
 void Value::do_taproot_tweak_seckey() {
+    if (!secp256k1_context_sign) ECC_Start();
+
     std::vector<std::vector<uint8_t>> args;
     if (!extract_values(args) || args.size() != 2) abort("invalid input (needs two values: privkey, tweak)");
     if (args[0].size() != 32) abort("invalid input: first argument must be a 32 byte private key");
