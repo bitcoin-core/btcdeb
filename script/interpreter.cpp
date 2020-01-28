@@ -1890,8 +1890,10 @@ bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const st
         k = ss_branch.GetSHA256();
         btc_taproot_logf("  - %d: k -> %s\n", i, k.ToString().c_str());
     }
+    k_desc = strprintf("TapTweak(internal_pubkey=%s || %s)", HexStr(MakeSpan(p)).c_str(), k_desc.c_str());
     k = (CHashWriter(HasherTapTweak) << MakeSpan(p) << k).GetSHA256();
     btc_taproot_logf("- final k  = %s\n", k.ToString().c_str());
+    btc_taproot_logf("  (%s)\n", k_desc.c_str());
     bool res = q.CheckPayToContract(p, k, control[0] & 1);
     btc_taproot_logf("- q.CheckPayToContract(p, k, %d) == %s\n", control[0] & 1, res ? "success" : "failure");
     return res;
