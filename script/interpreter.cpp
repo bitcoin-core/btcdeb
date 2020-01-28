@@ -1011,6 +1011,9 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                         pub_str.c_str()
                     );
                 }
+            } else if (sigversion == SigVersion::TAPROOT) {
+                // btcdeb converts taproot spends into actual scripts, but in reality these are checked earlier
+                fSuccess = checker.CheckSigSchnorr(vchSig, vchPubKey, SigVersion::TAPROOT, execdata);
             } else if (!EvalChecksig(vchSig, vchPubKey, pend, pbegincodehash, execdata, flags, checker, sigversion, serror, fSuccess)) {
                 if (pretend_valid_map.size() > 0) {
                     fprintf(stderr, "note: pubkey not found in pretend set: %s not in (%s)\n", pub_str.c_str(), Join<std::set<valtype>,std::vector<unsigned char>>(pretend_valid_pubkeys, ", ", JoinHexStrFun).c_str());
@@ -1475,11 +1478,13 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
     assert(in_pos < tx_to.vin.size());
     assert(cache.ready && cache.m_amounts_spent_ready);
 
+    CHashWriter::debug = true;
     CHashWriter ss = HasherTapSighash;
 
     // Epoch
     static constexpr uint8_t EPOCH = 0;
     ss << EPOCH;
+    // 00       00
 
     // Hash type
     const uint8_t output_type = (hash_type == SIGHASH_DEFAULT) ? SIGHASH_ALL : (hash_type & SIGHASH_OUTPUT_MASK); // Default (no sighash byte) is equivalent to SIGHASH_ALL
@@ -1487,13 +1492,18 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
     if (output_type != SIGHASH_ALL && output_type != SIGHASH_SINGLE && output_type != SIGHASH_NONE) return false;
     if (input_type != SIGHASH_ANYONECANPAY && input_type != 0) return false;
     ss << hash_type;
+    // 00       00
 
     // Transaction level data
     ss << tx_to.nVersion;
+    // 02000000
     ss << tx_to.nLockTime;
+    // 00000000
     if (input_type != SIGHASH_ANYONECANPAY) {
         ss << cache.m_prevouts_hash;
+        // ff010294a5b18c95e452586d931e67b68257780f697eb8b51a2ee6c4c2b7f822
         ss << cache.m_amounts_spent_hash;
+        // 5ebd4ccd9df61db3922ae26d991dfad87de77497510f8151a3ee5ef8f71592f2 vs d67f904aa67b8efd2db8afa6a6bf8a2f447cbb15d59ce612ababd762795d814f
         ss << cache.m_sequences_hash;
     }
     if (output_type == SIGHASH_ALL) {
@@ -1536,6 +1546,7 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
     }
 
     hash_out = ss.GetSHA256();
+    CHashWriter::debug = false;
     return true;
 }
 

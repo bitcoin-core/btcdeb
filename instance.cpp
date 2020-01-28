@@ -154,9 +154,9 @@ void Instance::parse_stack_args(size_t argc, char* const* argv, size_t starting_
 bool Instance::setup_environment(unsigned int flags) {
     if (tx) {
         // txdata = PrecomputedTransactionData(*tx.get()); // necessary?
-        if (txin && txin_index > -1) {
+        if (txin && txin_vout_index > -1) {
             std::vector<CTxOut> spent_outputs;
-            spent_outputs.emplace_back(txin->vout[txin_index]);
+            spent_outputs.emplace_back(txin->vout[txin_vout_index]);
             txdata.Init(*tx.get(), std::move(spent_outputs));
         }
         checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[txin_index > -1 ? txin_index : 0], txdata);
@@ -475,10 +475,6 @@ bool Instance::configure_tx_txin() {
                 // Key path spending (stack size is 1 after removing optional annex)
                 validation = CScript() << program << OP_CHECKSIG;
                 sigver = SigVersion::TAPROOT;
-                // if (!checker.CheckSigSchnorr(stack[0], program, SigVersion::TAPROOT, execdata)) {
-                //     return set_error(serror, SCRIPT_ERR_TAPROOT_INVALID_SIG);
-                // }
-                // return set_success(serror);
             } else {
                 // Script path spending (stack size is >1 after removing optional annex)
                 auto control = std::move(stack.back());
