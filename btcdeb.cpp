@@ -168,13 +168,23 @@ int main(int argc, char* const* argv)
 
     // crude check for tx=
     if (ca.m.count('x')) {
-        if (!instance.parse_transaction(ca.m['x'].c_str(), true)) {
+        try {
+            if (!instance.parse_transaction(ca.m['x'].c_str(), true)) {
+                return 1;
+            }
+        } catch (std::exception const& ex) {
+            fprintf(stderr, "error parsing spending (--tx) transaction: %s\n", ex.what());
             return 1;
         }
         if (!quiet) fprintf(stderr, "got %stransaction %s:\n%s\n", instance.sigver == SigVersion::WITNESS_V0 ? "segwit " : "", instance.tx->GetHash().ToString().c_str(), instance.tx->ToString().c_str());
     }
     if (ca.m.count('i')) {
-        if (!instance.parse_input_transaction(ca.m['i'].c_str(), selected)) {
+        try {
+            if (!instance.parse_input_transaction(ca.m['i'].c_str(), selected)) {
+                return 1;
+            }
+        } catch (std::exception const& ex) {
+            fprintf(stderr, "error parsing input (--txin) transaction: %s\n", ex.what());
             return 1;
         }
         if (!quiet) fprintf(stderr, "got input tx #%" PRId64 " %s:\n%s\n", instance.tx_internal_vin_index_of_txin, instance.txin->GetHash().ToString().c_str(), instance.txin->ToString().c_str());

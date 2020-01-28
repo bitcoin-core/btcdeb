@@ -298,7 +298,7 @@ void Value::do_taproot_tweak_pubkey() {
     if (!secp256k1_xonly_pubkey_serialize(secp256k1_context_sign, &data.data()[1], &pubkey)) {
         abort("failed to serialize pubkey");
     }
-    fprintf(stderr, "non-standard warning: btcdeb serializes pubkey tweaks as (negated)(pubkey), i.e. pubkeys are 00<32 bytes> for non-negated and 01<32 bytes> for negated");
+    fprintf(stderr, "non-standard warning: btcdeb serializes pubkey tweaks as (negated)(pubkey), i.e. pubkeys are 00<32 bytes> for non-negated and 01<32 bytes> for negated\n");
 }
 
 void Value::do_taproot_tweak_seckey() {
