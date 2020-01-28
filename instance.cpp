@@ -10,10 +10,10 @@
 
 CTransactionRef parse_tx(const char* p) {
     std::vector<unsigned char> txData = ParseHex(p);
-    if (txData.size() != (strlen(p) >> 1)) {
-        fprintf(stderr, "failed to parse tx hex string\n");
-        return nullptr;
-    }
+    // if (txData.size() != (strlen(p) >> 1)) {
+    //     fprintf(stderr, "failed to parse tx hex string\n");
+    //     return nullptr;
+    // }
     CDataStream ss(txData, SER_DISK, 0);
     CMutableTransaction mtx;
     UnserializeTransaction(mtx, ss);
@@ -153,16 +153,26 @@ void Instance::parse_stack_args(size_t argc, char* const* argv, size_t starting_
 
 bool Instance::setup_environment(unsigned int flags) {
     if (tx) {
-        checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[txin_index > -1 ? txin_index : 0]);
+        // txdata = PrecomputedTransactionData(*tx.get()); // necessary?
+        if (txin && txin_index > -1) {
+            std::vector<CTxOut> spent_outputs;
+            spent_outputs.emplace_back(txin->vout[txin_index]);
+            txdata.Init(*tx.get(), std::move(spent_outputs));
+        }
+        checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[txin_index > -1 ? txin_index : 0], txdata);
     } else {
         checker = new BaseSignatureChecker();
     }
+
+    execdata.m_codeseparator_pos = 0xFFFFFFFFUL;
+    execdata.m_codeseparator_pos_init = true;
 
     env = new InterpreterEnv(stack, script, flags, *checker, sigver, &error);
     env->successor_script = successor_script;
     env->pretend_valid_map = pretend_valid_map;
     env->pretend_valid_pubkeys = pretend_valid_pubkeys;
     env->done &= successor_script.size() == 0;
+    env->execdata = execdata;
 
     return env->operational;
 }
@@ -321,6 +331,7 @@ bool Instance::configure_tx_txin() {
         Value hashsrc(scriptPubKey);
         std::string source = "script pub key";
         bool wsh;
+        uint8_t witprogver; // 0 for pre-taproot, 1 for taproot/tapscript; note that SigVersion has 2 values for taproot (2) vs tapscript (3)
         if (scriptSig.size() > 0) {
             btc_segwit_logf("script sig non-empty; embedded P2SH (extracting payload)\n");
             // Embedded in P2SH -- payload extraction required
@@ -369,7 +380,7 @@ bool Instance::configure_tx_txin() {
         }
         switch (validation.size()) {
             case 22: wsh = false; btc_segwit_logf("22 bytes (P2WPKH)\n"); break;
-            case 34: wsh = true;  btc_segwit_logf("34 bytes (P2WSH)\n"); break;
+            case 34: wsh = true;  btc_segwit_logf("34 bytes (v0=P2WSH, v1=taproot/tapscript)\n"); break;
             default:
                 fprintf(stderr, "expected 22 or 34 byte script inside %s, but got %zu bytes\n", source.c_str(), pushval.size());
                 return false;
@@ -379,7 +390,18 @@ bool Instance::configure_tx_txin() {
             fprintf(stderr, "can't parse %s, or %s ended prematurely\n", source.c_str(), source.c_str());
             return false;
         }
-        if (opcode != OP_0) {
+        switch (opcode) {
+        case OP_0:
+            // version 0 (pre-taproot)
+            witprogver = 0;
+            sigver = SigVersion::WITNESS_V0;
+            break;
+        case OP_1:
+            // taproot/tapscript
+            witprogver = 1;
+            // sigver is determined at a later stage for V1
+            break;
+        default:
             fprintf(stderr, "%s declared version=%s not supported: %s=%s\n", source.c_str(), GetOpName(opcode), source.c_str(), HexStr(validation).c_str());
             return false;
         }
@@ -393,38 +415,102 @@ bool Instance::configure_tx_txin() {
         }
         auto program = pushval;
         Value wscript(wstack.back());
-        std::string pushval_str;
-        std::string wscript_str;
-        if (wsh) {
-            wscript.do_sha256();
-            pushval_str = uint256(pushval).ToString();
-            wscript_str = uint256(wscript.data).ToString();
-        } else {
-            wscript.do_hash160();
-            pushval_str = uint160(pushval).ToString();
-            wscript_str = uint160(wscript.data).ToString();
-        }
-        if (wscript.data != pushval) {
-            fprintf(stderr, "witness script hash does not match the input script pub key hash:\n"
-                "- witness script: %s\n"
-                "- witness script hash: %s\n"
-                "- script pub key given hash: %s\n",
-                HexStr(wstack.back()).c_str(),
-                wscript_str.c_str(),
-                pushval_str.c_str()
-            );
-            return false;
-        }
-
-        sigver = SigVersion::WITNESS_V0;
-
         size_t wstack_to_stack = wstack.size();
-        if (!wsh) {
-            validation = CScript() << OP_DUP << OP_HASH160 << program << OP_EQUALVERIFY << OP_CHECKSIG;
-        } else {
-            wstack_to_stack--; // do not include the script on the stack
-            validation = CScript(wstack.back().begin(), wstack.back().end());
-        }
+        if (witprogver == 0) {
+            // w2pkh/w2sh
+            std::string pushval_str;
+            std::string wscript_str;
+            if (wsh) {
+                wscript.do_sha256();
+                pushval_str = uint256(pushval).ToString();
+                wscript_str = uint256(wscript.data).ToString();
+            } else {
+                wscript.do_hash160();
+                pushval_str = uint160(pushval).ToString();
+                wscript_str = uint160(wscript.data).ToString();
+            }
+            if (wscript.data != pushval) {
+                fprintf(stderr, "witness script hash does not match the input script pub key hash:\n"
+                    "- witness script: %s\n"
+                    "- witness script hash: %s\n"
+                    "- script pub key given hash: %s\n",
+                    HexStr(wstack.back()).c_str(),
+                    wscript_str.c_str(),
+                    pushval_str.c_str()
+                );
+                return false;
+            }
+
+            sigver = SigVersion::WITNESS_V0;
+
+            if (!wsh) {
+                validation = CScript() << OP_DUP << OP_HASH160 << program << OP_EQUALVERIFY << OP_CHECKSIG;
+            } else {
+                wstack_to_stack--; // do not include the script on the stack
+                validation = CScript(wstack.back().begin(), wstack.back().end());
+            }
+        } else if (witprogver == 1) {
+            auto stack = wstack;
+            // taproot/tapscript
+            if (program.size() != TAPROOT_PROGRAM_SIZE) {
+                fprintf(stderr, "witness program unexpected size: %zu (expected %zu)\n", program.size(), TAPROOT_PROGRAM_SIZE);
+                return false;
+            }
+            // TODO: check if p2sh
+            if (stack.size() == 0) {
+                fprintf(stderr, "error: witness program was passed an empty witness\n");
+                return false;
+            }
+            if (stack.size() >= 2 && !stack.back().empty() && stack.back()[0] == ANNEX_TAG) {
+                // Drop annex
+                fprintf(stderr, "warning: unknown annex in witness stack\n");
+                execdata.m_annex_hash = (CHashWriter(SER_GETHASH, 0) << stack.back()).GetSHA256();
+                execdata.m_annex_present = true;
+                stack.pop_back();
+            } else {
+                execdata.m_annex_present = false;
+            }
+            execdata.m_annex_init = true;
+            if (stack.size() == 1) {
+                // Key path spending (stack size is 1 after removing optional annex)
+                validation = CScript() << program << OP_CHECKSIG;
+                sigver = SigVersion::TAPROOT;
+                // if (!checker.CheckSigSchnorr(stack[0], program, SigVersion::TAPROOT, execdata)) {
+                //     return set_error(serror, SCRIPT_ERR_TAPROOT_INVALID_SIG);
+                // }
+                // return set_success(serror);
+            } else {
+                // Script path spending (stack size is >1 after removing optional annex)
+                auto control = std::move(stack.back());
+                stack.pop_back();
+                scriptPubKey = CScript(stack.back().begin(), stack.back().end());
+                stack.pop_back();
+                if (control.size() < TAPROOT_CONTROL_BASE_SIZE || control.size() > TAPROOT_CONTROL_MAX_SIZE || ((control.size() - TAPROOT_CONTROL_BASE_SIZE) % TAPROOT_CONTROL_NODE_SIZE) != 0) {
+                    fprintf(stderr, "control object size %zu is incorrect:\n"
+                        "- 1. it must not be smaller than the control base size %zu\n"
+                        "- 2. it must not be greater than the control max size %zu\n"
+                        "- 3. it must be base_size + n*node_size, where base_size = %zu and node_size = %zu\n", control.size(), TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_MAX_SIZE, TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_NODE_SIZE);
+                    return false;
+                }
+                if (!VerifyTaprootCommitment(control, program, scriptPubKey, &execdata.m_tapleaf_hash)) {
+                    fprintf(stderr, "taproot commitment verification failure\n");
+                    return false;
+                }
+                execdata.m_tapleaf_hash_init = true;
+                if ((control[0] & TAPROOT_LEAF_MASK) == TAPROOT_LEAF_TAPSCRIPT) {
+                    // Tapscript (leaf version 0xc0)
+                    execdata.m_validation_weight_left = ::GetSerializeSize(wstack, PROTOCOL_VERSION) + VALIDATION_WEIGHT_OFFSET;
+                    execdata.m_validation_weight_left_init = true;
+                    sigver = SigVersion::TAPSCRIPT;
+                    validation = scriptPubKey;
+                    wstack_to_stack = stack.size();
+                    // return ExecuteWitnessProgram(std::move(stack), scriptPubKey, flags, SigVersion::TAPSCRIPT, checker, execdata, serror);
+                } else {
+                    fprintf(stderr, "unable to determine v1 script type (not taproot, not tapscript)\n");
+                    return false;
+                }
+            }
+        } else assert(!"should never get here; was a new witprogver added?");
 
         if (parse_script(std::vector<uint8_t>(validation.begin(), validation.end()))) {
             btc_logf("valid script\n");

@@ -1855,7 +1855,8 @@ static bool ExecuteWitnessProgram(std::vector<std::vector<unsigned char>> stack,
     return true;
 }
 
-static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script, uint256* tapleaf_hash)
+#include <tinyformat.h>
+bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script, uint256* tapleaf_hash)
 {
     btc_taproot_logf("Verifying taproot commitment:\n");
     btc_taproot_logf("- control  = %s\n", HexStr(control).c_str());
@@ -1869,6 +1870,8 @@ static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, c
     btc_taproot_logf("- q        = %s\n", q.ToString().c_str());
     uint256 k = (CHashWriter(HasherTapLeaf) << uint8_t(control[0] & TAPROOT_LEAF_MASK) << script).GetSHA256();
     btc_taproot_logf("- k        = %s          (tap leaf hash)\n", k.ToString().c_str());
+    std::string k_desc = strprintf("TapLeaf(0x%02x || %s)", uint8_t(control[0] & TAPROOT_LEAF_MASK), HexStr(script).c_str());
+    btc_taproot_logf("  (%s)\n", k_desc.c_str());
     if (tapleaf_hash) *tapleaf_hash = k;
     btc_taproot_logf("- looping over path (0..%d)\n", path_len-1);
     for (int i = 0; i < path_len; ++i) {
@@ -1876,11 +1879,14 @@ static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, c
         auto node_begin = control.data() + TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i;
         if (std::lexicographical_compare(k.begin(), k.end(), node_begin, node_begin + TAPROOT_CONTROL_NODE_SIZE)) {
             btc_taproot_logf("  - %d: node_begin = %d; taproot control node match -> k first\n", i, node_begin);
+            k_desc = strprintf("TapBranch(%s || Span<%d,%zu>=%s)", k_desc.c_str(), TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE, HexStr(Span<const unsigned char>(node_begin, TAPROOT_CONTROL_NODE_SIZE)).c_str());
             ss_branch << k << Span<const unsigned char>(node_begin, TAPROOT_CONTROL_NODE_SIZE);
         } else {
             btc_taproot_logf("  - %d: node_begin = %d; taproot control node mismatch -> k second\n", i, node_begin);
+            k_desc = strprintf("TapBranch(Span<%d,%zu>=%s || %s)", TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE, HexStr(Span<const unsigned char>(node_begin, TAPROOT_CONTROL_NODE_SIZE)).c_str(), k_desc.c_str());
             ss_branch << Span<const unsigned char>(node_begin, TAPROOT_CONTROL_NODE_SIZE) << k;
         }
+        btc_taproot_logf("  (%s)\n", k_desc.c_str());
         k = ss_branch.GetSHA256();
         btc_taproot_logf("  - %d: k -> %s\n", i, k.ToString().c_str());
     }
@@ -1938,7 +1944,7 @@ static bool VerifyWitnessProgram(const CScriptWitness& witness, int witversion, 
         execdata.m_annex_init = true;
         if (stack.size() == 1) {
             // Key path spending (stack size is 1 after removing optional annex)
-            if (!checker.CheckSigSchnorr(stack[0], program, SigVersion::TAPROOT, execdata)) {
+            if (!checker.CheckSigSchnorr(stack[0] /* sig */, program /* pubkey */, SigVersion::TAPROOT, execdata)) {
                 return set_error(serror, SCRIPT_ERR_TAPROOT_INVALID_SIG);
             }
             return set_success(serror);

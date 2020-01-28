@@ -366,6 +366,9 @@ struct ScriptExecutionEnvironment {
 
 bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script = nullptr);
 
+// made public to assist instance.cpp
+bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script, uint256* tapleaf_hash);
+
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* error = nullptr, ScriptExecutionData execdata = {});
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror = nullptr);
 

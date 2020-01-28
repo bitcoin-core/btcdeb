@@ -26,7 +26,7 @@ EXTRA_LIBRARIES += \
 
 # lib_LTLIBRARIES = $(LIBBITCOIN)
 
-bin_PROGRAMS = btcdeb btcc test-btcdeb
+bin_PROGRAMS = btcdeb btcc test-btcdeb #mastify
 noinst_PROGRAMS =
 
 if ENABLE_DANGEROUS
@@ -156,6 +156,25 @@ btcdeb_LDADD = \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
 	$(LIBKERL)
+
+
+# # mastify binary #
+# mastify_SOURCES = \
+# 	instance.h \
+# 	instance.cpp \
+# 	functions.h \
+# 	functions.cpp \
+# 	mastify.cpp \
+# 	cliargs.h
+# mastify_CPPFLAGS = $(AM_CPPFLAGS)
+# mastify_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+# mastify_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
+
+# mastify_LDADD = \
+# 	$(LIBBITCOIN_DEB) \
+# 	$(LIBBITCOIN) \
+# 	$(LIBSECP256K1) \
+# 	$(LIBKERL)
 
 if ENABLE_DANGEROUS
 

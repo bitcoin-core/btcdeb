@@ -15,6 +15,8 @@ typedef std::vector<unsigned char> valtype;
 class Instance {
 public:
     InterpreterEnv* env;
+    ScriptExecutionData execdata;
+    PrecomputedTransactionData txdata;
     int count;
     ECCVerifyHandle evh;
     CTransactionRef tx;
