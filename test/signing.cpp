@@ -136,8 +136,8 @@ TEST_CASE("Segwit Multisig Signing", "[signing-segwit-multisig]") {
         Instance instance;
         REQUIRE(instance.parse_transaction(TXIII, true));
         REQUIRE(instance.parse_input_transaction(TXIIIIN));
-        REQUIRE(instance.txin_index == 1);
-        REQUIRE(instance.txin_vout_index == 1);
+        REQUIRE(instance.tx_internal_vin_index_of_txin == 1);
+        REQUIRE(instance.txin_vout_index_spent_by_tx == 1);
         REQUIRE(instance.configure_tx_txin());
         REQUIRE(instance.setup_environment());
         REQUIRE(ContinueScript(*instance.env));

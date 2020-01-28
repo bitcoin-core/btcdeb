@@ -21,8 +21,8 @@ public:
     ECCVerifyHandle evh;
     CTransactionRef tx;
     CTransactionRef txin;
-    int64_t txin_index;             ///< index of the input txid in tx's inputs
-    int64_t txin_vout_index;        ///< index inside txin of the output to tx
+    int64_t tx_internal_vin_index_of_txin;             ///< index of the input txid in tx's inputs
+    int64_t txin_vout_index_spent_by_tx;        ///< index inside txin of the output to tx
     std::vector<CAmount> amounts;
     SigVersion sigver;
     CScript script;
@@ -44,8 +44,8 @@ public:
     Instance()
     : env(nullptr)
     , count(0)
-    , txin_index(-1)
-    , txin_vout_index(-1)
+    , tx_internal_vin_index_of_txin(-1)
+    , txin_vout_index_spent_by_tx(-1)
     , sigver(SigVersion::BASE)
     , checker(nullptr)
     {}

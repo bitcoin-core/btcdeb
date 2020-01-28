@@ -71,20 +71,20 @@ bool Instance::parse_input_transaction(const char* txdata, int select_index) {
                 fprintf(stderr, "error: the selected index (%d) of the transaction refers to txid %s, but the input transaction has txid %s\n", select_index, tx->vin[select_index].prevout.hash.ToString().c_str(), txin_hash.ToString().c_str());
                 return false;
             }
-            txin_index = select_index;
-            txin_vout_index = tx->vin[select_index].prevout.n;
+            tx_internal_vin_index_of_txin = select_index;
+            txin_vout_index_spent_by_tx = tx->vin[select_index].prevout.n;
         } else {
             // figure out index from tx vin
             int64_t i = 0;
             for (const auto& input : tx->vin) {
                 if (input.prevout.hash == txin_hash) {
-                    txin_index = i;
-                    txin_vout_index = input.prevout.n;
+                    tx_internal_vin_index_of_txin = i;
+                    txin_vout_index_spent_by_tx = input.prevout.n;
                     break;
                 }
                 i++;
             }
-            if (txin_index == -1) {
+            if (tx_internal_vin_index_of_txin == -1) {
                 fprintf(stderr, "error: the input transaction %s is not found in any of the inputs for the provided transaction %s\n", txin_hash.ToString().c_str(), tx->GetHash().ToString().c_str());
                 return false;
             }
@@ -154,12 +154,12 @@ void Instance::parse_stack_args(size_t argc, char* const* argv, size_t starting_
 bool Instance::setup_environment(unsigned int flags) {
     if (tx) {
         // txdata = PrecomputedTransactionData(*tx.get()); // necessary?
-        if (txin && txin_vout_index > -1) {
+        if (txin && txin_vout_index_spent_by_tx > -1) {
             std::vector<CTxOut> spent_outputs;
-            spent_outputs.emplace_back(txin->vout[txin_vout_index]);
+            spent_outputs.emplace_back(txin->vout[txin_vout_index_spent_by_tx]);
             txdata.Init(*tx.get(), std::move(spent_outputs));
         }
-        checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[txin_index > -1 ? txin_index : 0], txdata);
+        checker = new TransactionSignatureChecker(tx.get(), tx_internal_vin_index_of_txin > -1 ? tx_internal_vin_index_of_txin : 0, amounts[tx_internal_vin_index_of_txin > -1 ? tx_internal_vin_index_of_txin : 0], txdata);
     } else {
         checker = new BaseSignatureChecker();
     }
@@ -270,11 +270,11 @@ bool Instance::configure_tx_txin() {
     // no script and no stack; autogenerate from tx/txin
     // the script is the witness stack, last entry, or scriptpubkey
     // the stack is the witness stack minus last entry, in order, or the results of executing the scriptSig
-    amounts[txin_index] = txin->vout[txin_vout_index].nValue;
-    btc_logf("input tx index = %" PRId64 "; tx input vout = %" PRId64 "; value = %" PRId64 "\n", txin_index, txin_vout_index, amounts[txin_index]);
-    auto& wstack = tx->vin[txin_index].scriptWitness.stack;
-    auto& scriptSig = tx->vin[txin_index].scriptSig;
-    CScript scriptPubKey = txin->vout[txin_vout_index].scriptPubKey;
+    amounts[tx_internal_vin_index_of_txin] = txin->vout[txin_vout_index_spent_by_tx].nValue;
+    btc_logf("input tx index = %" PRId64 "; tx input vout = %" PRId64 "; value = %" PRId64 "\n", tx_internal_vin_index_of_txin, txin_vout_index_spent_by_tx, amounts[tx_internal_vin_index_of_txin]);
+    auto& wstack = tx->vin[tx_internal_vin_index_of_txin].scriptWitness.stack;
+    auto& scriptSig = tx->vin[tx_internal_vin_index_of_txin].scriptSig;
+    CScript scriptPubKey = txin->vout[txin_vout_index_spent_by_tx].scriptPubKey;
     std::vector<const char*> push_del;
     btc_segwit_logf("got witness stack of size %zu\n", wstack.size());
     if (wstack.size() > 0) {

@@ -177,7 +177,7 @@ int main(int argc, char* const* argv)
         if (!instance.parse_input_transaction(ca.m['i'].c_str(), selected)) {
             return 1;
         }
-        if (!quiet) fprintf(stderr, "got input tx #%" PRId64 " %s:\n%s\n", instance.txin_index, instance.txin->GetHash().ToString().c_str(), instance.txin->ToString().c_str());
+        if (!quiet) fprintf(stderr, "got input tx #%" PRId64 " %s:\n%s\n", instance.tx_internal_vin_index_of_txin, instance.txin->GetHash().ToString().c_str(), instance.txin->ToString().c_str());
     }
     char* script_str = nullptr;
     if (pipe_in) {
