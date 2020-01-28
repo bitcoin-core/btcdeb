@@ -432,6 +432,7 @@ static const char* opnames[] = {
     "OP_CHECKSIGVERIFY",
     "OP_CHECKMULTISIG",
     "OP_CHECKMULTISIGVERIFY",
+    "OP_CHECKSIGADD",
 
     // expansion
     "OP_NOP1",

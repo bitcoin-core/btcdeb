@@ -35,10 +35,23 @@ struct Value {
     std::string str;
     static std::vector<Value> parse_args(const std::vector<const char*> args) {
         std::vector<Value> result;
+        std::string accum = "";
         for (auto& v : args) {
             size_t vlen = strlen(v);
+            if (accum != "") {
+                accum += std::string(" ") + v;
+                if (vlen > 0 && v[vlen-1] == ']') {
+                    result.emplace_back(parse_args(accum.c_str(), accum.length() - 1));
+                    accum = "";
+                    continue;
+                }
+            }
             if (vlen > 0) {
                 // brackets embed
+                if (v[0] == '[' && v[vlen-1] != ']') {
+                    accum = &v[1];
+                    continue;
+                }
                 if (v[0] == '[' && v[vlen-1] == ']') {
                     result.emplace_back(parse_args(&v[1], vlen - 2));
                 } else {
@@ -156,9 +169,9 @@ struct Value {
             return;
         }
         if (vlen > 3 && v[vlen-1] == ')') {
-            char fun[10];
+            char fun[30];
             size_t i;
-            for (i = 0; i < 9 && v[i] && v[i] != '('; ++i) {
+            for (i = 0; i < 29 && v[i] && v[i] != '('; ++i) {
                 fun[i] = v[i];
             }
             if (v[i] == '(') {
@@ -507,6 +520,7 @@ struct Value {
     // void do_taproot_sign_key();
     // void do_taproot_sign_script();
     void do_jacobi_symbol();
+    void do_prefix_compact_size();
 // #ifdef ENABLE_DANGEROUS
     void do_combine_privkeys();
     void do_multiply_privkeys();
@@ -577,6 +591,7 @@ struct Value {
         DO(tagged_hash);
         DO(taproot_tweak_pubkey);
         DO(taproot_tweak_seckey);
+        DO(prefix_compact_size);
 #ifdef ENABLE_DANGEROUS
         DO(combine_privkeys);
         DO(multiply_privkeys);

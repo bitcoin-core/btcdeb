@@ -191,6 +191,7 @@ static const char* tfs[] = {
     "tagged-hash",
     "taproot-tweak-pubkey",
     "taproot-tweak-seckey",
+    "prefix-compact-size",
 // #ifdef ENABLE_DANGEROUS
     "encode-wif",
     "decode-wif",
@@ -224,9 +225,10 @@ static const char* tfsh[] = {
     "[value1] [value2] add two values together",
     "[value1] [value2] subtract value2 from value1",
     "[n] ([k]) calculate the Jacobi symbol for n modulo k, where k defaults to the secp256k1 field size",
-    "[tag] [message]",
-    "[pubkey] [tweak]",
-    "[privkey] [tweak]",
+    "[tag] [message] generate the [tag]ged hash of [message]",
+    "[pubkey] [tweak] tweak the pubkey with the tweak",
+    "[privkey] [tweak] tweak the privkey with the tweak",
+    "[value] prefix [value] with its compact size encoded byte length",
 // #ifdef ENABLE_DANGEROUS
     "[privkey] encode [privkey] using the Wallet Import Format",
     "[string]  decode [string] into a private key using the Wallet Import Format",
@@ -262,6 +264,7 @@ int _e_jacobi_sym(Value&& pv)  { pv.do_jacobi_symbol(); pv.println(); return 0; 
 int _e_tagged_hash(Value&& pv) { pv.do_tagged_hash(); pv.println(); return 0; }
 int _e_taproot_tweak_pubkey(Value&& pv) { pv.do_taproot_tweak_pubkey(); pv.println(); return 0; }
 int _e_taproot_tweak_seckey(Value&& pv) { pv.do_taproot_tweak_seckey(); pv.println(); return 0; }
+int _e_prefix_compact_size(Value&& pv) { pv.do_prefix_compact_size(); pv.println(); return 0; }
 
 // #ifdef ENABLE_DANGEROUS
 int _e_encode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_encode_wif(); pv.println(); return 0; }
@@ -298,6 +301,7 @@ static const btcdeb_tfun tffp[] = {
     _e_tagged_hash,
     _e_taproot_tweak_pubkey,
     _e_taproot_tweak_seckey,
+    _e_prefix_compact_size,
 #ifdef ENABLE_DANGEROUS
     _e_encode_wif,
     _e_decode_wif,
@@ -334,7 +338,7 @@ int fn_tf(const char* arg) {
         printf(
             "\nThe inline operators have slightly different names; they are called: echo, hex, int, reverse, sha256"
             ", ripemd160, hash256, hash160, base58chkenc, base58chkdec, bech32enc, bech32dec, verify_sig"
-            ", combine_pubkeys, tweak_pubkey, addr_to_spk, spk_to_addr, add, sub, jacobi, tagged_hash, taproot_tweak_pubkey, taproot_tweak_seckey"
+            ", combine_pubkeys, tweak_pubkey, addr_to_spk, spk_to_addr, add, sub, jacobi, tagged_hash, taproot_tweak_pubkey, taproot_tweak_seckey, prefix_compact_size"
 // #ifdef ENABLE_DANGEROUS
             ", combine_privkeys, multiply_privkeys, nnegate_privkey, encode_wif, decode_wif, sign, get_pubkey, get_xpubkey"
 // #endif // ENABLE_DANGEROUS

@@ -246,6 +246,21 @@ void Value::do_not_op() {
     int64 = !int64;
 }
 
+void Value::do_prefix_compact_size() {
+    data_value();
+    uint8_t sz8 = 0;
+    size_t data_len = data.size();
+    #define DLW(type) \
+        if (sz8) data.insert(data.begin(), &sz8, &sz8 + 1);\
+        type t = (type)data_len;\
+        data.insert(data.begin(), &t, &t + sizeof(type));\
+        return
+    if (data_len < 253) { DLW(uint8_t); }
+    if (data_len <= std::numeric_limits<unsigned short>::max()) { sz8 = 253; DLW(uint16_t); }
+    if (data_len <= std::numeric_limits<unsigned int>::max()) { sz8 = 254; DLW(uint32_t); }
+    sz8 = 255; DLW(uint64_t);
+}
+
 std::vector<uint8_t> gen_taproot_tagged_hash(const std::string& tag, const std::vector<uint8_t>& msg) {
     CHashWriter tagged_writer = TaggedHash(tag);
     // we do not use the << operator is the std::vector serializer pushes a compact-size prefix
@@ -256,8 +271,11 @@ std::vector<uint8_t> gen_taproot_tagged_hash(const std::string& tag, const std::
 
 void Value::do_tagged_hash() {
     std::vector<std::vector<uint8_t>> args;
-    if (!extract_values(args) || args.size() != 2) abort("invalid input (need two values: tag, msg)");
-    data = gen_taproot_tagged_hash(std::string(args[0].begin(), args[0].end()), args[1]);
+    if (!extract_values(args) || args.size() < 2) abort("invalid input (need at least two values: tag, msg[, msg2, ...])");
+    std::vector<uint8_t> msg = args[1];
+    for (size_t i = 2; i < args.size(); ++i) msg.insert(msg.end(), args[i].begin(), args[i].end());
+    if (args.size() > 2) fprintf(stderr, "msg = %s\n", HexStr(msg).c_str());
+    data = gen_taproot_tagged_hash(std::string(args[0].begin(), args[0].end()), msg);
 }
 
 void Value::do_taproot_tweak_pubkey() {
