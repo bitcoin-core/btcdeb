@@ -61,9 +61,9 @@ Next, we will see how we can generate a merkle tree for these two.
 
 Without going into detail, in order to spend a Taproot output, you either have to sign with the *tweaked private key* or you have to provide (1) a script, (2) a proof that the script was actually *committed to* by the output, and (3) conditions satisfying the script, including signatures and the like.
 
-We will do the latter, i.e. pick a script, prove it's in there, and satisfy it.
+We will do both, in that order.
 
-To avoid risk of collisions when using hashes of things, Taproot introduces *tagged hashes*. Think of them as a regular old hash with a prefix (a tag), that was hashed and fed to it beforehand. There are currently three types of tagged hashes:
+To avoid risk of collisions when using hashes of things, Taproot introduces *tagged hashes*. Think of them as a regular old hash with a prefix (a tag), that was hashed and fed to it beforehand. We will use three types of tagged hashes:
 
 * `TapLeaf`: a leaf node (e.g. one of our scripts)
 * `TapBranch`: a branch node gluing leaf and branch nodes together in a tree (e.g. the parent node for our two scripts)
@@ -71,7 +71,7 @@ To avoid risk of collisions when using hashes of things, Taproot introduces *tag
 
 These are derived as: `SHA256(SHA256(tag_as_utf8_string) || SHA26(tag_as_utf8_string) || msg)`, e.g. `SHA256(SHA256("TapLeaf") || SHA256("TapLeaf") || "foobar")` to `TapLeaf` the message `"foobar"`.
 
-When we generate out output (i.e. commit to our scripts), we begin by creating the `TapLeaf` tags for each of the scripts. We then pair them together two at a time using `TapBranch`, and at the end, we create a tweak using `TapTweak` containing our internal public key and the merkle root, and then finally we tweak our internal public key with that. *That is our taproot key!* One caveat though: for each "merge", we have to order the pair, i.e. if left hash evaluates to `0x123abc` and right to `0x123abb`, we need to swap the hashes, so that left is always <= right.
+When we generate our output (i.e. commit to our scripts), we begin by creating the `TapLeaf` tags for each of the scripts. We then pair them together two at a time using `TapBranch`, and at the end, we create a tweak using `TapTweak` containing our internal public key and the merkle root, and then finally we tweak our internal public key with that. *That is our taproot key!* One caveat though: for each "merge", we have to order the pair, i.e. if left hash evaluates to `0x123abc` and right to `0x123abb`, we need to swap the hashes, so that left is always <= right.
 
 Let's start by generating the `TapLeaf` entries.
 
@@ -95,14 +95,16 @@ c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
 btcdeb> tf tagged-hash TapLeaf c0 prefix_compact_size(a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac)
 632c8632b4f29c6291416e23135cf78ecb82e525788ea5ed6483e3c6ce943b42
 # ↑ this is the commitment hash for script 2, and this is provided if we want to spend script 1
-# *** NOTE: c814... is greater than 632c..., so we have to swap the hashes when we put them into the branch in the next step
+# *** NOTE: c814... is greater than 632c..., so we have to swap the hashes when we put them into the
+#           branch in the next step
 btcdeb> tf tagged-hash TapBranch 632c8632b4f29c6291416e23135cf78ecb82e525788ea5ed6483e3c6ce943b42 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
 41646f8c1fe2a96ddad7f5471bc4fee7da98794ef8c45a4f4fc6a559d60c9f6b
-# ↑ this is the root of our merkle tree, before we do the tweak; NOTE: because script 1 hash > script 2 hash,
-#   we swapped the
+# ↑ this is the root of our merkle tree, before we do the tweak
 btcdeb tf tagged-hash TapTweak 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 41646f8c1fe2a96ddad7f5471bc4fee7da98794ef8c45a4f4fc6a559d60c9f6b
 0b0e6981ce6cac74d055d0e4c25e5b4455a083b3217761327867f26460e0a776
-# ↑ this is the tweak; we now need to tweak our pubkey (note: the tweak is actually multiplied by the generator to generate a point that is added to the pubkey; this is done under the hood by the secp256k1 library, but is worth noting)
+# ↑ this is the tweak; we now need to tweak our pubkey (note: the tweak is actually multiplied by the
+#   generator to generate a point that is added to the pubkey; this is done under the hood by the
+#   secp256k1 library, but is worth noting; you should not do this yourself)
 btcdeb> tf taproot-tweak-pubkey 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 0b0e6981ce6cac74d055d0e4c25e5b4455a083b3217761327867f26460e0a776
 non-standard warning: btcdeb serializes pubkey tweaks as (negated)(pubkey), i.e. pubkeys are 00<32 bytes> for non-negated and 01<32 bytes> for negated
 0196f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
@@ -117,6 +119,8 @@ We now have our pubkey 96f401..d4. We can bech32-encode it to get an actual addr
 btcdeb> tf bech32-encode 96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
 "sb1pjm6qzyv36gmgy6s8hxyjnqp25wmm0ceva2r2ef8c9n5flg60mn2q0w45px"
 ```
+
+Warning: be sure to remove the negation byte from the above! If you do 0196f401... you will get something that cannot be spent!
 
 Now send a (small!) amount to this address, and check the transaction. It should say unknown witness for the output.
 
@@ -203,34 +207,25 @@ $ bitcoin-cli -signet createrawtransaction '[{"txid":"d4461a7d5d4120f7c3fd62c2f6
 
 Now we need to tweak it. This is the messy part, but stay with me. We turn it into a Segwit transaction by adding the dummy vin and 0x01 flag: take the first 8 characters (the 32-bit version):
 
-```
-02000000
-```
+> 02000000
 
 add 0001 to it (0 size vin, flags=01)
 
-```
-020000000001
-```
+> 020000000001
 
 then add the rest up until but *excluding* the last 8 characters (all zeroes):
 
-```
-0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6
-```
+> 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6
 
 Before we put those last 8 characters on, we add the witness commitment. This is an array, of arrays, of arrays of bytes. Or an array of arrays of binary blobs. Each outer array corresponds to one input, and this is explicit, i.e. we do *not* put the compact size of the outer array into the serialization; this is implicitly derived from the input array, which must be the same size. The inner array, i.e. the array of binary blobs, or the array containing arrays of bytes, does have a size, however.
 
 In our case, we have 1 input, so there's an array containing binary blobs. The number of entries? Depends on which script we're executing. For Taproot spends, we need to push the signature, and... that's it. The signature has to be 64 bytes, but alas, we don't have a way to sign yet, so let's just make something random that is 64 bytes long.
 
-```
-01 40 0102030405060708090a0b0c0d0e0f0102030405060708090a0b0c0d0e0f0102030405060708090a0b0c0d0e0f0102030405060708090a0b0c0d0e0f
-```
+> 01 40 0102030405060708090a0b0c0d0e0f0102030405060708090a0b0c0d0e0f0102030405060708090a0b0c0d0e0f0102030405060708090a0b0c0d0e0f
 
 Then the locktime (last 8 zeroes), and we have a starting point:
-```
-020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 01 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 00000000
-```
+
+> 020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 01 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 00000000
 
 Hint: You can *keep* the spacing for easier tweaking/overview, by wrapping the argument in quotes in the call to btcdeb.
 
@@ -306,7 +301,7 @@ script                                                           |              
                                                                  |                                                                 0x
 ```
 
-OK yeah that didn't go too well. However, btcdeb has now given us a vital clue. The only one we need, in fact, to complete this transaction: the signature hash (abbreviate "sighash") -- it is 48f47c4aad9ad4d0ea6671d10c34eb34b70255f12bd4c72b77c19805e274765b (big endian, so we need to *reverse* it), and you can see it above a few lines above the "result: FAILURE" part. With that, and our privkey (which we created at the start) tweaked with that tweak we created, we can now create an *actual* signature!
+OK yeah that didn't go too well. However, btcdeb has now given us a vital clue. The only one we need, in fact, to complete this transaction: the signature hash (abbreviate "sighash") -- it is `48f47c4aad9ad4d0ea6671d10c34eb34b70255f12bd4c72b77c19805e274765b` (big endian, so we need to *reverse* it), and you can see it above a few lines above the "result: FAILURE" part. With that, and our privkey (which we created at the start) tweaked with that tweak we created, we can now create an *actual* signature!
 
 ```Bash
 btcdeb> tf taproot-tweak-seckey 3bed2cb3a3acf7b6a8ef408420cc682d5520e26976d354254f528c965612054f 0b0e6981ce6cac74d055d0e4c25e5b4455a083b3217761327867f26460e0a776
@@ -384,32 +379,28 @@ We need:
 * The internal pubkey; we have this one: 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5; both Alice and Bob knows it; note that we don't necessarily know the private key, since this was probably generated using MuSig or something, and requires all participants.
 
 To do the tapscript spend, we need to provide a "control object" which describes the path leading to our particular script. The two possible control objects are:
-* Use Alice's script: <control byte with leaf & negation bit> || <internal pubkey> || <Bob script tagged hash>
-* Use Bob's script: <control byte with leaf & negation bit> || <internal pubkey> || <Alice script tagged hash>
+* Use Alice's script: `<control byte with leaf & negation bit> || <internal pubkey> || <Bob script tagged hash>`
+* Use Bob's script: `<control byte with leaf & negation bit> || <internal pubkey> || <Alice script tagged hash>`
 
 We wanna go the second route; the leaf in the control byte is the hex value c0 (decimal 192), the negation bit, if you recall from when we funded this thing, should be set to 1, so we get c1 (193)), the internal pubkey is 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5, and Alice's script tagged hash is c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9, giving us:
 
-```
-c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
-```
+> c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
 
 We need to push the above as a single push operation; counting it, we get 65 bytes, which in hex is 0x41. So we end up with
 
-```
-41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
-```
+> 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
 
 We also need to reveal the script we are executing, as this is required to determine whether our tapscript commitment is valid: this is a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac, and it's 69 bytes (=0x45). Combined (first program, then control object) we have
 
-```
-45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
-41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
-```
+> 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
+> 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
 
 and our script, when we replace the witness stuff above with the new data (prefixed with a 02 for "2 items on stack"):
 
 > 020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 02 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9 00000000
+
+(Note that you can use the `prefix-compact-size` transform inside btcdeb to generate the size prefixed variants, e.g. `tf prefix-compact-size c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9` inside btcdeb gives `41c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9`.)
 
 ```Bash
 $ btcdeb --txin=$txin --tx='020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 02 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
@@ -461,10 +452,12 @@ OP_CHECKSIG                                                      |
 #0000 OP_SHA256
 ```
 
-The tapscript commitment succeeded. Yay! Now as you can see we still need to add the inputs that satisfy the script itself. We will be adding those on the left hand side of the program || control object blob in the witness. Generally speaking, tapscript spending witness stack looks like: `<arg1> <arg2> ... <script> <control object>`.
+The tapscript commitment succeeded. Yay! Now as you can see we still need to add the inputs that satisfy the script itself. We will be adding those on the left hand side of the program || control object blob in the witness. Generally speaking, tapscript spending witness stack looks like: `<argN> ... <arg2> <arg1> <script> <control object>`.
 
 * Firstly, the preimage which, when hashed, turns into the above: 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f
 * Second, the signature for the script. We don't have one, yet, so let's just put 64 random bytes in and have btcdeb tell us the sighash.
+
+Flipped around, since args are opposite order:
 
 > 020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 04 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 20 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9 00000000
@@ -589,7 +582,7 @@ error: Signature must be zero for failed CHECK(MULTI)SIG operation
 btcdeb>
 ```
 
-K. the sighash is `2358796e44e5c16e678f613dc0550740123a682c17680b7467985d9145d478db`. We can sign it, since we have Bob's privkey `81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9`. Remember; sighash is a hash. We need to reverse it.
+OK. The sighash is `2358796e44e5c16e678f613dc0550740123a682c17680b7467985d9145d478db`. We can sign it, since we have Bob's privkey `81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9`. Remember; sighash is a hash. We need to reverse it below.
 
 ```Bash
 btcdeb> tf sign reverse(2358796e44e5c16e678f613dc0550740123a682c17680b7467985d9145d478db) 81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9
