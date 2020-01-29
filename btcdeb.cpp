@@ -143,10 +143,12 @@ int main(int argc, char* const* argv)
         if (checkenv("DEBUG_SIGNING", true)) btc_sign_logf = btc_logf_stderr;
         if (checkenv("DEBUG_SEGWIT", true))  btc_segwit_logf = btc_logf_stderr;
         if (checkenv("DEBUG_TAPROOT", true)) btc_taproot_logf = btc_logf_stderr;
-        btc_sighash_logf("LOG: sighash\n");
-        btc_sign_logf("LOG: sign\n");
-        btc_segwit_logf("LOG: segwit\n");
-        btc_taproot_logf("LOG: taproot\n");
+        btc_logf("LOG:");
+        if (btc_enabled(btc_sighash_logf)) btc_logf(" sighash");
+        if (btc_enabled(btc_sign_logf)) btc_logf(" sign");
+        if (btc_enabled(btc_segwit_logf)) btc_logf(" segwit");
+        if (btc_enabled(btc_taproot_logf)) btc_logf(" taproot");
+        btc_logf("\n");
     }
 
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
