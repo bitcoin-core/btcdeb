@@ -221,7 +221,7 @@ public:
     const unsigned char& operator[](int pos) const { return *(m_keydata.begin() + pos); }
     const unsigned char* data() const { return m_keydata.begin(); }
     size_t size() const { return 32; }
-    std::string ToString() const { return m_keydata.ToString(); }
+    std::string ToString() const;
 };
 
 struct CExtPubKey {

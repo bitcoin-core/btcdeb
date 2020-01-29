@@ -9,6 +9,7 @@
 #include <secp256k1_recovery.h>
 #include <secp256k1_schnorrsig.h>
 #include <debugger/script.h>
+#include <util/strencodings.h>
 
 namespace
 {
@@ -166,6 +167,10 @@ static int ecdsa_signature_parse_der_lax(const secp256k1_context* ctx, secp256k1
         secp256k1_ecdsa_signature_parse_compact(ctx, sig, tmpsig);
     }
     return 1;
+}
+
+std::string XOnlyPubKey::ToString() const {
+    return HexStr(m_keydata);
 }
 
 bool XOnlyPubKey::IsValid() const {
