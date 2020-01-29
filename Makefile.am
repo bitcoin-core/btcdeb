@@ -4,7 +4,7 @@
 
 DIST_SUBDIRS = secp256k1
 
-AM_LDFLAGS = $(LIBTOOL_LDFLAGS)
+AM_LDFLAGS = $(LIBTOOL_LDFLAGS) $(PTHREAD_CFLAGS)
 EXTRA_LIBRARIES =
 
 BITCOIN_INCLUDES=-I$(builddir)
@@ -81,7 +81,7 @@ BITCOIN_CORE_H = \
 
 # debugger #
 
-libbitcoin_deb_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS) $(EVENT_PTHREADS_CFLAGS)
+libbitcoin_deb_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_deb_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_deb_a_SOURCES = \
 	debugger/hash.cpp \
