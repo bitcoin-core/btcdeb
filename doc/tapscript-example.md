@@ -53,7 +53,7 @@ So the above two scripts expand into:
 2. OP_SHA256 6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333 OP_EQUALVERIFY 4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10 OP_CHECKSIG
 ```
 
-(now you might realize why people are so eager to *not* have to show all the paths when spending)
+(now you might realize why people are so eager to *not* have to show all the paths when spending; not having to show the unnecessary alternative path(s) means a much smaller script and thus less fees)
 
 Next, we will see how we can generate a merkle tree for these two.
 
