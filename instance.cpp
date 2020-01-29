@@ -9,11 +9,11 @@
 #include <instance.h>
 
 CTransactionRef parse_tx(const char* p) {
-    std::vector<unsigned char> txData = ParseHex(p);
-    // if (txData.size() != (strlen(p) >> 1)) {
-    //     fprintf(stderr, "failed to parse tx hex string\n");
-    //     return nullptr;
-    // }
+    std::vector<unsigned char> txData;
+    if (!TryHex(p, txData)) {
+        fprintf(stderr, "failed to parse tx hex string\n");
+        return nullptr;
+    }
     CDataStream ss(txData, SER_DISK, 0);
     CMutableTransaction mtx;
     UnserializeTransaction(mtx, ss);
@@ -221,14 +221,15 @@ bool Instance::eval(const size_t argc, char* const* argv) {
             char buf[vlen + 1];
             sprintf(buf, "%d", n);
             if (!strcmp(buf, v)) {
-                // verified; can it be a hexstring too?
-                if (!(vlen & 1)) {
-                    std::vector<unsigned char> pushData(ParseHex(v));
-                    if (pushData.size() == (vlen >> 1)) {
+                // verified; is it > 3 chars and can it be a hexstring too?
+                if (vlen > 3 && !(vlen & 1)) {
+                    std::vector<unsigned char> pushData;
+                    if (TryHex(v, pushData)) {
                         // it can; warn about using 0x for hex
                         if (VALUE_WARN) btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
                     }
                 }
+
                 // can it be an opcode too?
                 if (n < 16) {
                     if (VALUE_WARN) btc_logf("warning: ambiguous input %s is interpreted as a numeric value (%s), not as an opcode (OP_%s). Use OP_%s to force into op code interpretation\n", v, v, v, v);
@@ -240,8 +241,8 @@ bool Instance::eval(const size_t argc, char* const* argv) {
         }
         // hex string?
         if (!(vlen & 1)) {
-            std::vector<unsigned char> pushData(ParseHex(v));
-            if (pushData.size() == (vlen >> 1)) {
+            std::vector<unsigned char> pushData;
+            if (TryHex(v, pushData)) {
                 script << pushData;
                 continue;
             }

@@ -195,8 +195,8 @@ struct Value {
             if (!strcmp(buf, v)) {
                 // verified; can it be a hexstring too?
                 if (!(vlen & 1)) {
-                    std::vector<unsigned char> pushData(ParseHex(v));
-                    if (pushData.size() == (vlen >> 1)) {
+                    std::vector<unsigned char> pushData;
+                    if (TryHex(v, pushData)) {
                         // it can; warn about using 0x for hex
                         if (VALUE_WARN) btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
                     }
@@ -220,8 +220,7 @@ struct Value {
                 vlen -= 2;
                 v = &v[2];
             }
-            data = ParseHex(v);
-            if (data.size() == (vlen >> 1)) {
+            if (TryHex(v, data)) {
                 type = T_DATA;
                 return;
             }

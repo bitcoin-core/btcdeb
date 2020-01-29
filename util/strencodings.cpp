@@ -81,6 +81,28 @@ bool IsHexNumber(const std::string& str)
     return (str.size() > starting_location);
 }
 
+/**
+ * Check if str can be hex-parsed.
+ *
+ * This differs from above by allowing whitespace.
+ */
+bool TryHex(const std::string& str, std::vector<unsigned char>& rv)
+{
+    rv.clear();
+    const char* psz = str.c_str();
+    while (*psz) {
+        while (IsSpace(*psz)) psz++;
+        signed char c = HexDigit(*psz++);
+        if (c == (signed char)-1) return false;
+        unsigned char n = (c << 4);
+        c = HexDigit(*psz++);
+        if (c == (signed char)-1) return false;
+        n |= c;
+        rv.push_back(n);
+    }
+    return true;
+}
+
 std::vector<unsigned char> ParseHex(const char* psz)
 {
     // convert hex dump to vector
