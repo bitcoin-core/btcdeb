@@ -382,7 +382,7 @@ bool Instance::configure_tx_txin() {
             case 22: wsh = false; btc_segwit_logf("22 bytes (P2WPKH)\n"); break;
             case 34: wsh = true;  btc_segwit_logf("34 bytes (v0=P2WSH, v1=taproot/tapscript)\n"); break;
             default:
-                fprintf(stderr, "expected 22 or 34 byte script inside %s, but got %zu bytes\n", source.c_str(), pushval.size());
+                fprintf(stderr, "expected 22 or 34 byte script inside %s, but got %u bytes: %s\n", source.c_str(), validation.size(), HexStr(validation).c_str());
                 return false;
         }
         CScript::const_iterator it = validation.begin();
