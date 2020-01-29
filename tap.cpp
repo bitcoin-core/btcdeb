@@ -123,7 +123,7 @@ int main(int argc, char* const* argv)
         btc_logf("\n");
     }
 
-    std::string addprefix = ca.m.count('p') ? ca.m['p'] : DEFAULT_ADDR_PREFIX;
+    bech32_hrp = ca.m.count('p') ? ca.m['p'] : DEFAULT_ADDR_PREFIX;
 
     std::string internal_pubkey_str = ca.l[0];
     Item internal_pubkey;

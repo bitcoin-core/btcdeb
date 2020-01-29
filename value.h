@@ -15,6 +15,9 @@
 static bool VALUE_WARN = true;
 static bool VALUE_EXTENDED = false; // 0bNNNN, etc
 
+extern std::string bech32_hrp;
+extern uint8_t bech32_witness_version;
+
 template<typename T1, typename T2>
 inline void insert(T1& a, T2&& b) {
     a.insert(a.end(), b.begin(), b.end());
@@ -450,7 +453,7 @@ struct Value {
         data_value();
         std::vector<unsigned char> tmp = {1 /* temporary; this should be configurable (wit ver) */};
         ConvertBits<8, 5, true>([&](unsigned char c) { tmp.push_back(c); }, data.begin(), data.end());
-        str = bech32::Encode("sb", tmp);
+        str = bech32::Encode(bech32_hrp, tmp);
         type = T_STRING;
     }
     void do_bech32dec() {

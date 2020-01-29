@@ -16,6 +16,9 @@ static secp256k1_context* secp256k1_context_sign = nullptr;
 
 void ECC_Start();
 
+std::string bech32_hrp = "bcrt";
+uint8_t bech32_witness_version = 1;
+
 #define abort(msg...) do { fprintf(stderr, msg); fputc('\n', stderr); return; } while (0)
 
 Value Value::prepare_extraction(const Value& a, const Value& b) {
