@@ -1883,11 +1883,11 @@ bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const st
         CHashWriter ss_branch = HasherTapBranch;
         auto node_begin = control.data() + TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i;
         if (std::lexicographical_compare(k.begin(), k.end(), node_begin, node_begin + TAPROOT_CONTROL_NODE_SIZE)) {
-            btc_taproot_logf("  - %d: node_begin = %d; taproot control node match -> k first\n", i, node_begin);
+            btc_taproot_logf("  - %d: node = %02x...; taproot control node match -> k first\n", i, node_begin[0]);
             k_desc = strprintf("TapBranch(%s || Span<%d,%zu>=%s)", k_desc.c_str(), TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE, HexStr(Span<const unsigned char>(node_begin, TAPROOT_CONTROL_NODE_SIZE)).c_str());
             ss_branch << k << Span<const unsigned char>(node_begin, TAPROOT_CONTROL_NODE_SIZE);
         } else {
-            btc_taproot_logf("  - %d: node_begin = %d; taproot control node mismatch -> k second\n", i, node_begin);
+            btc_taproot_logf("  - %d: node = %02x...; taproot control node mismatch -> k second\n", i, node_begin[0]);
             k_desc = strprintf("TapBranch(Span<%d,%zu>=%s || %s)", TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE, HexStr(Span<const unsigned char>(node_begin, TAPROOT_CONTROL_NODE_SIZE)).c_str(), k_desc.c_str());
             ss_branch << Span<const unsigned char>(node_begin, TAPROOT_CONTROL_NODE_SIZE) << k;
         }

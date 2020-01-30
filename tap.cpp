@@ -439,6 +439,11 @@ int main(int argc, char* const* argv)
             if (!secp256k1_schnorrsig_serialize(secp256k1_context_sign, data.data(), &sig)) {
                 abort("failed to serialize signature");
             }
+            uint256 pk;
+            if (!secp256k1_xonly_pubkey_serialize(secp256k1_context_sign, pk.begin(), &pubkey)) assert(0);
+            btc_logf("sighash: %s\n", HEXC(sighash));
+            btc_logf("privkey: %s\n", HEXC(privkey));
+            btc_logf("pubkey: %s\n", HEXC(pk));
             btc_logf("signature: %s\n", HEXC(data));
             taproot_input_stack.insert(taproot_input_stack.begin(), data);
 
