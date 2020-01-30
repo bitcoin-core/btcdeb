@@ -4,6 +4,8 @@ The taproot branch of btcdeb contains experimental support for the work-in-progr
 
 This document is an early draft describing one process with which you can create, from scratch, your own Tapscript output, fund it, and then spend one of its paths.
 
+Note: you should start out at [the tap utility version of this document](tapscript-example-with-tap.md) unless you want to know the nitty gritty details.
+
 ## Scenario
 
 We will base the approach on a simple [HTLC](https://en.bitcoin.it/wiki/Hash_Time_Locked_Contracts)-like contract between Alice and Bob, kind of like a Lightning channel. In old-style Bitcoin, this might look something like this:
