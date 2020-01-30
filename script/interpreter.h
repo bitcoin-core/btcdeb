@@ -212,8 +212,8 @@ static constexpr size_t TAPROOT_CONTROL_MAX_SIZE = TAPROOT_CONTROL_BASE_SIZE + T
 template <class T>
 uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache = nullptr);
 
-template <class T>
-bool SignatureHashTap(uint256& hash_out, const ScriptExecutionData& execdata, const T& tx_to, unsigned int in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache);
+template <typename T>
+bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata, const T& tx_to, unsigned int in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache);
 
 class BaseSignatureChecker
 {

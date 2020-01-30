@@ -1484,7 +1484,6 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
     // Epoch
     static constexpr uint8_t EPOCH = 0;
     ss << EPOCH;
-    // 00       00
 
     // Hash type
     const uint8_t output_type = (hash_type == SIGHASH_DEFAULT) ? SIGHASH_ALL : (hash_type & SIGHASH_OUTPUT_MASK); // Default (no sighash byte) is equivalent to SIGHASH_ALL
@@ -1492,18 +1491,13 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
     if (output_type != SIGHASH_ALL && output_type != SIGHASH_SINGLE && output_type != SIGHASH_NONE) return false;
     if (input_type != SIGHASH_ANYONECANPAY && input_type != 0) return false;
     ss << hash_type;
-    // 00       00
 
     // Transaction level data
     ss << tx_to.nVersion;
-    // 02000000
     ss << tx_to.nLockTime;
-    // 00000000
     if (input_type != SIGHASH_ANYONECANPAY) {
         ss << cache.m_prevouts_hash;
-        // ff010294a5b18c95e452586d931e67b68257780f697eb8b51a2ee6c4c2b7f822
         ss << cache.m_amounts_spent_hash;
-        // 5ebd4ccd9df61db3922ae26d991dfad87de77497510f8151a3ee5ef8f71592f2 vs d67f904aa67b8efd2db8afa6a6bf8a2f447cbb15d59ce612ababd762795d814f
         ss << cache.m_sequences_hash;
     }
     if (output_type == SIGHASH_ALL) {
