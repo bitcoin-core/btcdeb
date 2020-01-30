@@ -18,7 +18,8 @@
 
 #include <hash.h>
 
-#define abort(msg...) do { fprintf(stderr, msg); fputc('\n', stderr); return 1; } while(0)
+#define abort(msg...) do { fprintf(stderr, msg); fputc('\n', stderr); exit(1); } while(0)
+#define HEXC(v) HexStr(v).c_str()
 
 static secp256k1_context* secp256k1_context_sign = nullptr;
 
@@ -34,6 +35,8 @@ constexpr const char* DEFAULT_ADDR_PREFIX = "sb"; // TODO: switch to bcrt once W
 
 typedef std::vector<uint8_t> Item;
 
+static Item PLACEHOLDER_SIGNATURE = ParseHex("000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f");
+
 bool quiet = false;
 bool pipe_in = false;  // xxx | btcdeb
 bool pipe_out = false; // btcdeb xxx > file
@@ -46,9 +49,13 @@ inline bool checkenv(const std::string& flag, bool fallback = false) {
 struct TapNode {
     size_t m_index;
     uint256 m_hash;
+    TapNode* m_parent{nullptr};
     TapNode(size_t index) : m_index(index) {}
     virtual ~TapNode() {}
     virtual std::string ToString() const { return strprintf("#%zu", m_index); }
+    virtual void Prove(const TapNode* child, Item& proof) const {
+        abort("this node type cannot make proofs");
+    }
 };
 
 struct TapBranch : public TapNode {
@@ -61,6 +68,9 @@ struct TapBranch : public TapNode {
     }
     virtual std::string ToString() const override { return strprintf("(%s, %s)", m_l->ToString(), m_r->ToString()); }
     TapBranch(TapNode* l, TapNode* r) : TapNode(l->m_index), m_l(l), m_r(r), m_index_r(r->m_index) {
+        if (l->m_parent) abort("left node has a parent already");
+        if (r->m_parent) abort("right node has a parent already");
+        l->m_parent = r->m_parent = this;
         auto hasher = HasherTapBranch;
         auto h_l = m_l->m_hash;
         auto h_r = m_r->m_hash;
@@ -69,6 +79,16 @@ struct TapBranch : public TapNode {
         }
         hasher << h_l << h_r;
         m_hash = hasher.GetSHA256();
+    }
+    virtual void Prove(const TapNode* child, Item& proof) const override {
+        uint256 hash;
+        if (child == m_l) {
+            hash = m_r->m_hash;
+        } else if (child == m_r) {
+            hash = m_l->m_hash;
+        } else abort("TapBranch::Prove failed to prove missing child %s (this branch has %s and %s)\n", child->ToString().c_str(), m_l->ToString().c_str(), m_r->ToString().c_str());
+        proof.insert(proof.end(), hash.begin(), hash.end());
+        if (m_parent) m_parent->Prove(this, proof);
     }
 };
 
@@ -102,9 +122,8 @@ int main(int argc, char* const* argv)
         printf("tap (\"The Bitcoin Debugger Taproot Utility\") version %d.%d.%d\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION);
         return 0;
     } else if (ca.m.count('h') || ca.l.size() < 3) {
-        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--addrprefix=sb|-psb] <internal_pubkey> <script_count> <script1> <script2> ... [<spend index or sig> [<spend arg1> [<spend arg2> [...]]]]\n", argv[0]);
+        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--addrprefix=sb|-psb] <internal_pubkey> <script_count> <script1> <script2> ... [<spend index> [<spend arg1> [<spend arg2> [...]]]]\n", argv[0]);
         fprintf(stderr, "If spend index and args are omitted, this generates a tweaked pubkey for funding. If spend index and args are included, this generates the spending witness based on the given input.\n");
-        fprintf(stderr, "If spend index is a signature (64-65 bytes) and no arguments are provided, this is interpreted as a Taproot spend.\n");
         fprintf(stderr, "The address prefix refers to the bech32 human readable part; this defaults to '%s' (bitcoin regtest)\n", DEFAULT_ADDR_PREFIX);
         return 0;
     }
@@ -133,9 +152,9 @@ int main(int argc, char* const* argv)
         abort("invalid internal pubkey %s: not parsable hex value", internal_pubkey_str.c_str());
     }
     if (internal_pubkey.size() != 32) {
-        abort("invalid internal pubkey %s -> %s: length %zu invalid (must be 32 bytes)", internal_pubkey_str.c_str(), HexStr(internal_pubkey).c_str(), internal_pubkey.size());
+        abort("invalid internal pubkey %s -> %s: length %zu invalid (must be 32 bytes)", internal_pubkey_str.c_str(), HEXC(internal_pubkey), internal_pubkey.size());
     }
-    btc_logf("Internal pubkey: %s\n", HexStr(internal_pubkey).c_str());
+    btc_logf("Internal pubkey: %s\n", HEXC(internal_pubkey));
     uint256 internal_pubkey_u256 = uint256(internal_pubkey);
 
     size_t script_count = atol(ca.l[1]);
@@ -146,26 +165,63 @@ int main(int argc, char* const* argv)
         abort("missing scripts (count %zu but only %zu arguments)", script_count, ca.l.size() - 2);
     }
 
+    size_t sai = 2 + script_count;
+    size_t sargc = sai < ca.l.size() ? ca.l.size() - sai : 0;
+    size_t spending_index = (size_t)-1;
+    bool is_tapscript = false;
+    Item sig;
+    CScript taproot_inputs;
+    size_t witness_stack_count = 0;
+    if (sargc > 0) {
+        btc_logf("%zu spending argument%s present\n", sargc, sargc == 1 ? "" : "s");
+        is_tapscript = true;
+        spending_index = atol(ca.l[sai++]);
+        if (spending_index >= script_count) {
+            abort("invalid script index: %zu must be within range [0..%zu]\n", spending_index, script_count = 1);
+        }
+        while (sai < ca.l.size()) {
+            if (std::string(ca.l[sai]) == "%SIG%") {
+                taproot_inputs << PLACEHOLDER_SIGNATURE;
+                btc_logf("  #%zu: <placeholder signature>\n", witness_stack_count);
+            } else {
+                auto v = Value(ca.l[sai]).data_value();
+                taproot_inputs << v;
+                btc_logf("  #%zu: %s\n", witness_stack_count, HEXC(v));
+            }
+            ++sai;
+            ++witness_stack_count;
+        }
+    }
+
     std::vector<CScript> scripts;
     btc_logf("%zu scripts:\n", script_count);
     for (size_t i = 0; i < script_count; ++i) {
         Item scriptData = Value(ca.l[2 + i]).data_value();
         CScript script = CScript(scriptData.begin(), scriptData.end());
         if (!script.HasValidOps()) {
-            abort("invalid script #%zu: %s", i, HexStr(scriptData).c_str());
+            abort("invalid script #%zu: %s", i, HEXC(scriptData));
         }
         if (!quiet) {
-            btc_logf("- #%zu: %s\n", i, HexStr(script).c_str());
+            btc_logf("- #%zu: %s\n", i, HEXC(script));
         }
         scripts.emplace_back(script);
     }
 
-    // generate tapscript commitment
+    // if we are doing a tapscript spend, we can add the program now that we know it
+    if (is_tapscript) {
+        taproot_inputs << Item(scripts[spending_index].begin(), scripts[spending_index].end());
+        btc_logf("Adding selected script to taproot inputs: %s\n → %s\n", HEXC(scripts[spending_index]), HEXC(taproot_inputs));
+        ++witness_stack_count;
+    }
+
+    // generate tapscript commitment (always)
     std::vector<TapNode*> branches;
     TapLeaf* pending = nullptr;
+    TapLeaf* spending_leaf = nullptr;
     for (size_t i = 0; i < script_count; ++i) {
         TapLeaf* leaf = new TapLeaf(i, scripts[i]);
         btc_logf("Script #%zu leaf hash = TapLeaf<<0xc0 || %s>>\n → %s\n", i, HexStr(scripts[i]).c_str(), HexStr(leaf->m_hash).c_str());
+        if (is_tapscript && i == spending_index) spending_leaf = leaf;
         if (pending) {
             // we've got a pair
             branches.push_back(new TapBranch(pending, leaf));
@@ -199,12 +255,24 @@ int main(int argc, char* const* argv)
     if (branches.size() != 1) {
         abort("Unable to generate tapscript commitment tree (branch size did not end up at 1, it is %zu)", branches.size());
     }
+
+    // control block (if spending) -- note that we put the leaf version and negation bit in last, as we don't know if the pubkey was negated yet
+    Item ctl = internal_pubkey;
+    if (is_tapscript) {
+        btc_logf("Control object = (leaf), (internal pubkey = %s), ...\n", HEXC(internal_pubkey));
+        if (!spending_leaf) {
+            abort("Internal error: Spending leaf was not derived (this is a bug; please report)");
+        }
+        spending_leaf->m_parent->Prove(spending_leaf, ctl);
+        btc_logf("... with proof -> %s\n", HEXC(ctl));
+    }
+
     // now TapTweak <pubkey> <root>
     TapNode* root = branches[0];
     auto hasher = HasherTapTweak;
     hasher << internal_pubkey_u256 << root->m_hash;
     auto tweak = hasher.GetSHA256();
-    btc_logf("Tweak value = %s\n", HexStr(tweak).c_str());
+    btc_logf("Tweak value = %s\n", HEXC(tweak));
     // now tweak the pubkey
     secp256k1_xonly_pubkey pubkey;
     if (!secp256k1_xonly_pubkey_parse(secp256k1_context_sign, &pubkey, internal_pubkey.data())) {
@@ -219,11 +287,25 @@ int main(int argc, char* const* argv)
     if (!secp256k1_xonly_pubkey_serialize(secp256k1_context_sign, serialized_pk.data(), &pubkey)) {
         abort("failed to serialize pubkey");
     }
-    btc_logf("Tweaked pubkey = %s (%snegated)\n", HexStr(serialized_pk).c_str(), is_negated ? "" : "not ");
+    btc_logf("Tweaked pubkey = %s (%snegated)\n", HEXC(serialized_pk), is_negated ? "" : "not ");
 
     Value v(serialized_pk);
     v.do_bech32enc();
+
     btc_logf("Resulting Bech32 address: %s\n", v.str_value().c_str());
+
+    if (is_tapscript) {
+        // we can now finally put in the leaf/negation bit in the control object
+        uint8_t ctl_ln = is_negated ? 0xc1 : 0xc0;
+        ctl.insert(ctl.begin(), &ctl_ln, &ctl_ln + 1);
+        btc_logf("Final control object = %s\n", HEXC(ctl));
+
+        // append control object to taproot inputs
+        taproot_inputs << ctl;
+        ++witness_stack_count;
+        assert(witness_stack_count < 253); // if not, we need to do actual compact size encoding
+        btc_logf("Tapscript spending witness:\n%02x%s\n", witness_stack_count, HEXC(taproot_inputs));
+    }
 
     ECC_Stop();
 }
