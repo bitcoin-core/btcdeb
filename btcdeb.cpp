@@ -139,7 +139,7 @@ int main(int argc, char* const* argv)
 
     if (!pipe_in) {
         // temporarily defaulting all to ON
-        if (checkenv("DEBUG_SIGHASH", true)) btc_sighash_logf = btc_logf_stderr;
+        if (checkenv("DEBUG_SIGHASH")) btc_sighash_logf = btc_logf_stderr;
         if (checkenv("DEBUG_SIGNING", true)) btc_sign_logf = btc_logf_stderr;
         if (checkenv("DEBUG_SEGWIT", true))  btc_segwit_logf = btc_logf_stderr;
         if (checkenv("DEBUG_TAPROOT", true)) btc_taproot_logf = btc_logf_stderr;
