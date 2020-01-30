@@ -483,10 +483,10 @@ bool Instance::configure_tx_txin() {
                 scriptPubKey = CScript(stack.back().begin(), stack.back().end());
                 stack.pop_back();
                 if (control.size() < TAPROOT_CONTROL_BASE_SIZE || control.size() > TAPROOT_CONTROL_MAX_SIZE || ((control.size() - TAPROOT_CONTROL_BASE_SIZE) % TAPROOT_CONTROL_NODE_SIZE) != 0) {
-                    fprintf(stderr, "control object size %zu is incorrect:\n"
+                    fprintf(stderr, "control object size %zu is incorrect: %s\n"
                         "- 1. it must not be smaller than the control base size %zu\n"
                         "- 2. it must not be greater than the control max size %zu\n"
-                        "- 3. it must be base_size + n*node_size, where base_size = %zu and node_size = %zu\n", control.size(), TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_MAX_SIZE, TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_NODE_SIZE);
+                        "- 3. it must be base_size + n*node_size, where base_size = %zu and node_size = %zu\n", control.size(), HexStr(control).c_str(), TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_MAX_SIZE, TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_NODE_SIZE);
                     return false;
                 }
                 if (!VerifyTaprootCommitment(control, program, scriptPubKey, &execdata.m_tapleaf_hash)) {
@@ -532,4 +532,17 @@ bool Instance::configure_tx_txin() {
     }
 
     return true;
+}
+
+uint256 Instance::calc_sighash() {
+    uint256 hash;
+    std::vector<CTxOut> spent_outputs;
+    spent_outputs.emplace_back(txin->vout[txin_vout_index_spent_by_tx]);
+    txdata = PrecomputedTransactionData();
+    txdata.Init(*tx.get(), std::move(spent_outputs));
+    if (!SignatureHashSchnorr(hash, execdata, *tx, tx_internal_vin_index_of_txin, 0x00, sigver, txdata)) {
+        fprintf(stderr, "Failed to generate schnorr signature hash!\n");
+        exit(1);
+    }
+    return hash;
 }

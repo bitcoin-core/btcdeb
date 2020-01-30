@@ -14,6 +14,10 @@
 
 #include <value.h>
 
+#include <instance.h>
+
+#include <functions.h>
+
 #include <config/bitcoin-config.h>
 
 #include <hash.h>
@@ -114,6 +118,10 @@ int main(int argc, char* const* argv)
     ca.add_option("quiet", 'q', no_arg);
     ca.add_option("version", 'v', no_arg);
     ca.add_option("addrprefix", 'p', req_arg);
+    ca.add_option("tx", 'x', req_arg);
+    ca.add_option("txin", 'i', req_arg);
+    ca.add_option("privkey", 'k', req_arg);
+    ca.add_option("sig", 's', req_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q') || pipe_in || pipe_out;
     if (quiet) btc_logf = btc_logf_dummy;
@@ -122,9 +130,13 @@ int main(int argc, char* const* argv)
         printf("tap (\"The Bitcoin Debugger Taproot Utility\") version %d.%d.%d\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION);
         return 0;
     } else if (ca.m.count('h') || ca.l.size() < 3) {
-        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--addrprefix=sb|-psb] <internal_pubkey> <script_count> <script1> <script2> ... [<spend index> [<spend arg1> [<spend arg2> [...]]]]\n", argv[0]);
-        fprintf(stderr, "If spend index and args are omitted, this generates a tweaked pubkey for funding. If spend index and args are included, this generates the spending witness based on the given input.\n");
-        fprintf(stderr, "The address prefix refers to the bech32 human readable part; this defaults to '%s' (bitcoin regtest)\n", DEFAULT_ADDR_PREFIX);
+        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--addrprefix=sb|-psb] [--tx=<hex>|-x<hex>] [--txin=<hex>|-i<hex>] [--privkey=<key>|-k<key>] [--sig=<hex>|-s<hex>] <internal_pubkey> <script_count> <script1> <script2> ... [<spend index or sig> [<spend arg1> [<spend arg2> [...]]]]\n", argv[0]);
+        fprintf(stderr, "If spend index and args are omitted, and no transaction data is provided, this generates a tweaked pubkey for funding.\n");
+        fprintf(stderr, "If spend index and args are omitted, but transaction data is provided, this generates witness data for a Taproot spend and inserts this into the spending transaction.\n");
+        fprintf(stderr, "If spend index and args are included, this generates the spending witness based on the given input.\n");
+        fprintf(stderr, "If spend index, args, and transaction data are all included, the spending witness is inserted into the transaction.\n");
+        fprintf(stderr, "A signature is generated if --privkey is given. If a signature is provided via the --sig argument, it is used as is.\n");
+        fprintf(stderr, "The address prefix refers to the bech32 human readable part; this defaults to '%s'\n", DEFAULT_ADDR_PREFIX);
         return 0;
     }
     btc_logf("tap %d.%d.%d -- type `%s -h` for help\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, argv[0]);
@@ -132,7 +144,7 @@ int main(int argc, char* const* argv)
 
     if (!pipe_in) {
         // temporarily defaulting all to ON
-        if (checkenv("DEBUG_SIGHASH", true)) btc_sighash_logf = btc_logf_stderr;
+        if (checkenv("DEBUG_SIGHASH")) btc_sighash_logf = btc_logf_stderr;
         if (checkenv("DEBUG_SIGNING", true)) btc_sign_logf = btc_logf_stderr;
         if (checkenv("DEBUG_SEGWIT", true))  btc_segwit_logf = btc_logf_stderr;
         if (checkenv("DEBUG_TAPROOT", true)) btc_taproot_logf = btc_logf_stderr;
@@ -144,7 +156,44 @@ int main(int argc, char* const* argv)
         btc_logf("\n");
     }
 
+    Item premade_sig;
+    Item privkey;
     bech32_hrp = ca.m.count('p') ? ca.m['p'] : DEFAULT_ADDR_PREFIX;
+
+    bool have_txs = false;
+    if (ca.m.count('x') + ca.m.count('i') == 1) abort("provide either both --txin and --tx, or neither");
+    if (ca.m.count('x')) {
+        have_txs = true;
+        if (!instance.parse_transaction(ca.m['x'].c_str(), false)) {
+            abort("failed to parse transaction");
+        }
+        if (!instance.parse_input_transaction(ca.m['i'].c_str())) {
+            abort("failed to parse input transaction");
+        }
+        btc_logf("targeting transaction vin at index #%lld\n", instance.tx_internal_vin_index_of_txin);
+    }
+
+    if (ca.m.count('k')) {
+        Value wif(ca.m['k'].c_str());
+        if (wif.type == Value::T_STRING) {
+            // WIF encoding?
+            wif.do_decode_wif();
+        }
+        if (wif.type != Value::T_DATA) {
+            abort("failed to parse private key (not raw data, and not WIF encoded): %s", ca.m['k'].c_str());
+        }
+        privkey = wif.data;
+        if (privkey.size() != 32) {
+            abort("invalid private key (wrong size: %zu, must be 32)", privkey.size());
+        }
+    }
+
+    if (ca.m.count('s')) {
+        if (!TryHex(ca.m['s'], premade_sig)) {
+            abort("failed to parse signature: %s", ca.m['s'].c_str());
+        }
+        if (privkey.size()) abort("cannot use --privkey and --sig simultaneously");
+    }
 
     std::string internal_pubkey_str = ca.l[0];
     Item internal_pubkey;
@@ -168,12 +217,18 @@ int main(int argc, char* const* argv)
     size_t sai = 2 + script_count;
     size_t sargc = sai < ca.l.size() ? ca.l.size() - sai : 0;
     size_t spending_index = (size_t)-1;
-    bool is_tapscript = false;
-    Item sig;
-    CScript taproot_inputs;
+    bool is_taproot = false, is_tapscript = false;
+    std::vector<Item> taproot_input_stack; // ScriptWitness variant
+    CScript taproot_inputs;                // manual variant
     size_t witness_stack_count = 0;
+    if (have_txs && sargc == 0) {
+        btc_logf("- no spend arguments; TAPROOT mode\n");
+        is_taproot = true;
+    }
     if (sargc > 0) {
         btc_logf("%zu spending argument%s present\n", sargc, sargc == 1 ? "" : "s");
+        // spend mode -- if 1 single argument, it's taproot, and the argument is the signature
+        btc_logf("- 1+ spend arguments; TAPSCRIPT mode\n");
         is_tapscript = true;
         spending_index = atol(ca.l[sai++]);
         if (spending_index >= script_count) {
@@ -181,10 +236,12 @@ int main(int argc, char* const* argv)
         }
         while (sai < ca.l.size()) {
             if (std::string(ca.l[sai]) == "%SIG%") {
+                taproot_input_stack.push_back(PLACEHOLDER_SIGNATURE);
                 taproot_inputs << PLACEHOLDER_SIGNATURE;
                 btc_logf("  #%zu: <placeholder signature>\n", witness_stack_count);
             } else {
                 auto v = Value(ca.l[sai]).data_value();
+                taproot_input_stack.push_back(v);
                 taproot_inputs << v;
                 btc_logf("  #%zu: %s\n", witness_stack_count, HEXC(v));
             }
@@ -208,10 +265,9 @@ int main(int argc, char* const* argv)
     }
 
     // if we are doing a tapscript spend, we can add the program now that we know it
+    Item spending_script;
     if (is_tapscript) {
-        taproot_inputs << Item(scripts[spending_index].begin(), scripts[spending_index].end());
-        btc_logf("Adding selected script to taproot inputs: %s\n → %s\n", HEXC(scripts[spending_index]), HEXC(taproot_inputs));
-        ++witness_stack_count;
+        spending_script = Item(scripts[spending_index].begin(), scripts[spending_index].end());
     }
 
     // generate tapscript commitment (always)
@@ -289,22 +345,115 @@ int main(int argc, char* const* argv)
     }
     btc_logf("Tweaked pubkey = %s (%snegated)\n", HEXC(serialized_pk), is_negated ? "" : "not ");
 
+    // if we have a txin, we can now verify that our pubkey matches the pubkey in the output
+    if (have_txs) {
+        auto spk = instance.txin->vout[instance.txin_vout_index_spent_by_tx].scriptPubKey;
+        if (spk.size() < serialized_pk.size()) {
+            abort("pubkey mismatch: input transaction's vout[%lld].scriptPubKey = %s, but our pubkey = %s\n", instance.txin_vout_index_spent_by_tx, HEXC(spk), HEXC(serialized_pk));
+        }
+        auto cmp = Item(spk.end() - serialized_pk.size(), spk.end());
+        if (cmp != serialized_pk) {
+            abort("pubkey mismatch: input transaction's vout[%lld].scriptPubKey %s does not end (%s) with our pubkey %s\n", instance.txin_vout_index_spent_by_tx, HEXC(spk), HEXC(cmp), HEXC(serialized_pk));
+        }
+        btc_logf("Pubkey matches the scriptPubKey of the input transaction's output #%lld\n", instance.txin_vout_index_spent_by_tx);
+    }
+
     Value v(serialized_pk);
     v.do_bech32enc();
 
-    btc_logf("Resulting Bech32 address: %s\n", v.str_value().c_str());
+    printf("Resulting Bech32 address: %s\n", v.str_value().c_str());
+
+    if (is_taproot &&privkey.size() != 0) {
+        if (!secp256k1_xonly_seckey_tweak_add(secp256k1_context_sign, privkey.data(), tweak.begin())) {
+            abort("failure: secp256k1_xonly_seckey_tweak_add call failed");
+        }
+        btc_logf("tweaked privkey -> %s\n", HEXC(privkey));
+
+        Value v(privkey);
+        v.do_get_xpubkey();
+        if (v.data_value() != serialized_pk) {
+            abort("the provided private key has a corresponding public key %s\nhowever, the tweaked public key for this output is %s", HEXC(v.data), HEXC(serialized_pk));
+        }
+        btc_logf("The given private key matches the tweaked public key\n");
+    }
 
     if (is_tapscript) {
         // we can now finally put in the leaf/negation bit in the control object
         uint8_t ctl_ln = is_negated ? 0xc1 : 0xc0;
         ctl.insert(ctl.begin(), &ctl_ln, &ctl_ln + 1);
         btc_logf("Final control object = %s\n", HEXC(ctl));
+    }
 
-        // append control object to taproot inputs
-        taproot_inputs << ctl;
-        ++witness_stack_count;
-        assert(witness_stack_count < 253); // if not, we need to do actual compact size encoding
-        btc_logf("Tapscript spending witness:\n%02x%s\n", witness_stack_count, HEXC(taproot_inputs));
+    // if we have transaction data, replace the witness stack for the appropriate input
+    if (have_txs) {
+        if (premade_sig.size()) {
+            // insert signature
+            taproot_input_stack.insert(taproot_input_stack.begin(), premade_sig);
+        } else if (privkey.size() == 0) {
+            // append a placeholder sig to the witness stack, or the instance system won't recognize the output type
+            taproot_input_stack.insert(taproot_input_stack.begin(), PLACEHOLDER_SIGNATURE);
+        }
+
+        if (is_tapscript) {
+            // append script to taproot inputs
+            taproot_input_stack.push_back(spending_script);
+            taproot_inputs << spending_script;
+            btc_logf("Adding selected script to taproot inputs: %s\n → %s\n", HEXC(scripts[spending_index]), HEXC(taproot_inputs));
+            ++witness_stack_count;
+            // append control object
+            btc_logf("appending control object to taproot input stack: %s\n", HEXC(ctl));
+            taproot_input_stack.push_back(ctl);
+            taproot_inputs << ctl;
+            ++witness_stack_count;
+            btc_logf("Tapscript spending witness: [\n");
+            for (auto& x : taproot_input_stack) btc_logf(" \"%s\",\n", HEXC(x));
+            btc_logf("]\n");
+        }
+
+        CMutableTransaction mtx(*instance.tx);
+        mtx.vin[instance.tx_internal_vin_index_of_txin].scriptWitness.stack = taproot_input_stack;
+        instance.tx = MakeTransactionRef(mtx);
+
+        instance.configure_tx_txin();
+        instance.execdata.m_codeseparator_pos = 0xFFFFFFFFUL;
+        instance.execdata.m_codeseparator_pos_init = true;
+
+        const uint256 sighash = instance.calc_sighash();
+        btc_logf("sighash (little endian) = %s\n", HEXC(sighash));
+
+        if (privkey.size()) {
+            secp256k1_schnorrsig sig;
+            secp256k1_xonly_pubkey pubkey;
+            if (!secp256k1_xonly_pubkey_create(secp256k1_context_sign, &pubkey, privkey.data())) {
+                abort("failed to derive pubkey");
+            }
+
+            if (!secp256k1_schnorrsig_sign(secp256k1_context_sign, &sig, sighash.begin(), privkey.data(), NULL, NULL)) {
+                abort("failed to create signature");
+            }
+            if (!secp256k1_schnorrsig_verify(secp256k1_context_sign, &sig, sighash.begin(), &pubkey)) {
+                abort("failed to verify signature");
+            }
+            Item data;
+            data.resize(64);
+            if (!secp256k1_schnorrsig_serialize(secp256k1_context_sign, data.data(), &sig)) {
+                abort("failed to serialize signature");
+            }
+            btc_logf("signature: %s\n", HEXC(data));
+            taproot_input_stack.insert(taproot_input_stack.begin(), data);
+
+            mtx.vin[instance.tx_internal_vin_index_of_txin].scriptWitness.stack = taproot_input_stack;
+            instance.tx = MakeTransactionRef(mtx);
+        } else if (premade_sig.size() == 0) {
+            printf("NOTE: there is a placeholder signature at the end of the witness data for the resulting transaction below; this must be replaced with a 64 byte signature for the sighash given above\n");
+        }
+
+        mtx.vin[instance.tx_internal_vin_index_of_txin].scriptWitness.stack = taproot_input_stack;
+        instance.tx = MakeTransactionRef(mtx);
+
+        CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+        ssTx << *instance.tx;
+        printf("Resulting transaction: %s\n", HEXC(ssTx));
     }
 
     ECC_Stop();

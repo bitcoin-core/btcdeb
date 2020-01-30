@@ -79,6 +79,8 @@ public:
     bool rewind();
 
     bool eval(const size_t argc, char* const* argv);
+
+    uint256 calc_sighash();
 };
 
 #endif // included_btcdeb_instance_h_
