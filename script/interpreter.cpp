@@ -1478,7 +1478,7 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
     assert(in_pos < tx_to.vin.size());
     assert(cache.ready && cache.m_amounts_spent_ready);
 
-    CHashWriter::debug = true;
+    CHashWriter::debug = btc_enabled(btc_sighash_logf);
     CHashWriter ss = HasherTapSighash;
 
     // Epoch
