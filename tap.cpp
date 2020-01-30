@@ -18,7 +18,7 @@
 
 #include <hash.h>
 
-#define abort(msg...) do { fprintf(stderr, msg); fputc('\n', stderr); return 1; }
+#define abort(msg...) do { fprintf(stderr, msg); fputc('\n', stderr); return 1; } while(0)
 
 static secp256k1_context* secp256k1_context_sign = nullptr;
 
