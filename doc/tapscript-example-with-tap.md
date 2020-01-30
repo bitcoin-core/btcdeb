@@ -94,7 +94,7 @@ Tweaked pubkey = a5ba0871796eb49fb4caa6bf78e675b9455e2d66e751676420f8381d5dda895
 Resulting Bech32 address: sb1p5kaqsuted66fldx256lh3en4h9z4uttxuagkwepqlqup6hw639gsy7hxn9
 ```
 
-The output is quote verbose right now, but lets go through what's being said here:
+The output is quite verbose right now, but lets go through what's being said here:
 * There is an internal pubkey f30...; we provided this one (`$pubkey`)
 * There are 2 scripts, the alice and bob scripts
 * There are *leaf hashes* for each of the scripts; we will talk about these more when we do the Tapscript spend
@@ -103,7 +103,7 @@ The output is quote verbose right now, but lets go through what's being said her
 * Finally, there's a Bech32 address. This is where we wanna send funds. Let's send 0.001 signet-coins to it.
 
 ```Bash
-$ alias bcli='bcli' # change this to whatever command you use to access bitcoin-cli
+$ alias bcli='bitcoin-cli -signet' # change this to whatever command you use to access bitcoin-cli
 $ bcli sendtoaddress sb1p5kaqsuted66fldx256lh3en4h9z4uttxuagkwepqlqup6hw639gsy7hxn9 0.001
 d4dcac1d176516dd614beef10eb7b22a666a69efcd3470b91423eca82e50f25e
 $ bcli getrawtransaction d4dcac1d176516dd614beef10eb7b22a666a69efcd3470b91423eca82e50f25e 1
@@ -528,7 +528,7 @@ error: Script failed an OP_EQUALVERIFY operation
 btcdeb>
 ```
 
-Unsurprisingly, our fake signature does *not* sha256-hash to the preimage hash that Bob requires. Luckily we know what the preimage is, because we created it at the very top. Let's put that in as the first argument to tap. We also want a signature by Bob in there, so let's also provide *Bob's private key* to tap. Alternatively we could run through to the end and use the sighash to generate a signature elsewhere.
+Unsurprisingly, our fake signature does *not* sha256-hash to the preimage hash that Bob requires. Luckily we know what the preimage is, because we created it at the very top. Let's put that in as the first script argument to tap (after the selected script index). We also want a signature by Bob in there, so let's also provide *Bob's private key* to tap. Alternatively we could run through to the end and use the sighash to generate a signature elsewhere.
 
 ```Bash
 $ tap -k81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9 --tx=$tx --txin=$txin $pubkey 2 $script_alice $script_bob 1 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f
