@@ -18,6 +18,8 @@
 
 #include <hash.h>
 
+#define abort(msg...) do { fprintf(stderr, msg); fputc('\n', stderr); return 1; }
+
 static secp256k1_context* secp256k1_context_sign = nullptr;
 
 static void ECC_Start();
@@ -128,24 +130,20 @@ int main(int argc, char* const* argv)
     std::string internal_pubkey_str = ca.l[0];
     Item internal_pubkey;
     if (!TryHex(internal_pubkey_str, internal_pubkey)) {
-        fprintf(stderr, "invalid internal pubkey %s: not parsable hex value\n", internal_pubkey_str.c_str());
-        return 1;
+        abort("invalid internal pubkey %s: not parsable hex value", internal_pubkey_str.c_str());
     }
     if (internal_pubkey.size() != 32) {
-        fprintf(stderr, "invalid internal pubkey %s -> %s: length %zu invalid (must be 32 bytes)\n", internal_pubkey_str.c_str(), HexStr(internal_pubkey).c_str(), internal_pubkey.size());
-        return 1;
+        abort("invalid internal pubkey %s -> %s: length %zu invalid (must be 32 bytes)", internal_pubkey_str.c_str(), HexStr(internal_pubkey).c_str(), internal_pubkey.size());
     }
     btc_logf("Internal pubkey: %s\n", HexStr(internal_pubkey).c_str());
     uint256 internal_pubkey_u256 = uint256(internal_pubkey);
 
     size_t script_count = atol(ca.l[1]);
     if (script_count < 1 || script_count > 1024) {
-        fprintf(stderr, "invalid script count: %zu (allowed range 1..1024)\n", script_count);
-        return 1;
+        abort("invalid script count: %zu (allowed range 1..1024)", script_count);
     }
     if (ca.l.size() < 2 + script_count) {
-        fprintf(stderr, "missing scripts (count %zu but only %zu arguments)\n", script_count, ca.l.size() - 2);
-        return 1;
+        abort("missing scripts (count %zu but only %zu arguments)", script_count, ca.l.size() - 2);
     }
 
     std::vector<CScript> scripts;
@@ -154,8 +152,7 @@ int main(int argc, char* const* argv)
         Item scriptData = Value(ca.l[2 + i]).data_value();
         CScript script = CScript(scriptData.begin(), scriptData.end());
         if (!script.HasValidOps()) {
-            fprintf(stderr, "invalid script #%zu: %s\n", i, HexStr(scriptData).c_str());
-            return 1;
+            abort("invalid script #%zu: %s", i, HexStr(scriptData).c_str());
         }
         if (!quiet) {
             btc_logf("- #%zu: %s\n", i, HexStr(script).c_str());
@@ -200,11 +197,9 @@ int main(int argc, char* const* argv)
     }
 
     if (branches.size() != 1) {
-        fprintf(stderr, "Unable to generate tapscript commitment tree (branch size did not end up at 1, it is %zu)\n", branches.size());
-        return 1;
+        abort("Unable to generate tapscript commitment tree (branch size did not end up at 1, it is %zu)", branches.size());
     }
     // now TapTweak <pubkey> <root>
-    CHashWriter::debug = true;
     TapNode* root = branches[0];
     auto hasher = HasherTapTweak;
     hasher << internal_pubkey_u256 << root->m_hash;
@@ -213,19 +208,16 @@ int main(int argc, char* const* argv)
     // now tweak the pubkey
     secp256k1_xonly_pubkey pubkey;
     if (!secp256k1_xonly_pubkey_parse(secp256k1_context_sign, &pubkey, internal_pubkey.data())) {
-        fprintf(stderr, "invalid input: pubkey invalid (parse failed)\n");
-        return 1;
+        abort("invalid input: pubkey invalid (parse failed)");
     }
     int is_negated;
     if (!secp256k1_xonly_pubkey_tweak_add(secp256k1_context_sign, &pubkey, &is_negated, tweak.begin())) {
-        fprintf(stderr, "failure: secp256k1_xonly_pubkey_tweak_add call failed\n");
-        return 1;
+        abort("failure: secp256k1_xonly_pubkey_tweak_add call failed");
     }
     Item serialized_pk;
     serialized_pk.resize(32);
     if (!secp256k1_xonly_pubkey_serialize(secp256k1_context_sign, serialized_pk.data(), &pubkey)) {
-        fprintf(stderr, "failed to serialize pubkey\n");
-        return 1;
+        abort("failed to serialize pubkey");
     }
     btc_logf("Tweaked pubkey = %s (%snegated)\n", HexStr(serialized_pk).c_str(), is_negated ? "" : "not ");
 
@@ -241,11 +233,11 @@ static void GetRandBytes(unsigned char* buf, int num)
     // TODO: Make this more cross platform
     FILE* f = fopen("/dev/urandom", "rb");
     if (!f) {
-        fprintf(stderr, "unable to open /dev/urandom for GetRandBytes(): sorry! btcdeb does not currently work on your operating system for signature signing\n");
+        abort("unable to open /dev/urandom for GetRandBytes(): sorry! btcdeb does not currently work on your operating system for signature signing\n");
         exit(1);
     }
     if (fread(buf, 1, num, f) != num) {
-        fprintf(stderr, "unable to read from /dev/urandom\n");
+        abort("unable to read from /dev/urandom\n");
         exit(1);
     }
     fclose(f);
