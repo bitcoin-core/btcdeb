@@ -1,65 +1,4 @@
-# btcdeb
-
-Bitcoin Script debugging utilities.
-
-This is a set of tools used to debug or construct scripts for use in Bitcoin.
-
-[![Build Status](https://travis-ci.org/kallewoof/btcdeb.svg?branch=master)](https://travis-ci.org/kallewoof/btcdeb)
-
-## Preparation
-
-Mac users need the macOS command line tools:
-
-```
-xcode-select --install
-```
-
-And [Homebrew](https://brew.sh/).
-
-## Dependencies
-
-btcdeb depends on the following:
-
-* libtool
-* libssl
-* autoconf
-* pkg-config
-
-Ubuntu/debian users can do: `apt-get install libtool libssl-dev autoconf` (with `sudo` prepended if necessary)
-
-Mac users can do: `brew install libtool autoconf pkg-config`
-
-## Installation
-
-On linux or mac, grab the source code and do:
-```Bash
-$ ./autogen.sh
-$ ./configure
-$ make
-$ sudo make install
-```
-
-If any of those give an error, please file an issue and I'll take a look. It could
-be a dependency that I forgot about.
-
-## Emscripten
-
-You can compile btcdeb tools into JavaScript using [emscripten](http://kripken.github.io/emscripten-site/).
-
-After installing the SDK, compile btcdeb tools with the following commands:
-```Bash
-$ make clean
-$ emconfigure ./configure
-$ emmake make
-$ for i in btcdeb btcc tap; do mv $i $i.bc && emcc -O2 $i.bc libbitcoin.a -o $i.js; done
-```
-and then instead of doing `./btcdeb` you do `node btcdeb.js` (or `mastify.js`, etc).
-
-The last part is done because emscripten's `emcc` expects the input bytecode file to have the `.bc` extension, whereas the makefile generates files with no extension.
-
-Note: most things work, but the console in btcdeb does not. You can work around this by doing `echo -n -e "step\n\n\n"` (with sufficient `\n`s).
-
-## Script debugger
+# Script debugger
 
 The `btcdeb` command can step through a Bitcoin Script and show stack content and operations on a per op level. 
 ```
@@ -92,7 +31,7 @@ OP_CHECKSIG                                                        |
 btcdeb>
 ```
 
-### Signature checking
+## Signature checking
 
 In order to run an OP_CHECKSIG command, the debugger needs to know about the transaction being checked, since it creates the signature hash from the transaction content. You can pass the transaction to `btcdeb` when you run it, using the `--tx=amount1,amount2:hexdata`, where `amountN` is the amount of the inputs of the transaction, and `hexdata` is the hexadecimal representation of the entire transaction (not just the transaction ID). For example, to verify transaction ID c2fdfbcbef9acb6107eb5d18c172f234ee694254be1128d29b85b80b9bad9b3a, the following will produce an output of TRUE.
 
@@ -154,14 +93,34 @@ OP_CHECKMULTISIG                                                   |
 btcdeb>
 ```
 
-## Script compiler
+## Transforms
 
-The `btcc` command can interpret a script in its human readable form and will
-return a corresponding Bitcoin Script.
+btcdeb has a built-in toolkit for transforming values. To see all currently available transform operations type `tf -h`.
+
+If you compile with the `--enable-dangerous` flag set, you can also manipulate private keys. E.g.
 
 ```Bash
-$ btcc OP_DUP OP_HASH160 897c81ac37ae36f7bc5b91356cfb0138bfacb3c1 OP_EQUALVERIFY OP_CHECKSIG
-76a914897c81ac37ae36f7bc5b91356cfb0138bfacb3c188ac
+btcdeb> tf sha256 alice
+2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90
+btcdeb> tf get-xpubkey 2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90
+9997a497d964fc1a62885b05a51166a65a90df00492c8d7cf61d6accf54803be
+btcdeb> tf sha256 message
+ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d
+btcdeb> tf sign ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d 2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90
+bd910c7f1340c525384c739bbde410e7d37701fdfacbec0a0d6d1d360381a4c01e85aee61eb30de834f111630b6c47803e0f17bf6397573f28508168531019ec
+btcdeb> tf verify-sig ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d 9997a497d964fc1a62885b05a51166a65a90df00492c8d7cf61d6accf54803be bd910c7f1340c525384c739bbde410e7d37701fdfacbec0a0d6d1d360381a4c01e85aee61eb30de834f111630b6c47803e0f17bf6397573f28508168531019ec
+1
 ```
 
-The above is the script pub key for a transaction in Bitcoin in human readable format turned into its hexadecimal representation.
+There is also built-in support for inline operations; these mostly look the same as the transform operations with the minus signs converted to underscore signs, except for a few exceptions; typing `tf -h` should list the inline operation names.
+
+Either way, we can re-do the above using inline operations like this:
+
+```Bash
+btcdeb> tf get-xpubkey sha256(alice)
+9997a497d964fc1a62885b05a51166a65a90df00492c8d7cf61d6accf54803be
+btcdeb> tf sign sha256(message) sha256(alice)
+bd910c7f1340c525384c739bbde410e7d37701fdfacbec0a0d6d1d360381a4c01e85aee61eb30de834f111630b6c47803e0f17bf6397573f28508168531019ec
+tf verify-sig sha256(message) get_xpubkey(sha256(alice)) bd910c7f1340c525384c739bbde410e7d37701fdfacbec0a0d6d1d360381a4c01e85aee61eb30de834f111630b6c47803e0f17bf6397573f28508168531019ec
+1
+```
