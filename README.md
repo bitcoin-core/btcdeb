@@ -61,7 +61,7 @@ Note: most things work, but the console in btcdeb does not. You can work around 
 
 ## Script debugger
 
-The `btcdeb` command can step through a Bitcoin Script and show stack content and operations on a per op level. See [doc/btcdeb.md] for details on usage.
+The `btcdeb` command can step through a Bitcoin Script and show stack content and operations on a per op level. See [doc/btcdeb.md](doc/btcdeb.md) for details on usage.
 
 ## Script compiler
 
