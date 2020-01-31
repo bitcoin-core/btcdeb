@@ -602,6 +602,7 @@ struct Value {
         DO(decode_wif);
         DO(sign);
         DO(get_pubkey);
+        DO(get_xpubkey);
 #endif // ENABLE_DANGEROUS
         #undef DO
         return false;
