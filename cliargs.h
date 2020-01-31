@@ -1,5 +1,6 @@
 #include <map>
 #include <vector>
+#include <cstring>
 
 #include <getopt.h>
 
