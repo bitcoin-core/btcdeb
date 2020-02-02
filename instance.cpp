@@ -173,6 +173,7 @@ bool Instance::setup_environment(unsigned int flags) {
     env->pretend_valid_pubkeys = pretend_valid_pubkeys;
     env->done &= successor_script.size() == 0;
     env->execdata = execdata;
+    env->tce = tce;
 
     return env->operational;
 }
@@ -489,10 +490,7 @@ bool Instance::configure_tx_txin() {
                         "- 3. it must be base_size + n*node_size, where base_size = %zu and node_size = %zu\n", control.size(), HexStr(control).c_str(), TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_MAX_SIZE, TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_NODE_SIZE);
                     return false;
                 }
-                if (!VerifyTaprootCommitment(control, program, scriptPubKey, &execdata.m_tapleaf_hash)) {
-                    fprintf(stderr, "taproot commitment verification failure\n");
-                    return false;
-                }
+                tce = new TaprootCommitmentEnv(control, program, scriptPubKey, &execdata.m_tapleaf_hash);
                 execdata.m_tapleaf_hash_init = true;
                 if ((control[0] & TAPROOT_LEAF_MASK) == TAPROOT_LEAF_TAPSCRIPT) {
                     // Tapscript (leaf version 0xc0)

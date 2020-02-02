@@ -10,6 +10,9 @@
 
 #include <functions.h>
 
+#include <string>
+#include <vector>
+
 #include <config/bitcoin-config.h>
 
 bool quiet = false;
@@ -244,12 +247,17 @@ int main(int argc, char* const* argv)
     valtype vchPushValue, p2sh_script_payload;
     while (env->script.GetOp(it, opcode, vchPushValue)) { p2sh_script_payload = vchPushValue; ++count; }
 
+    std::vector<std::string> tc_desc;
     CScript p2sh_script;
     bool has_p2sh = false;
     if (env->is_p2sh && env->p2shstack.size() > 0) {
         has_p2sh = true;
         const valtype& p2sh_script_val = env->p2shstack.back();
         p2sh_script = CScript(p2sh_script_val.begin(), p2sh_script_val.end());
+    } else if (env->sigversion == SigVersion::TAPSCRIPT) {
+        // add commitment phase
+        tc_desc = env->tce->Description();
+        count += tc_desc.size() + 1;
     }
     if (instance.successor_script.size()) {
         script_ptrs.push_back(&instance.successor_script);
@@ -273,6 +281,12 @@ int main(int argc, char* const* argv)
 
     int i = 0;
     char buf[1024];
+    if (env->sigversion == SigVersion::TAPSCRIPT) {
+        script_lines[i++] = strdup("<<< tapscript commitment >>>");
+        for (const auto& s : tc_desc) {
+            script_lines[i++] = strdup(strprintf("#%04d %s", i, s).c_str());
+        }
+    }
     for (size_t siter = 0; siter < script_ptrs.size(); ++siter) {
         CScript* script = script_ptrs[siter];
         const std::string& header = script_headers[siter];

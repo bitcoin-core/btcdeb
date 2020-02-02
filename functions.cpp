@@ -29,11 +29,21 @@ int fn_rewind(const char* arg) {
     return 0;
 }
 
-inline void svprintscripts(std::vector<std::string>& l, int& lmax, std::vector<CScript*>& scripts, std::vector<std::string>& headers, CScript::const_iterator it) {
+inline void svprintscripts(std::vector<std::string>& l, int& lmax, std::vector<CScript*>& scripts, std::vector<std::string>& headers, CScript::const_iterator it, TaprootCommitmentEnv* tce) {
     char buf[1024];
     opcodetype opcode;
     valtype vchPushValue;
     bool begun = false;
+    if (tce) {
+        auto desc = tce->Description();
+        std::string header = "<<< taproot commitment >>>";
+        if (header.length() > lmax) lmax = header.length();
+        l.push_back(header);
+        for (const auto& s : desc) {
+            if (s.length() > lmax) lmax = s.length();
+            l.push_back(s);
+        }
+    }
     for (size_t siter = 0; siter < scripts.size(); ++siter) {
         CScript* script = scripts[siter];
 
@@ -97,7 +107,7 @@ void print_dualstack() {
         scripts.push_back(&p2sh_script);
         headers.push_back("<<< P2SH script >>>");
     }
-    svprintscripts(l, lmax, scripts, headers, it);
+    svprintscripts(l, lmax, scripts, headers, it, env->tce);
 
     for (int j = env->stack.size() - 1; j >= 0; j--) {
         auto& it = env->stack[j];
