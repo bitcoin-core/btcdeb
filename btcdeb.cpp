@@ -310,7 +310,6 @@ int main(int argc, char* const* argv)
             print_dualstack();
             return 1;
         }
-
         print_stack(env->stack, true);
         return 0;
     } else {

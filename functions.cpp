@@ -109,11 +109,21 @@ void print_dualstack() {
     }
     svprintscripts(l, lmax, scripts, headers, it, env->tce);
 
-    for (int j = env->stack.size() - 1; j >= 0; j--) {
-        auto& it = env->stack[j];
-        auto s = it.begin() == it.end() ? "0x" : HexStr(it.begin(), it.end());
-        if (s.length() > rmax) rmax = s.length();
-        r.push_back(s);
+    if (env->tce) {
+        std::vector<std::string> tces;
+        tces.push_back(strprintf("i: %d", env->tce->m_i));
+        tces.push_back(strprintf("k: %s", HexStr(env->tce->m_k)));
+        for (const auto& s : tces) {
+            if (s.length() > rmax) rmax = s.length();
+            r.push_back(s);
+        }
+    } else {
+        for (int j = env->stack.size() - 1; j >= 0; j--) {
+            auto& it = env->stack[j];
+            auto s = it.begin() == it.end() ? "0x" : HexStr(it.begin(), it.end());
+            if (s.length() > rmax) rmax = s.length();
+            r.push_back(s);
+        }
     }
     if (glmax < lmax) glmax = lmax;
     if (grmax < rmax) grmax = rmax;

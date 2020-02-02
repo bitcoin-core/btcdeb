@@ -25,6 +25,7 @@ int fn_tf(const char*);
 char* compl_exec(const char*, int);
 char* compl_tf(const char*, int);
 int print_stack(std::vector<valtype>&, bool raw = false);
+int print_tce(TaprootCommitmentEnv* tce, bool raw = false);
 int print_bool_stack(std::vector<valtype>&);
 
 void print_dualstack();
