@@ -109,7 +109,9 @@ void print_dualstack() {
     }
     svprintscripts(l, lmax, scripts, headers, it, env->tce);
 
+    std::string right_name = "stack ";
     if (env->tce) {
+        right_name = "tapscript commitment state ";
         std::vector<std::string> tces;
         tces.push_back(strprintf("i: %d", env->tce->m_i));
         tces.push_back(strprintf("k: %s", HexStr(env->tce->m_k)));
@@ -135,7 +137,7 @@ void print_dualstack() {
     sprintf(rfmt, "%%%ds", rcap);
     printf(lfmt, "script");
     printf("| ");
-    printf(rfmt, "stack ");
+    printf(rfmt, right_name.c_str());
     printf("\n");
     for (int i = 0; i < lcap; i++) printf("-");
     printf("-+-");
