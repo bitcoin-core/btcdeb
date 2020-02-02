@@ -49,6 +49,7 @@ public:
     , txin_vout_index_spent_by_tx(-1)
     , sigver(SigVersion::BASE)
     , checker(nullptr)
+    , tce(nullptr)
     {}
 
     ~Instance() {
