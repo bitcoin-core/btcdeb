@@ -288,12 +288,16 @@ int main(int argc, char* const* argv)
         }
     }
     if (pending) {
-        // we have [a,b] [c,d] and pending e
-        // we extend [c,d] to be [[c,d], e]
-        TapNode* rightmost = branches.back();
-        branches.pop_back();
-        branches.push_back(new TapBranch(rightmost, pending));
-        btc_logf("Leftover node %s baked into right-most (last) tree %s\n → %s\n", pending->ToString().c_str(), rightmost->ToString().c_str(), HexStr(branches.back()->m_hash).c_str());
+        if (branches.size() == 0) {
+            branches.push_back(pending);
+        } else {
+            // we have [a,b] [c,d] and pending e
+            // we extend [c,d] to be [[c,d], e]
+            TapNode* rightmost = branches.back();
+            branches.pop_back();
+            branches.push_back(new TapBranch(rightmost, pending));
+            btc_logf("Leftover node %s baked into right-most (last) tree %s\n → %s\n", pending->ToString().c_str(), rightmost->ToString().c_str(), HexStr(branches.back()->m_hash).c_str());
+        }
         pending = nullptr;
     }
     // now we pair things together until we have a root node
@@ -319,7 +323,9 @@ int main(int argc, char* const* argv)
         if (!spending_leaf) {
             abort("Internal error: Spending leaf was not derived (this is a bug; please report)");
         }
-        spending_leaf->m_parent->Prove(spending_leaf, ctl);
+        if (spending_leaf->m_parent) {
+            spending_leaf->m_parent->Prove(spending_leaf, ctl);
+        }
         btc_logf("... with proof -> %s\n", HEXC(ctl));
     }
 
