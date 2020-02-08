@@ -319,7 +319,7 @@ struct Value {
         case T_OPCODE:
             return opcode;
         case T_DATA:
-            return CScriptNum(data, false).getint64();
+            return CScriptNum(data, false).GetInt64();
         default:
             fprintf(stderr, "cannot convert string into integer value: %s\n", str.c_str());
             return -1;
