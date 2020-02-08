@@ -334,7 +334,7 @@ int main(int argc, char* const* argv)
     auto hasher = HasherTapTweak;
     hasher << internal_pubkey_u256 << root->m_hash;
     auto tweak = hasher.GetSHA256();
-    btc_logf("Tweak value = %s\n", HEXC(tweak));
+    btc_logf("Tweak value = TapTweak(%s || %s) = %s\n", HEXC(internal_pubkey_u256), HEXC(root->m_hash), HEXC(tweak));
     // now tweak the pubkey
     secp256k1_xonly_pubkey pubkey;
     if (!secp256k1_xonly_pubkey_parse(secp256k1_context_sign, &pubkey, internal_pubkey.data())) {
