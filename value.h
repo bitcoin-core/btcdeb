@@ -11,6 +11,8 @@
 #include <crypto/ripemd160.h>
 #include <base58.h>
 #include <bech32.h>
+#include <script/miniscript.h>
+#include <miniscript/compiler.h>
 
 static bool VALUE_WARN = true;
 static bool VALUE_EXTENDED = false; // 0bNNNN, etc
@@ -33,17 +35,31 @@ struct Value {
     opcodetype opcode;
     std::vector<uint8_t> data;
     std::string str;
+    static bool parse_miniscript(const std::string& script, CScript& result) {
+        // try policy compilation
+        miniscript::NodeRef<CompilerContext::Key> ret;
+        double avgcost;
+        if (Compile(Expand(script), ret, avgcost)) {
+            std::string str;
+            ret->ToString(COMPILER_CTX, str);
+            printf("X %17.10f %5i %s %s\n", ret->ScriptSize() + avgcost, (int)ret->ScriptSize(), Abbreviate(std::move(str)).c_str(), script.c_str());
+            result = ret->ToScript(COMPILER_CTX);
+            return true;
+        }
+        if ((ret = miniscript::FromString(Expand(script), COMPILER_CTX))) {
+            // using miniscript::operator"" _mst;
+            // printf("%7li scriptlen=%i maxops=%i type=%s safe=%s nonmal=%s dissat=%s input=%s output=%s miniscript=%s\n", (long)0, (int)ret->ScriptSize(), (int)ret->GetOps(), ret->GetType() << "B"_mst ? "B" : ret->GetType() << "V"_mst ? "V" : ret->GetType() << "W"_mst ? "W" : ret->GetType() << "K"_mst ? "K" : "(invalid)", ret->GetType() << "s"_mst ? "yes" : "no", ret->GetType() << "m"_mst ? "yes" : "no", ret->GetType() << "f"_mst ? "no" : ret->GetType() << "e"_mst ? "unique" : ret->GetType() << "d"_mst ? "yes" : "unknown", ret->GetType() << "z"_mst ? "0" : ret->GetType() << "o"_mst ? (ret->GetType() << "n"_mst ? "1n" : "1") : ret->GetType() << "n"_mst ? "n" : "-", ret->GetType() << "u"_mst ? "1" : "nonzero", script.c_str());
+            result = ret->ToScript(COMPILER_CTX);
+            return true;
+        }
+        return false;
+    }
     static std::vector<Value> parse_args(const std::vector<const char*> args) {
         std::vector<Value> result;
         for (auto& v : args) {
             size_t vlen = strlen(v);
             if (vlen > 0) {
-                // brackets embed
-                if (v[0] == '[' && v[vlen-1] == ']') {
-                    result.emplace_back(parse_args(&v[1], vlen - 2));
-                } else {
-                    result.emplace_back(v, vlen/*, embedding*/);
-                }
+                result.emplace_back(v, vlen);
             }
         }
         return result;
@@ -143,8 +159,13 @@ struct Value {
         type = T_STRING;
         if (vlen > 1 && v[0] == '[' && v[vlen - 1] == ']') {
             CScript s;
-            for (auto& it : parse_args(&v[1], vlen - 2)) {
-                it >> s;
+            // try decompiling from policy/miniscript
+            std::string str(&v[1], &v[vlen - 1]);
+            if (!parse_miniscript(str, s)) {
+                // decompile from Bitcoin Script
+                for (auto& it : parse_args(&v[1], vlen - 2)) {
+                    it >> s;
+                }
             }
             insert(data, s);
             type = T_DATA;
@@ -319,7 +340,7 @@ struct Value {
         case T_OPCODE:
             return opcode;
         case T_DATA:
-            return CScriptNum(data, false).getint64();
+            return CScriptNum(data, false).GetInt64();
         default:
             fprintf(stderr, "cannot convert string into integer value: %s\n", str.c_str());
             return -1;
