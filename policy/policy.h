@@ -53,4 +53,7 @@ static constexpr unsigned int STANDARD_SCRIPT_VERIFY_FLAGS = MANDATORY_SCRIPT_VE
                                                              SCRIPT_VERIFY_WITNESS_PUBKEYTYPE |
                                                              SCRIPT_VERIFY_CONST_SCRIPTCODE;
 
+/** The maximum number of witness stack items in a standard P2WSH script */
+static const unsigned int MAX_STANDARD_P2WSH_STACK_ITEMS = 100;
+
 #endif // BITCOIN_POLICY_POLICY_H

@@ -5,6 +5,7 @@
 #include <pubkey.h>
 #include <value.h>
 #include <vector>
+#include <miniscript/compiler.h>
 
 #include <instance.h>
 
@@ -96,6 +97,14 @@ bool Instance::parse_input_transaction(const char* txdata, int select_index) {
 bool Instance::parse_script(const char* script_str) {
     std::vector<unsigned char> scriptData = Value(script_str).data_value();
     script = CScript(scriptData.begin(), scriptData.end());
+    for (const auto& keymap : COMPILER_CTX.KeyMap) {
+        auto cs = keymap.first.c_str();
+        auto key = Value(std::vector<uint8_t>(keymap.second.begin(), keymap.second.end())).data;
+        auto sig = Value((std::string("sig:") + keymap.first).c_str()).data_value();
+        pretend_valid_map[sig] = key;
+        pretend_valid_pubkeys.insert(key);
+        printf("info: provide sig:%s as signature for %s [%s=%s]\n", cs, cs, HexStr(sig).c_str(), HexStr(key).c_str());
+    }
     return script.HasValidOps();
 }
 
