@@ -60,12 +60,14 @@ BITCOIN_CORE_H = \
 	crypto/sha256.h \
 	crypto/sha512.h \
 	hash.h \
-	script/interpreter.h \
 	merkle.h \
+	miniscript/compiler.h \
 	policy/policy.h \
 	prevector.h \
 	primitives/transaction.h \
 	pubkey.h \
+	script/interpreter.h \
+	script/miniscript.h \
 	script/script.h \
 	script/script_error.h \
 	serialize.h \
@@ -77,6 +79,7 @@ BITCOIN_CORE_H = \
 	support/lockedpool.h \
 	tinyformat.h \
 	uint256.h \
+	util/spanparsing.h \
 	util/strencodings.h \
 	util/string.h \
 	util/vector.h \
@@ -107,14 +110,17 @@ libbitcoin_a_SOURCES = \
 	crypto/sha512.cpp \
 	hash.cpp \
 	merkle.cpp \
+	miniscript/compiler.cpp \
 	primitives/transaction.cpp \
 	pubkey.cpp \
 	script/interpreter.cpp \
+	script/miniscript.cpp \
 	script/script.cpp \
 	script/script_error.cpp \
 	support/cleanse.cpp \
 	support/lockedpool.cpp \
 	uint256.cpp \
+	util/spanparsing.cpp \
 	util/strencodings.cpp \
 	util/string.cpp \
 	value.cpp \
