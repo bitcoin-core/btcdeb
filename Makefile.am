@@ -24,7 +24,7 @@ EXTRA_LIBRARIES += \
   $(LIBBITCOIN) \
   $(LIBKERL)
 
-bin_PROGRAMS = btcdeb btcc test-btcdeb
+bin_PROGRAMS = btcdeb btcc test-btcdeb approach
 noinst_PROGRAMS =
 
 # debugger #
@@ -133,6 +133,26 @@ btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
+	$(LIBBITCOIN_DEB) \
+	$(LIBBITCOIN) \
+	$(LIBSECP256K1) \
+	$(LIBKERL)
+
+# approach binary #
+approach_SOURCES = \
+	instance.h \
+	instance.cpp \
+	approach.functions.h \
+	approach.functions.cpp \
+	msenv.h \
+	msenv.cpp \
+	approach.cpp \
+	cliargs.h
+approach_CPPFLAGS = $(AM_CPPFLAGS)
+approach_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+approach_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
+
+approach_LDADD = \
 	$(LIBBITCOIN_DEB) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \

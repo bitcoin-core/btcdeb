@@ -13,9 +13,13 @@
 #include <string>
 
 struct CompilerContext {
+    mutable bool SymbolicOutputs{false};
     typedef CPubKey Key;
 
-    bool ToString(const Key& key, std::string& str) const { str = key.ToString(); return true; }
+    bool ToString(const Key& key, std::string& str) const {
+        str = SymbolicOutputs && Symbols.count(key) ? Symbols.at(key) : key.ToString();
+        return true;
+    }
 
     template<typename I>
     bool FromString(I first, I last, Key& key) const {
@@ -32,7 +36,9 @@ struct CompilerContext {
                 k.insert(k.end(), u.begin(), u.end());
                 key = CPubKey(k);
             } while (!key.IsFullyValid());
-            KeyMap[std::string(first, last)] = key;
+            auto s = std::string(first, last);
+            KeyMap[s] = key;
+            Symbols[key] = s;
             return true;
         }
         key = CPubKey(ParseHex(first));
@@ -50,6 +56,7 @@ struct CompilerContext {
 
     mutable arith_uint256 symkeys;
     mutable std::map<std::string,CPubKey> KeyMap;
+    mutable std::map<CPubKey,std::string> Symbols;
 };
 
 extern const CompilerContext COMPILER_CTX;

@@ -199,6 +199,46 @@ enum class Availability {
     MAYBE,
 };
 
+enum class EmitType : uint8_t {
+    Default,
+    Func,
+    Key,
+    Value,
+    Modifier,
+};
+
+struct StringEmitter {
+    std::string m_str;
+    virtual ~StringEmitter() {}
+    virtual void emit(const std::string& value, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false, EmitType type = EmitType::Default) {
+        m_str += value;
+    }
+    inline void emit(const std::string& value, EmitType type) {
+        emit(value, false, false, 0, false, type);
+    }
+    inline void emit_func_start(const std::string& prefix, const std::string& func, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false) {
+        emit(prefix, own_line, false, 0, strip_end);
+        emit(func, EmitType::Func);
+        emit("(", false, ends_line, indents);
+    }
+    inline void emit_func(const std::string& prefix, const std::string& func, const std::string& content, EmitType content_type = EmitType::Default, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false) {
+        emit_func_start(prefix, func, own_line, false, 0, strip_end);
+        emit(content, content_type);
+        emit(")", false, ends_line, indents);
+    }
+    virtual void set_avail(Availability avail) {}
+};
+
+extern std::shared_ptr<StringEmitter> DefaultStringEmitter;
+
+/**
+ * Show hash value for hashes, and string value for non-hashes.
+ */
+inline std::string HashValue(const std::vector<uint8_t>& hash, size_t hash_len) {
+    if (hash.size() == hash_len) return HexStr(hash);
+    return std::string((char*)&hash[0], (char*)&hash[hash.size()]);
+}
+
 namespace internal {
 
 //! Helper function for Node::CalcType.
@@ -308,6 +348,8 @@ struct Node {
     const std::vector<unsigned char> data;
     //! Subexpressions (for WRAP_*/AND_*/OR_*/ANDOR/THRESH)
     const std::vector<NodeRef<Key>> subs;
+    //! [approach] Whether this node is considered available at the time
+    mutable Availability availability{Availability::MAYBE};
 
 private:
     //! Cached ops counts.
@@ -396,77 +438,130 @@ private:
 
     //! Internal code for ToString.
     template<typename Ctx>
-    std::string MakeString(const Ctx& ctx, bool& success, bool wrapped = false) const {
+    void MakeString(const Ctx& ctx, bool& success, bool wrapped, std::shared_ptr<StringEmitter> emitter) const {
+        emitter->set_avail(availability);
         switch (nodetype) {
-            case NodeType::WRAP_A: return "a" + subs[0]->MakeString(ctx, success, true);
-            case NodeType::WRAP_S: return "s" + subs[0]->MakeString(ctx, success, true);
-            case NodeType::WRAP_C: return "c" + subs[0]->MakeString(ctx, success, true);
-            case NodeType::WRAP_D: return "d" + subs[0]->MakeString(ctx, success, true);
-            case NodeType::WRAP_V: return "v" + subs[0]->MakeString(ctx, success, true);
-            case NodeType::WRAP_J: return "j" + subs[0]->MakeString(ctx, success, true);
-            case NodeType::WRAP_N: return "n" + subs[0]->MakeString(ctx, success, true);
+            case NodeType::WRAP_A: emitter->emit("a", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_S: emitter->emit("s", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_C: emitter->emit("c", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_D: emitter->emit("d", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_V: emitter->emit("v", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_J: emitter->emit("j", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_N: emitter->emit("n", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
             case NodeType::AND_V:
                 // t:X is syntactic sugar for and_v(X,1).
-                if (subs[1]->nodetype == NodeType::JUST_1) return "t" + subs[0]->MakeString(ctx, success, true);
+                if (subs[1]->nodetype == NodeType::JUST_1) {
+                    emitter->emit("t", EmitType::Modifier);
+                    return subs[0]->MakeString(ctx, success, true, emitter);
+                }
                 break;
             case NodeType::OR_I:
-                if (subs[0]->nodetype == NodeType::JUST_0) return "l" + subs[1]->MakeString(ctx, success, true);
-                if (subs[1]->nodetype == NodeType::JUST_0) return "u" + subs[0]->MakeString(ctx, success, true);
+                if (subs[0]->nodetype == NodeType::JUST_0) { emitter->emit("l", EmitType::Modifier); return subs[1]->MakeString(ctx, success, true, emitter); }
+                if (subs[1]->nodetype == NodeType::JUST_0) { emitter->emit("u", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter); }
                 break;
             default:
                 break;
         }
 
         std::string ret = wrapped ? ":" : "";
+        std::string sub_type;
 
         switch (nodetype) {
             case NodeType::PK: {
                 std::string key_str;
                 success = ctx.ToString(keys[0], key_str);
-                return std::move(ret) + "pk(" + std::move(key_str) + ")";
+                return emitter->emit_func(std::move(ret), "pk", std::move(key_str), EmitType::Key, !wrapped);
             }
             case NodeType::PK_H: {
                 std::string key_str;
                 success = ctx.ToString(keys[0], key_str);
-                return std::move(ret) + "pk_h(" + std::move(key_str) + ")";
+                return emitter->emit_func(std::move(ret), "pk_h", std::move(key_str), EmitType::Key, !wrapped);
             }
-            case NodeType::AFTER: return std::move(ret) + "after(" + std::to_string(k) + ")";
-            case NodeType::OLDER: return std::move(ret) + "older(" + std::to_string(k) + ")";
-            case NodeType::HASH256: return std::move(ret) + "hash256(" + HexStr(data.begin(), data.end()) + ")";
-            case NodeType::HASH160: return std::move(ret) + "hash160(" + HexStr(data.begin(), data.end()) + ")";
-            case NodeType::SHA256: return std::move(ret) + "sha256(" + HexStr(data.begin(), data.end()) + ")";
-            case NodeType::RIPEMD160: return std::move(ret) + "ripemd160(" + HexStr(data.begin(), data.end()) + ")";
-            case NodeType::JUST_1: return std::move(ret) + "1";
-            case NodeType::JUST_0: return std::move(ret) + "0";
-            case NodeType::AND_V: return std::move(ret) + "and_v(" + subs[0]->MakeString(ctx, success) + "," + subs[1]->MakeString(ctx, success) + ")";
-            case NodeType::AND_B: return std::move(ret) + "and_b(" + subs[0]->MakeString(ctx, success) + "," + subs[1]->MakeString(ctx, success) + ")";
-            case NodeType::OR_B: return std::move(ret) + "or_b(" + subs[0]->MakeString(ctx, success) + "," + subs[1]->MakeString(ctx, success) + ")";
-            case NodeType::OR_D: return std::move(ret) + "or_d(" + subs[0]->MakeString(ctx, success) + "," + subs[1]->MakeString(ctx, success) + ")";
-            case NodeType::OR_C: return std::move(ret) + "or_c(" + subs[0]->MakeString(ctx, success) + "," + subs[1]->MakeString(ctx, success) + ")";
-            case NodeType::OR_I: return std::move(ret) + "or_i(" + subs[0]->MakeString(ctx, success) + "," + subs[1]->MakeString(ctx, success) + ")";
+            case NodeType::AFTER: return emitter->emit_func(std::move(ret), "after", std::to_string(k), EmitType::Value, !wrapped);
+            case NodeType::OLDER: return emitter->emit_func(std::move(ret), "older", std::to_string(k), EmitType::Value, !wrapped);
+            case NodeType::HASH256: return emitter->emit_func(std::move(ret), "hash256", HashValue(data, 32), data.size() == 32 ? EmitType::Value : EmitType::Key, !wrapped);
+            case NodeType::HASH160: return emitter->emit_func(std::move(ret), "hash160", HashValue(data, 20), data.size() == 20 ? EmitType::Value : EmitType::Key, !wrapped);
+            case NodeType::SHA256: return emitter->emit_func(std::move(ret), "sha256", HashValue(data, 32), data.size() == 32 ? EmitType::Value : EmitType::Key, !wrapped);
+            case NodeType::RIPEMD160: return emitter->emit_func(std::move(ret), "ripemd160", HashValue(data, 20), data.size() == 20 ? EmitType::Value : EmitType::Key, !wrapped);
+            case NodeType::JUST_1: return emitter->emit(std::move(ret) + "1", EmitType::Value);
+            case NodeType::JUST_0: return emitter->emit(std::move(ret) + "0", EmitType::Value);
+            case NodeType::AND_V:
+            case NodeType::AND_B:
+                sub_type = nodetype == NodeType::AND_V ? "v" : "b";
+                emitter->emit_func_start(std::move(ret), "and_" + sub_type, !wrapped, true, 4);
+                subs[0]->MakeString(ctx, success, false, emitter);
+                emitter->emit(",", false, true, 0, true);
+                subs[1]->MakeString(ctx, success, false, emitter);
+                emitter->emit("", false, true, -4);
+                emitter->set_avail(availability);
+                emitter->emit(")", false, true);
+                return;
+            case NodeType::OR_B:
+            case NodeType::OR_D:
+            case NodeType::OR_C:
+            case NodeType::OR_I:
+                sub_type = "b";
+                if (nodetype == NodeType::OR_D) sub_type = "d";
+                if (nodetype == NodeType::OR_C) sub_type = "c";
+                if (nodetype == NodeType::OR_I) sub_type = "i";
+                emitter->emit_func_start(std::move(ret), "or_" + sub_type, !wrapped, true, 4);
+                subs[0]->MakeString(ctx, success, false, emitter);
+                emitter->emit(",", false, true, 0, true);
+                subs[1]->MakeString(ctx, success, false, emitter);
+                emitter->emit("", false, true, -4);
+                emitter->set_avail(availability);
+                emitter->emit(")", false, true);
+                return;
             case NodeType::ANDOR:
                 // and_n(X,Y) is syntactic sugar for andor(X,Y,0).
-                if (subs[2]->nodetype == NodeType::JUST_0) return std::move(ret) + "and_n(" + subs[0]->MakeString(ctx, success) + "," + subs[1]->MakeString(ctx, success) + ")";
-                return std::move(ret) + "andor(" + subs[0]->MakeString(ctx, success) + "," + subs[1]->MakeString(ctx, success) + "," + subs[2]->MakeString(ctx, success) + ")";
+                if (subs[2]->nodetype == NodeType::JUST_0) {
+                    emitter->emit_func_start(std::move(ret), "and_n", !wrapped, true, 4);
+                    subs[0]->MakeString(ctx, success, false, emitter);
+                    emitter->emit(",", false, true, 0, true);
+                    subs[1]->MakeString(ctx, success, false, emitter);
+                    emitter->emit("", false, true, -4);
+                    emitter->set_avail(availability);
+                    emitter->emit(")", false, true);
+                    return;
+                }
+                emitter->emit_func_start(std::move(ret), "andor", !wrapped, true, 4);
+                subs[0]->MakeString(ctx, success, false, emitter);
+                emitter->emit(",", false, true, 0, true);
+                subs[1]->MakeString(ctx, success, false, emitter);
+                emitter->emit(",", false, true, 0, true);
+                subs[2]->MakeString(ctx, success, false, emitter);
+                emitter->emit("", false, true, -4);
+                emitter->set_avail(availability);
+                emitter->emit(")", false, true);
+                return;
             case NodeType::THRESH_M: {
-                auto str = std::move(ret) + "thresh_m(" + std::to_string(k);
+                emitter->emit_func_start(std::move(ret), "thresh_m", !wrapped, true, 4);
+                emitter->emit(std::to_string(k), EmitType::Value);
                 for (const auto& key : keys) {
                     std::string key_str;
                     success &= ctx.ToString(key, key_str);
-                    str += "," + std::move(key_str);
+                    emitter->emit(",", false, true, 0, true);
+                    emitter->emit(std::move(key_str), EmitType::Key);
                 }
-                return std::move(str) + ")";
+                emitter->emit("", false, true, -4);
+                emitter->set_avail(availability);
+                emitter->emit(")", false, true);
+                return;
             }
             case NodeType::THRESH: {
-                auto str = std::move(ret) + "thresh(" + std::to_string(k);
+                emitter->emit_func_start(std::move(ret), "thresh", !wrapped, true, 4);
+                emitter->emit(std::to_string(k), EmitType::Value);
                 for (const auto& sub : subs) {
-                    str += "," + sub->MakeString(ctx, success);
+                    emitter->emit(",", false, true, 0, true);
+                    sub->MakeString(ctx, success, false, emitter);
                 }
-                return std::move(str) + ")";
+                emitter->emit("", false, true, -4);
+                emitter->set_avail(availability);
+                emitter->emit(")", false, true);
+                return;
             }
             default: assert(false); // Wrappers should have been handled above
         }
-        return "";
     }
 
     internal::Ops CalcOps() const {
@@ -717,6 +812,92 @@ private:
     }
 
 public:
+    template<typename Ctx>
+    Availability CalcAvail(const Ctx& ctx, const std::set<std::string>& inventory, const std::set<std::string>& missing, int confirmations) const {
+        std::set<std::string> required;
+        std::vector<NodeRef<Key>> dependencies;
+        std::string key;
+        bool guaranteed_maybe = false;
+        int threshold = 1; // # of dependencies which must be satisfied for availability
+        switch (nodetype) {
+            case NodeType::THRESH_M: {
+                threshold = k;
+            case NodeType::PK:
+            case NodeType::PK_H:
+                for (const auto& v : keys) {
+                    ctx.ToString(v, key);
+                    required.insert(key);
+                }
+                break;
+            case NodeType::OLDER:
+                return availability = confirmations == -1 ? Availability::MAYBE : confirmations >= k ? Availability::YES : Availability::NO;
+            // case NodeType::AFTER:
+            #define preimage(s, len) \
+                required.insert(std::string(#s "^-1(" + HashValue(data, len) + ")")); \
+                break
+            case NodeType::SHA256:    preimage(sha256, 32);
+            case NodeType::RIPEMD160: preimage(ripemd160, 20);
+            case NodeType::HASH256:   preimage(hash256, 32);
+            case NodeType::HASH160:   preimage(hash160, 20);
+            #undef preimage
+            case NodeType::WRAP_A:
+            case NodeType::WRAP_S:
+            case NodeType::WRAP_C:
+            case NodeType::WRAP_D:
+            case NodeType::WRAP_V:
+            case NodeType::WRAP_J:
+            case NodeType::WRAP_N:
+                dependencies.push_back(subs[0]);
+                break;
+            case NodeType::ANDOR:
+                // (0 & 1) | 2: we check 2 case and then use (0 & 1)
+                {
+                    auto a = subs[2]->CalcAvail(ctx, inventory, missing, confirmations);
+                    if (a == Availability::YES) {
+                        return availability = Availability::YES;
+                    }
+                    guaranteed_maybe = a == Availability::MAYBE;
+                }
+            case NodeType::AND_V:
+            case NodeType::AND_B:
+                threshold = 2;
+                dependencies.push_back(subs[0]); dependencies.push_back(subs[1]);
+                break;
+            case NodeType::OR_B:
+            case NodeType::OR_D:
+            case NodeType::OR_C:
+            case NodeType::OR_I:
+                dependencies.push_back(subs[0]); dependencies.push_back(subs[1]);
+                break;
+            }
+            case NodeType::THRESH: {
+                threshold = k;
+                dependencies.insert(dependencies.end(), subs.begin(), subs.end());
+                break;
+            }
+            default: return availability = Availability::YES;
+        }
+
+        size_t possible = required.size() + dependencies.size();
+        size_t satisfactions = 0;
+        size_t dissatisfactions = 0;
+        for (const auto& k : required) {
+            satisfactions += inventory.count(k);
+            dissatisfactions += missing.count(k);
+        }
+
+        for (auto& dep : dependencies) {
+            Availability sub_avail = dep->CalcAvail(ctx, inventory, missing, confirmations);
+            satisfactions += sub_avail == Availability::YES;
+            dissatisfactions += sub_avail == Availability::NO;
+        }
+
+        if (satisfactions >= threshold) return availability = Availability::YES;
+        if (!guaranteed_maybe && possible - dissatisfactions < threshold) return availability = Availability::NO;
+        // inconclusive
+        return availability = Availability::MAYBE;
+    }
+
     //! Return the size of the script for this expression (faster than ToString().size()).
     size_t ScriptSize() const { return scriptlen; }
 
@@ -756,10 +937,11 @@ public:
 
     //! Convert this miniscript to its textual descriptor notation.
     template<typename Ctx>
-    bool ToString(const Ctx& ctx, std::string& out) const {
+    bool ToString(const Ctx& ctx, std::string& out, bool wrapped = false, std::shared_ptr<StringEmitter> emitter = DefaultStringEmitter) const {
         bool ret = true;
-        out = MakeString(ctx, ret);
-        if (!ret) out = "";
+        emitter->m_str = "";
+        MakeString(ctx, ret, wrapped, emitter);
+        if (ret) out = emitter->m_str;
         return ret;
     }
 
