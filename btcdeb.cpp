@@ -283,8 +283,8 @@ int main(int argc, char* const* argv)
         kerl_register("vfexec", fn_vfexec, "Print vfexec content.");
         kerl_register("exec", fn_exec, "Execute command.");
         kerl_register("tf", fn_tf, "Transform a value using a given function.");
-        kerl_set_completor("exec", compl_exec);
-        kerl_set_completor("tf", compl_tf);
+        kerl_set_completor("exec", compl_exec, true);
+        kerl_set_completor("tf", compl_tf, false);
         kerl_register("print", fn_print, "Print script.");
         kerl_register_help("help");
         if (!quiet) btc_logf("%d op script loaded. type `help` for usage information\n", count);

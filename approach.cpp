@@ -88,8 +88,8 @@ int main(int argc, char* const* argv)
         kerl_register("conf", approach::fn_conf, "Set the confirmation count (used to activate 'older' entries) to the given block height.");
         kerl_register("script", approach::fn_script, "Display the Bitcoin Script version.");
         kerl_register("paths", approach::fn_paths, "Display the available paths.");
-        kerl_set_completor("present", approach::compl_presence);
-        kerl_set_completor("absent", approach::compl_presence);
+        kerl_set_completor("present", approach::compl_presence, true);
+        kerl_set_completor("absent", approach::compl_presence, true);
         kerl_register_help("help");
         if (!quiet) btc_logf("%zu path policy with %zu elements loaded. type `help` for usage information\n", approach::env->m_situation.m_solutions.size(), approach::env->m_situation.m_elements.size());
         if (!quiet) {

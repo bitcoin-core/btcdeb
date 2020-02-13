@@ -35,6 +35,7 @@ typedef struct {
   kerl_bindable func;  /* Function to call to do the job. */
   char *doc;           /* Documentation for this function.  */
   kerl_completor compl;/* Completion engine, or NULL if none. */
+  char compl_multi;    /* Completion works over any number of arguments, not just the first. */
 } COMMAND;
 
 int command_count = 0;
@@ -89,11 +90,12 @@ void kerl_register_fallback(kerl_bindable func)
   fallback = func;
 }
 
-void kerl_set_completor(const char *name, kerl_completor completor)
+void kerl_set_completor(const char *name, kerl_completor completor, int multi)
 {
   COMMAND *cmd = find_command(name);
   assert(cmd);
   cmd->compl = completor;
+  cmd->compl_multi = multi;
 }
 
 void kerl_set_repeat_on_empty(int flag)
@@ -109,7 +111,7 @@ void kerl_set_comment_char(char commentchar)
 void kerl_register_help(const char *name)
 {
   kerl_register(name, kerl_com_help, "Show help information.");
-  kerl_set_completor(name, command_generator);
+  kerl_set_completor(name, command_generator, 0);
 }
 
 /* When non-zero, this global means the user is done using this program. */
@@ -610,18 +612,17 @@ char **kerl_completion(char *text, int start, int end)
   } else {
     /* If we have a custom completor, we use that. Otherwise it is the name 
        of a file in the current directory. */
-    int spaces = 0;
-    for (register int i = 0; spaces < 2 && i < rl_point; i++) spaces += rl_line_buffer[i] == ' ';
-    if (spaces < 2) {
-      char *strcom = strdup_command(rl_line_buffer);
-      COMMAND *com = find_command(strcom);
-      if (com && com->compl) {
-        matches = rl_completion_matches(text, com->compl);
-        } else {
-            printf("no completion for command %s\n", strcom);
-        }
-        free(strcom);
+    char *strcom = strdup_command(rl_line_buffer);
+    COMMAND *com = find_command(strcom);
+    free(strcom);
+    if (com && com->compl) {
+      if (!com->compl_multi) {
+        int spaces = 0;
+        for (register int i = 0; spaces < 2 && i < rl_point; i++) spaces += rl_line_buffer[i] == ' ';
+        if (spaces >= 2) com = NULL;
+      }
     }
+    if (com && com->compl) matches = rl_completion_matches(text, com->compl);
   }
 #endif // HAVE_LIBREADLINE
   return matches;
