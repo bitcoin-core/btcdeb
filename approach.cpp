@@ -32,6 +32,7 @@ inline bool checkenv(const std::string& flag, bool fallback = false) {
 
 int main(int argc, char* const* argv)
 {
+    ECCVerifyHandle evh;
     pipe_in = !isatty(fileno(stdin)) || std::getenv("DEBUG_SET_PIPE_IN");
     pipe_out = !isatty(fileno(stdout)) || std::getenv("DEBUG_SET_PIPE_OUT");
     if (pipe_in || pipe_out) btc_logf = btc_logf_dummy;
