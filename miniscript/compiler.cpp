@@ -132,8 +132,13 @@ Policy Parse(Span<const char>& in) {
         return Policy(Policy::Type::NONE);
     } else if (Func("hash160", expr)) {
         auto hash = Hash(expr, 20);
-        if (hash.size()) return Policy(Policy::Type::HASH160, std::move(hash));
-        return Policy(Policy::Type::NONE);
+        if (!hash.size()) {
+            // symbol
+            size_t len = 0;
+            while (expr[len] && expr[len] != ')') ++len;
+            hash = std::vector<uint8_t>((uint8_t*)&expr[0], (uint8_t*)&expr[len]);
+        }
+        return Policy(Policy::Type::HASH160, std::move(hash));
     } else if (Func("or", expr)) {
         std::vector<Policy> sub;
         std::vector<uint32_t> prob;

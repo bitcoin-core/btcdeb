@@ -10,6 +10,9 @@
 #include <assert.h>
 
 namespace miniscript {
+
+std::shared_ptr<StringEmitter> DefaultStringEmitter = std::make_shared<StringEmitter>();
+
 namespace internal {
 
 Type SanitizeType(Type e) {
@@ -34,11 +37,11 @@ Type SanitizeType(Type e) {
 }
 
 Type ComputeType(NodeType nodetype, Type x, Type y, Type z, const std::vector<Type>& sub_types, uint32_t k, size_t data_size, size_t n_subs, size_t n_keys) {
-    // Sanity check on data
+    // Sanity check on data (disabled; we allow symbolic data)
     if (nodetype == NodeType::SHA256 || nodetype == NodeType::HASH256) {
-        assert(data_size == 32);
+        // assert(data_size == 32);
     } else if (nodetype == NodeType::RIPEMD160 || nodetype == NodeType::HASH160) {
-        assert(data_size == 20);
+        // assert(data_size == 20);
     } else {
         assert(data_size == 0);
     }
