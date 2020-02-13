@@ -55,7 +55,7 @@ typedef char *(*kerl_completor)(const char *text, int continued);
 
 void kerl_register(const char *name, kerl_bindable func, const char *doc);
 void kerl_register_help(const char *name);
-void kerl_set_completor(const char *name, kerl_completor completor);
+void kerl_set_completor(const char *name, kerl_completor completor, int multi);
 void kerl_run(const char *prompt);
 void kerl_set_history_file(const char *path);
 void kerl_set_repeat_on_empty(int flag);

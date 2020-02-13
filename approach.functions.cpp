@@ -75,19 +75,21 @@ int toggle(const char* arg, Availability avail) {
         printf("user abort\n");
         return -1;
     }
-    if (argc != 1) {
-        printf("syntax: present <name>\n");
+    if (argc == 0) {
+        printf("syntax: present <name> [<name2> [...]]\n");
         printf("e.g. for the policy or(pk(a),pk(b)), you could say \"present a\" to satisfy the policy.\n");
         kerl_free_argcv(argc, argv);
         return 0;
     }
 
-    if (env->m_situation.m_inventory.count(argv[0]) && env->m_situation.m_inventory[argv[0]] == avail) {
-        printf("- %s\n", argv[0]);
-        env->m_situation.m_inventory.erase(argv[0]);
-    } else {
-        printf("+ %s\n", argv[0]);
-        env->m_situation.m_inventory[argv[0]] = avail;
+    for (size_t i = 0; i < argc; ++i) {
+        if (env->m_situation.m_inventory.count(argv[i]) && env->m_situation.m_inventory[argv[i]] == avail) {
+            printf("- %s\n", argv[i]);
+            env->m_situation.m_inventory.erase(argv[i]);
+        } else {
+            printf("+ %s\n", argv[i]);
+            env->m_situation.m_inventory[argv[i]] = avail;
+        }
     }
     kerl_free_argcv(argc, argv);
     env->PrintTree();
