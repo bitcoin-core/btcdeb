@@ -38,21 +38,24 @@ struct Value {
     static bool parse_miniscript(const std::string& script, CScript& result) {
         // try policy compilation
         miniscript::NodeRef<CompilerContext::Key> ret;
+        miniscript::Opmap nodeopmap;
         double avgcost;
         if (Compile(Expand(script), ret, avgcost)) {
             std::string str;
             ret->ToString(COMPILER_CTX, str);
             printf("X %17.10f %5i %s %s\n", ret->ScriptSize() + avgcost, (int)ret->ScriptSize(), Abbreviate(std::move(str)).c_str(), script.c_str());
-            result = ret->ToScript(COMPILER_CTX);
+            result = ret->ToScript(COMPILER_CTX, nodeopmap);
             return true;
         }
-        if ((ret = miniscript::FromString(Expand(script), COMPILER_CTX))) {
-            // using miniscript::operator"" _mst;
-            // printf("%7li scriptlen=%i maxops=%i type=%s safe=%s nonmal=%s dissat=%s input=%s output=%s miniscript=%s\n", (long)0, (int)ret->ScriptSize(), (int)ret->GetOps(), ret->GetType() << "B"_mst ? "B" : ret->GetType() << "V"_mst ? "V" : ret->GetType() << "W"_mst ? "W" : ret->GetType() << "K"_mst ? "K" : "(invalid)", ret->GetType() << "s"_mst ? "yes" : "no", ret->GetType() << "m"_mst ? "yes" : "no", ret->GetType() << "f"_mst ? "no" : ret->GetType() << "e"_mst ? "unique" : ret->GetType() << "d"_mst ? "yes" : "unknown", ret->GetType() << "z"_mst ? "0" : ret->GetType() << "o"_mst ? (ret->GetType() << "n"_mst ? "1n" : "1") : ret->GetType() << "n"_mst ? "n" : "-", ret->GetType() << "u"_mst ? "1" : "nonzero", script.c_str());
-            result = ret->ToScript(COMPILER_CTX);
-            return true;
+        try {
+            ret = miniscript::FromString(Expand(script), COMPILER_CTX);
+        } catch (const miniscript::compile_error& err) {
+            return false;
         }
-        return false;
+        // using miniscript::operator"" _mst;
+        // printf("%7li scriptlen=%i maxops=%i type=%s safe=%s nonmal=%s dissat=%s input=%s output=%s miniscript=%s\n", (long)0, (int)ret->ScriptSize(), (int)ret->GetOps(), ret->GetType() << "B"_mst ? "B" : ret->GetType() << "V"_mst ? "V" : ret->GetType() << "W"_mst ? "W" : ret->GetType() << "K"_mst ? "K" : "(invalid)", ret->GetType() << "s"_mst ? "yes" : "no", ret->GetType() << "m"_mst ? "yes" : "no", ret->GetType() << "f"_mst ? "no" : ret->GetType() << "e"_mst ? "unique" : ret->GetType() << "d"_mst ? "yes" : "unknown", ret->GetType() << "z"_mst ? "0" : ret->GetType() << "o"_mst ? (ret->GetType() << "n"_mst ? "1n" : "1") : ret->GetType() << "n"_mst ? "n" : "-", ret->GetType() << "u"_mst ? "1" : "nonzero", script.c_str());
+        result = ret->ToScript(COMPILER_CTX, nodeopmap);
+        return true;
     }
     static std::vector<Value> parse_args(const std::vector<const char*> args) {
         std::vector<Value> result;

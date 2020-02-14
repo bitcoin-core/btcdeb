@@ -176,6 +176,13 @@ int main(int argc, char* const* argv)
         script_str = strdup(ca.l[0]);
         ca.l.erase(ca.l.begin(), ca.l.begin() + 1);
     }
+
+    if (ca.m.count('P')) {
+        if (!instance.parse_pretend_valid_expr(ca.m['P'].c_str())) {
+            return 1;
+        }
+    }
+
     CScript script;
     if (script_str) {
         if (instance.parse_script(script_str)) {
@@ -188,12 +195,6 @@ int main(int argc, char* const* argv)
     }
 
     instance.parse_stack_args(ca.l);
-
-    if (ca.m.count('P')) {
-        if (!instance.parse_pretend_valid_expr(ca.m['P'].c_str())) {
-            return 1;
-        }
-    }
 
     if (instance.txin && instance.tx && ca.l.size() == 0 && instance.script.size() == 0) {
         if (!instance.configure_tx_txin()) return 1;

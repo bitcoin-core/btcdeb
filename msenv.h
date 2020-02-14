@@ -26,8 +26,11 @@ struct TreeStringEmitter : public miniscript::StringEmitter {
     bool m_empty_line{true};
     Availability m_avail{Availability::MAYBE};
     int m_indentation{0};
+    std::string m_color;
     std::string m_ind;
-    void emit(const std::string& value, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false, EmitType type = EmitType::Default) override;
+    miniscript::Opmap m_nodeopmap;
+    int64_t m_highlight_nodeop;
+    void emit(const miniscript::Entity* ent, const std::string& value, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false, EmitType type = EmitType::Default) override;
     void set_avail(Availability avail) override;
     void nl();
 };
@@ -73,11 +76,14 @@ struct MSEnv {
     std::string m_input{""};
     double m_avgcost{0.0};
     int m_confirmations{-1};
-    // std::map<Node,Availability> m_availmap;
     Situation m_situation;
     Branch m_root;
-    explicit MSEnv(const std::string& input);
+    miniscript::Opmap m_nodeopmap;
+    CScript m_script;
+    MSEnv(const std::string& input, bool quiet = false);
+    MSEnv(const CScript& script, bool quiet = false);
     void PrintTree() const;
+    std::string TreeString(int64_t highlight_op = -1) const;
 };
 
 #endif // included_btcdeb_msenv_h_

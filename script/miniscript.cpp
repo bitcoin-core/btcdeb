@@ -42,6 +42,8 @@ Type ComputeType(NodeType nodetype, Type x, Type y, Type z, const std::vector<Ty
         // assert(data_size == 32);
     } else if (nodetype == NodeType::RIPEMD160 || nodetype == NodeType::HASH160) {
         // assert(data_size == 20);
+    } else if (nodetype == NodeType::SIG) {
+        // assert(data_size == <sig size>);
     } else {
         assert(data_size == 0);
     }
@@ -89,6 +91,7 @@ Type ComputeType(NodeType nodetype, Type x, Type y, Type z, const std::vector<Ty
         case NodeType::RIPEMD160: return "Bonudm"_mst;
         case NodeType::HASH256: return "Bonudm"_mst;
         case NodeType::HASH160: return "Bonudm"_mst;
+        case NodeType::SIG: return ""_mst;
         case NodeType::JUST_1: return "Bzufmx"_mst;
         case NodeType::JUST_0: return "Bzudemsx"_mst;
         case NodeType::WRAP_A: return
@@ -209,6 +212,7 @@ size_t ComputeScriptLen(NodeType nodetype, Type sub0typ, size_t subsize, uint32_
         case NodeType::HASH256: return subsize + 4 + 2 + 33;
         case NodeType::HASH160: return subsize + 4 + 2 + 21;
         case NodeType::SHA256: return subsize + 4 + 2 + 33;
+        case NodeType::SIG: return subsize + 71;
         case NodeType::RIPEMD160: return subsize + 4 + 2 + 21;
         case NodeType::WRAP_A: return subsize + 2;
         case NodeType::WRAP_S: return subsize + 1;

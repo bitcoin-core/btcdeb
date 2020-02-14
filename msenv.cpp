@@ -123,6 +123,10 @@ Branch::Branch(const Node& node) : m_node(node) {
     case Type::THRESH:
         // TODO: determine what to do here; technically we have >1 path
         break;
+    case Type::SIG:
+        // assert(node->subs.size() == 1);
+        // m_children.emplace_back(node->subs[0]);
+        break;
     default:
         assert(!"unknown node type");
     }
@@ -265,31 +269,64 @@ bool Branch::iterate(Situation& situation, const std::string& prefix, const std:
     }
 }
 
-MSEnv::MSEnv(const std::string& input) {
+MSEnv::MSEnv(const CScript& script, bool quiet) {
+    m_input = "<from script>";
+    Node ret = miniscript::FromScript(script, COMPILER_CTX);
+    if (!ret) {
+        throw std::runtime_error("MSEnv failed to convert script input into miniscript");
+    }
+    m_root = Branch(ret);
+    // we re-convert into script again
+    m_script = m_root.m_node->ToScript(COMPILER_CTX, m_nodeopmap);
+    // and assert that the two are identical, unless there are fake signatures
+    if (COMPILER_CTX.fake_sigs.size() == 0) {
+        if (HexStr(script) != HexStr(m_script)) {
+            fprintf(stderr, "assertion hit: strings different after MSEnv reparsed:\n%s\n%s\n", HexStr(script).c_str(), HexStr(m_script).c_str());
+        }
+        assert(HexStr(script) == HexStr(m_script));
+    }
+    if (quiet) {
+        // we want to do analysis still
+        const_cast<Situation*>(&m_situation)->analyze(m_confirmations, m_root.m_node);
+    } else {
+        PrintTree();
+    }
+}
+
+MSEnv::MSEnv(const std::string& input, bool quiet) {
     if (input.size() == 0) return; // empty
 
     m_input = input;
     Node ret;
     if (Compile(input, ret, m_avgcost)) {
         m_root = Branch(ret);
-        PrintTree();
-        return;
-    }
-    if ((ret = miniscript::FromString(input, COMPILER_CTX))) {
+    } else if ((ret = miniscript::FromString(input, COMPILER_CTX))) {
         m_root = Branch(ret);
-        PrintTree();
-        return;
+    } else {
+        throw std::runtime_error("MSEnv failed to compile input");
     }
-    throw std::runtime_error("MSEnv failed to compile input");
+    m_script = m_root.m_node->ToScript(COMPILER_CTX, m_nodeopmap);
+    if (quiet) {
+        // we want to do analysis still
+        const_cast<Situation*>(&m_situation)->analyze(m_confirmations, m_root.m_node);
+    } else {
+        PrintTree();
+    }
 }
 
-void MSEnv::PrintTree() const {
+std::string MSEnv::TreeString(int64_t highlight_op) const {
     // redo analysis
     const_cast<Situation*>(&m_situation)->analyze(m_confirmations, m_root.m_node);
     std::string str;
-    std::shared_ptr<miniscript::StringEmitter> emitter = std::make_shared<TreeStringEmitter>();
+    std::shared_ptr<TreeStringEmitter> emitter = std::make_shared<TreeStringEmitter>();
+    emitter->m_nodeopmap = m_nodeopmap;
+    emitter->m_highlight_nodeop = highlight_op;
     m_root.m_node->ToString(COMPILER_CTX, str, false, emitter);
-    str += ansi::reset;
+    return str + ansi::reset;
+}
+
+void MSEnv::PrintTree() const {
+    auto str = TreeString();
     printf("X %17.10f %5i %s\n%s\n", m_root.m_node->ScriptSize() + m_avgcost, (int)m_root.m_node->ScriptSize(), m_input.c_str(), Abbreviate(std::move(str)).c_str());
 }
 
@@ -304,34 +341,45 @@ void TreeStringEmitter::set_avail(miniscript::Availability avail) {
     m_avail = avail;
     switch (avail) {
     case Availability::NO:
+        m_color += ansi::fg_red + ansi::bold;
         m_str += ansi::fg_red + ansi::bold;
         break;
     case Availability::YES:
+        m_color += ansi::fg_green + ansi::bold;
         m_str += ansi::fg_green + ansi::bold;
         break;
     case Availability::MAYBE:
+        m_color = "";
         m_str += ansi::reset;
         break;
     }
 }
 
-void TreeStringEmitter::emit(const std::string& value, bool own_line, bool ends_line, int indents, bool strip_end, EmitType type) {
+void TreeStringEmitter::emit(const miniscript::Entity* ent, const std::string& value, bool own_line, bool ends_line, int indents, bool strip_end, EmitType type) {
     bool pushed_color = false;
+    std::string b = m_highlight_nodeop > -1 ? "" : ansi::bold;
     if (type != EmitType::Default && m_avail == Availability::MAYBE) {
         pushed_color = true;
         switch (type) {
-        case EmitType::Func: m_str += ansi::fg_magenta + ansi::bold; break;
-        case EmitType::Key: m_str += ansi::fg_cyan + ansi::bold; break;
-        case EmitType::Modifier: m_str += ansi::fg_yellow + ansi::bold; break;
-        default: m_str += ansi::fg_white + ansi::bold; break; // Value
+        case EmitType::Func: m_str += (m_color = ansi::fg_magenta + b); break;
+        case EmitType::Key: m_str += (m_color = ansi::fg_cyan + b); break;
+        case EmitType::Modifier: m_str += (m_color = ansi::fg_yellow + b); break;
+        default: m_str += (m_color = ansi::fg_white + b); break; // Value
         }
+    }
+    if (m_nodeopmap[m_highlight_nodeop] == ent) {
+        pushed_color = true;
+        m_color += ansi::uline + ansi::bold;
+        m_str += ansi::uline + ansi::bold;
     }
     // does this want us to strip the end?
     if (strip_end) {
-        size_t i = m_str.size() - 1;
-        while (i > 0 && (m_str[i] == ' ' || m_str[i] == '\n' || m_str[i] == '\t')) --i;
-        if (i + 1 < m_str.size()) {
-            m_str = m_str.substr(0, i + 1);
+        std::string trimmed = ansi::trimmed_right(m_str);
+        // size_t i = m_str.size() - 1;
+        // while (i > 0 && (m_str[i] == ' ' || m_str[i] == '\n' || m_str[i] == '\t')) --i;
+        // if (i + 1 < m_str.size()) {
+        if (trimmed != m_str) {
+            m_str = trimmed; //m_str.substr(0, i + 1);
             m_empty_line = false;
         }
     }
@@ -341,8 +389,8 @@ void TreeStringEmitter::emit(const std::string& value, bool own_line, bool ends_
         nl();
     }
     if (m_empty_line && value.size() > 0) {
-        // indent before insertion
-        m_str += m_ind;
+        // indent and colorize before insertion
+        m_str += m_ind + m_color;
         m_empty_line = false;
     }
     m_str += value;
@@ -368,5 +416,5 @@ void TreeStringEmitter::emit(const std::string& value, bool own_line, bool ends_
 
 void TreeStringEmitter::nl() {
     m_empty_line = true;
-    m_str += "\n";
+    m_str += ansi::reset + "\n";
 }

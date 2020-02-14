@@ -487,6 +487,7 @@ CostPair CalcCostPair(NodeType nt, const std::vector<const Result*>& s, double l
     switch (nt) {
         case NodeType::PK: return {73, 1};
         case NodeType::PK_H: return {107, 35};
+        case NodeType::SIG: return {75, 75};
         case NodeType::OLDER:
         case NodeType::AFTER:
             return {0, INF};
@@ -544,6 +545,7 @@ std::pair<std::vector<double>, std::vector<double>> GetPQs(NodeType nt, double p
         case NodeType::HASH160:
         case NodeType::SHA256:
         case NodeType::RIPEMD160:
+        case NodeType::SIG:
             return NONE;
         case NodeType::WRAP_A:
         case NodeType::WRAP_S:
@@ -611,6 +613,7 @@ const TypeFilters& GetTypeFilter(NodeType nt) {
         case NodeType::HASH160:
         case NodeType::SHA256:
         case NodeType::RIPEMD160:
+        case NodeType::SIG:
             return FILTER_NO;
         case NodeType::WRAP_A: return FILTER_WRAP_A;
         case NodeType::WRAP_S: return FILTER_WRAP_S;

@@ -23,6 +23,8 @@
 
 namespace miniscript {
 
+class compile_error : public std::runtime_error { public: explicit compile_error(const std::string& str) : std::runtime_error(str) {} };
+
 /** This type encapsulates the miniscript type system properties.
  *
  * Every miniscript expression is one of 4 basic types, and additionally has
@@ -191,6 +193,7 @@ enum class NodeType {
     // WRAP_T(X) is represented as AND_V(X,1)
     // WRAP_L(X) is represented as OR_I(0,X)
     // WRAP_U(X) is represented as OR_I(X,0)
+    SIG,       //!< signature data
 };
 
 enum class Availability {
@@ -207,24 +210,28 @@ enum class EmitType : uint8_t {
     Modifier,
 };
 
+struct Entity {};
+
+typedef std::map<size_t, const Entity*> Opmap;
+
 struct StringEmitter {
     std::string m_str;
     virtual ~StringEmitter() {}
-    virtual void emit(const std::string& value, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false, EmitType type = EmitType::Default) {
+    virtual void emit(const Entity* ent, const std::string& value, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false, EmitType type = EmitType::Default) {
         m_str += value;
     }
-    inline void emit(const std::string& value, EmitType type) {
-        emit(value, false, false, 0, false, type);
+    inline void emit(const Entity* ent, const std::string& value, EmitType type) {
+        emit(ent, value, false, false, 0, false, type);
     }
-    inline void emit_func_start(const std::string& prefix, const std::string& func, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false) {
-        emit(prefix, own_line, false, 0, strip_end);
-        emit(func, EmitType::Func);
-        emit("(", false, ends_line, indents);
+    inline void emit_func_start(const Entity* ent, const std::string& prefix, const std::string& func, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false) {
+        emit(ent, prefix, own_line, false, 0, strip_end);
+        emit(ent, func, EmitType::Func);
+        emit(ent, "(", false, ends_line, indents);
     }
-    inline void emit_func(const std::string& prefix, const std::string& func, const std::string& content, EmitType content_type = EmitType::Default, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false) {
-        emit_func_start(prefix, func, own_line, false, 0, strip_end);
-        emit(content, content_type);
-        emit(")", false, ends_line, indents);
+    inline void emit_func(const Entity* ent, const std::string& prefix, const std::string& func, const std::string& content, EmitType content_type = EmitType::Default, bool own_line = false, bool ends_line = false, int indents = 0, bool strip_end = false) {
+        emit_func_start(ent, prefix, func, own_line, false, 0, strip_end);
+        emit(ent, content, content_type);
+        emit(ent, ")", false, ends_line, indents);
     }
     virtual void set_avail(Availability avail) {}
 };
@@ -337,7 +344,7 @@ struct StackSize {
 
 //! A node in a miniscript expression.
 template<typename Key>
-struct Node {
+struct Node : public Entity {
     //! What node type this node is.
     const NodeType nodetype;
     //! The k parameter (time for OLDER/AFTER, threshold for THRESH(_M))
@@ -388,52 +395,65 @@ private:
         return SanitizeType(ComputeType(nodetype, x, y, z, sub_types, k, data.size(), subs.size(), keys.size()));
     }
 
+    inline CScript MakeScriptAnnotated(const CScript& s, size_t& op, Opmap& nodeopmap) const {
+        CScript::const_iterator it = s.begin();
+        opcodetype opcode;
+        std::vector<uint8_t> vchPushValue;
+        while (s.GetOp(it, opcode, vchPushValue)) {
+            if (nodeopmap.count(op) == 0) nodeopmap[op++] = this;
+        }
+        return s;
+    }
+    #define MSA(script) MakeScriptAnnotated(CScript() << script, op, nodeopmap)
+    #define CMS(node) node->MakeScript(ctx, op, nodeopmap)
+    #define CMSV(node, verify) node->MakeScript(ctx, op, nodeopmap, verify)
+
     //! Internal code for ToScript.
     template<typename Ctx>
-    CScript MakeScript(const Ctx& ctx, bool verify = false) const {
+    CScript MakeScript(const Ctx& ctx, size_t& op, Opmap& nodeopmap, bool verify = false) const {
         std::vector<unsigned char> bytes;
         switch (nodetype) {
-            case NodeType::PK: return CScript() << ctx.ToPKBytes(keys[0]);
-            case NodeType::PK_H: return CScript() << OP_DUP << OP_HASH160 << ctx.ToPKHBytes(keys[0]) << OP_EQUALVERIFY;
-            case NodeType::OLDER: return CScript() << k << OP_CHECKSEQUENCEVERIFY;
-            case NodeType::AFTER: return CScript() << k << OP_CHECKLOCKTIMEVERIFY;
-            case NodeType::SHA256: return CScript() << OP_SIZE << 32 << OP_EQUALVERIFY << OP_SHA256 << data << (verify ? OP_EQUALVERIFY : OP_EQUAL);
-            case NodeType::RIPEMD160: return CScript() << OP_SIZE << 32 << OP_EQUALVERIFY << OP_RIPEMD160 << data << (verify ? OP_EQUALVERIFY : OP_EQUAL);
-            case NodeType::HASH256: return CScript() << OP_SIZE << 32 << OP_EQUALVERIFY << OP_HASH256 << data << (verify ? OP_EQUALVERIFY : OP_EQUAL);
-            case NodeType::HASH160: return CScript() << OP_SIZE << 32 << OP_EQUALVERIFY << OP_HASH160 << data << (verify ? OP_EQUALVERIFY : OP_EQUAL);
-            case NodeType::WRAP_A: return (CScript() << OP_TOALTSTACK) + subs[0]->MakeScript(ctx) + (CScript() << OP_FROMALTSTACK);
-            case NodeType::WRAP_S: return (CScript() << OP_SWAP) + subs[0]->MakeScript(ctx, verify);
-            case NodeType::WRAP_C: return subs[0]->MakeScript(ctx) + CScript() << (verify ? OP_CHECKSIGVERIFY : OP_CHECKSIG);
-            case NodeType::WRAP_D: return (CScript() << OP_DUP << OP_IF) + subs[0]->MakeScript(ctx) + (CScript() << OP_ENDIF);
-            case NodeType::WRAP_V: return subs[0]->MakeScript(ctx, true) + (subs[0]->GetType() << "x"_mst ? (CScript() << OP_VERIFY) : CScript());
-            case NodeType::WRAP_J: return (CScript() << OP_SIZE << OP_0NOTEQUAL << OP_IF) + subs[0]->MakeScript(ctx) + (CScript() << OP_ENDIF);
-            case NodeType::WRAP_N: return subs[0]->MakeScript(ctx) + CScript() << OP_0NOTEQUAL;
-            case NodeType::JUST_1: return CScript() << OP_1;
-            case NodeType::JUST_0: return CScript() << OP_0;
-            case NodeType::AND_V: return subs[0]->MakeScript(ctx) + subs[1]->MakeScript(ctx, verify);
-            case NodeType::AND_B: return subs[0]->MakeScript(ctx) + subs[1]->MakeScript(ctx) + (CScript() << OP_BOOLAND);
-            case NodeType::OR_B: return subs[0]->MakeScript(ctx) + subs[1]->MakeScript(ctx) + (CScript() << OP_BOOLOR);
-            case NodeType::OR_D: return subs[0]->MakeScript(ctx) + (CScript() << OP_IFDUP << OP_NOTIF) + subs[1]->MakeScript(ctx) + (CScript() << OP_ENDIF);
-            case NodeType::OR_C: return subs[0]->MakeScript(ctx) + (CScript() << OP_NOTIF) + subs[1]->MakeScript(ctx) + (CScript() << OP_ENDIF);
-            case NodeType::OR_I: return (CScript() << OP_IF) + subs[0]->MakeScript(ctx) + (CScript() << OP_ELSE) + subs[1]->MakeScript(ctx) + (CScript() << OP_ENDIF);
-            case NodeType::ANDOR: return subs[0]->MakeScript(ctx) + (CScript() << OP_NOTIF) + subs[2]->MakeScript(ctx) + (CScript() << OP_ELSE) + subs[1]->MakeScript(ctx) + (CScript() << OP_ENDIF);
+            case NodeType::SIG: return MSA(data);// + CMS(subs[0]);
+            case NodeType::PK: return MSA(ctx.ToPKBytes(keys[0]));
+            case NodeType::PK_H: return MSA(OP_DUP << OP_HASH160 << ctx.ToPKHBytes(keys[0]) << OP_EQUALVERIFY);
+            case NodeType::OLDER: return MSA(k << OP_CHECKSEQUENCEVERIFY);
+            case NodeType::AFTER: return MSA(k << OP_CHECKLOCKTIMEVERIFY);
+            case NodeType::SHA256: return MSA(OP_SIZE << 32 << OP_EQUALVERIFY << OP_SHA256 << data << (verify ? OP_EQUALVERIFY : OP_EQUAL));
+            case NodeType::RIPEMD160: return MSA(OP_SIZE << 32 << OP_EQUALVERIFY << OP_RIPEMD160 << data << (verify ? OP_EQUALVERIFY : OP_EQUAL));
+            case NodeType::HASH256: return MSA(OP_SIZE << 32 << OP_EQUALVERIFY << OP_HASH256 << data << (verify ? OP_EQUALVERIFY : OP_EQUAL));
+            case NodeType::HASH160: return MSA(OP_SIZE << 32 << OP_EQUALVERIFY << OP_HASH160 << data << (verify ? OP_EQUALVERIFY : OP_EQUAL));
+            case NodeType::WRAP_A: return MSA(OP_TOALTSTACK) + CMS(subs[0]) + MSA(OP_FROMALTSTACK);
+            case NodeType::WRAP_S: return MSA(OP_SWAP) + CMSV(subs[0], verify);
+            case NodeType::WRAP_C: return CMS(subs[0]) + MSA((verify ? OP_CHECKSIGVERIFY : OP_CHECKSIG));
+            case NodeType::WRAP_D: return MSA(OP_DUP << OP_IF) + CMS(subs[0]) + MSA(OP_ENDIF);
+            case NodeType::WRAP_V: return CMSV(subs[0], true) + (subs[0]->GetType() << "x"_mst ? MSA(OP_VERIFY) : CScript());
+            case NodeType::WRAP_J: return MSA(OP_SIZE << OP_0NOTEQUAL << OP_IF) + CMS(subs[0]) + MSA(OP_ENDIF);
+            case NodeType::WRAP_N: return CMS(subs[0]) + MSA(OP_0NOTEQUAL);
+            case NodeType::JUST_1: return MSA(OP_1);
+            case NodeType::JUST_0: return MSA(OP_0);
+            case NodeType::AND_V: return CMS(subs[0]) + CMSV(subs[1], verify);
+            case NodeType::AND_B: return CMS(subs[0]) + CMS(subs[1]) + MSA(OP_BOOLAND);
+            case NodeType::OR_B: return CMS(subs[0]) + CMS(subs[1]) + MSA(OP_BOOLOR);
+            case NodeType::OR_D: return CMS(subs[0]) + MSA(OP_IFDUP << OP_NOTIF) + CMS(subs[1]) + MSA(OP_ENDIF);
+            case NodeType::OR_C: return CMS(subs[0]) + MSA(OP_NOTIF) + CMS(subs[1]) + MSA(OP_ENDIF);
+            case NodeType::OR_I: return MSA(OP_IF) + CMS(subs[0]) + MSA(OP_ELSE) + CMS(subs[1]) + MSA(OP_ENDIF);
+            case NodeType::ANDOR: return CMS(subs[0]) + MSA(OP_NOTIF) + CMS(subs[2]) + MSA(OP_ELSE) + CMS(subs[1]) + MSA(OP_ENDIF);
             case NodeType::THRESH_M: {
-                CScript script = CScript() << k;
+                CScript script = MSA(k);
                 for (const auto& key : keys) {
-                    script << ctx.ToPKBytes(key);
+                    script = script + MSA(ctx.ToPKBytes(key));
                 }
-                return script << keys.size() << (verify ? OP_CHECKMULTISIGVERIFY : OP_CHECKMULTISIG);
+                return script + MSA(keys.size() << (verify ? OP_CHECKMULTISIGVERIFY : OP_CHECKMULTISIG));
             }
             case NodeType::THRESH: {
-                CScript script = subs[0]->MakeScript(ctx);
+                CScript script = CMS(subs[0]);
                 for (size_t i = 1; i < subs.size(); ++i) {
-                    script = (script + subs[i]->MakeScript(ctx)) << OP_ADD;
+                    script = (script + CMS(subs[i])) + MSA(OP_ADD);
                 }
-                return script << k << (verify ? OP_EQUALVERIFY : OP_EQUAL);
+                return script + MSA(k << (verify ? OP_EQUALVERIFY : OP_EQUAL));
             }
         }
-        assert(false);
-        return {};
+        throw compile_error("parse failure");
     }
 
     //! Internal code for ToString.
@@ -441,23 +461,23 @@ private:
     void MakeString(const Ctx& ctx, bool& success, bool wrapped, std::shared_ptr<StringEmitter> emitter) const {
         emitter->set_avail(availability);
         switch (nodetype) {
-            case NodeType::WRAP_A: emitter->emit("a", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
-            case NodeType::WRAP_S: emitter->emit("s", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
-            case NodeType::WRAP_C: emitter->emit("c", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
-            case NodeType::WRAP_D: emitter->emit("d", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
-            case NodeType::WRAP_V: emitter->emit("v", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
-            case NodeType::WRAP_J: emitter->emit("j", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
-            case NodeType::WRAP_N: emitter->emit("n", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_A: emitter->emit(this, "a", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_S: emitter->emit(this, "s", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_C: emitter->emit(this, "c", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_D: emitter->emit(this, "d", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_V: emitter->emit(this, "v", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_J: emitter->emit(this, "j", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
+            case NodeType::WRAP_N: emitter->emit(this, "n", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter);
             case NodeType::AND_V:
                 // t:X is syntactic sugar for and_v(X,1).
                 if (subs[1]->nodetype == NodeType::JUST_1) {
-                    emitter->emit("t", EmitType::Modifier);
+                    emitter->emit(this, "t", EmitType::Modifier);
                     return subs[0]->MakeString(ctx, success, true, emitter);
                 }
                 break;
             case NodeType::OR_I:
-                if (subs[0]->nodetype == NodeType::JUST_0) { emitter->emit("l", EmitType::Modifier); return subs[1]->MakeString(ctx, success, true, emitter); }
-                if (subs[1]->nodetype == NodeType::JUST_0) { emitter->emit("u", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter); }
+                if (subs[0]->nodetype == NodeType::JUST_0) { emitter->emit(this, "l", EmitType::Modifier); return subs[1]->MakeString(ctx, success, true, emitter); }
+                if (subs[1]->nodetype == NodeType::JUST_0) { emitter->emit(this, "u", EmitType::Modifier); return subs[0]->MakeString(ctx, success, true, emitter); }
                 break;
             default:
                 break;
@@ -470,31 +490,40 @@ private:
             case NodeType::PK: {
                 std::string key_str;
                 success = ctx.ToString(keys[0], key_str);
-                return emitter->emit_func(std::move(ret), "pk", std::move(key_str), EmitType::Key, !wrapped);
+                return emitter->emit_func(this, std::move(ret), "pk", std::move(key_str), EmitType::Key, !wrapped);
             }
             case NodeType::PK_H: {
                 std::string key_str;
                 success = ctx.ToString(keys[0], key_str);
-                return emitter->emit_func(std::move(ret), "pk_h", std::move(key_str), EmitType::Key, !wrapped);
+                return emitter->emit_func(this, std::move(ret), "pk_h", std::move(key_str), EmitType::Key, !wrapped);
             }
-            case NodeType::AFTER: return emitter->emit_func(std::move(ret), "after", std::to_string(k), EmitType::Value, !wrapped);
-            case NodeType::OLDER: return emitter->emit_func(std::move(ret), "older", std::to_string(k), EmitType::Value, !wrapped);
-            case NodeType::HASH256: return emitter->emit_func(std::move(ret), "hash256", HashValue(data, 32), data.size() == 32 ? EmitType::Value : EmitType::Key, !wrapped);
-            case NodeType::HASH160: return emitter->emit_func(std::move(ret), "hash160", HashValue(data, 20), data.size() == 20 ? EmitType::Value : EmitType::Key, !wrapped);
-            case NodeType::SHA256: return emitter->emit_func(std::move(ret), "sha256", HashValue(data, 32), data.size() == 32 ? EmitType::Value : EmitType::Key, !wrapped);
-            case NodeType::RIPEMD160: return emitter->emit_func(std::move(ret), "ripemd160", HashValue(data, 20), data.size() == 20 ? EmitType::Value : EmitType::Key, !wrapped);
-            case NodeType::JUST_1: return emitter->emit(std::move(ret) + "1", EmitType::Value);
-            case NodeType::JUST_0: return emitter->emit(std::move(ret) + "0", EmitType::Value);
+            case NodeType::AFTER: return emitter->emit_func(this, std::move(ret), "after", std::to_string(k), EmitType::Value, !wrapped);
+            case NodeType::OLDER: return emitter->emit_func(this, std::move(ret), "older", std::to_string(k), EmitType::Value, !wrapped);
+            case NodeType::SIG:
+                emitter->emit_func(this, std::move(ret), "sig", HashValue(data, data.size()), EmitType::Value, !wrapped);
+                // emitter->emit_func_start(this, std::move(ret), "sig", !wrapped, true, 4);
+                // emitter->emit(this, HashValue(data, data.size()), EmitType::Value);
+                // emitter->emit(this, ",", false, true, 0, true);
+                // subs[0]->MakeString(ctx, success, false, emitter);
+                // emitter->emit(this, "", false, true, -4);
+                // emitter->emit(this, ")", false, true);
+                return;
+            case NodeType::HASH256: return emitter->emit_func(this, std::move(ret), "hash256", HashValue(data, 32), data.size() == 32 ? EmitType::Value : EmitType::Key, !wrapped);
+            case NodeType::HASH160: return emitter->emit_func(this, std::move(ret), "hash160", HashValue(data, 20), data.size() == 20 ? EmitType::Value : EmitType::Key, !wrapped);
+            case NodeType::SHA256: return emitter->emit_func(this, std::move(ret), "sha256", HashValue(data, 32), data.size() == 32 ? EmitType::Value : EmitType::Key, !wrapped);
+            case NodeType::RIPEMD160: return emitter->emit_func(this, std::move(ret), "ripemd160", HashValue(data, 20), data.size() == 20 ? EmitType::Value : EmitType::Key, !wrapped);
+            case NodeType::JUST_1: return emitter->emit(this, std::move(ret) + "1", EmitType::Value);
+            case NodeType::JUST_0: return emitter->emit(this, std::move(ret) + "0", EmitType::Value);
             case NodeType::AND_V:
             case NodeType::AND_B:
                 sub_type = nodetype == NodeType::AND_V ? "v" : "b";
-                emitter->emit_func_start(std::move(ret), "and_" + sub_type, !wrapped, true, 4);
+                emitter->emit_func_start(this, std::move(ret), "and_" + sub_type, !wrapped, true, 4);
                 subs[0]->MakeString(ctx, success, false, emitter);
-                emitter->emit(",", false, true, 0, true);
+                emitter->emit(this, ",", false, true, 0, true);
                 subs[1]->MakeString(ctx, success, false, emitter);
-                emitter->emit("", false, true, -4);
+                emitter->emit(this, "", false, true, -4);
                 emitter->set_avail(availability);
-                emitter->emit(")", false, true);
+                emitter->emit(this, ")", false, true);
                 return;
             case NodeType::OR_B:
             case NodeType::OR_D:
@@ -504,63 +533,64 @@ private:
                 if (nodetype == NodeType::OR_D) sub_type = "d";
                 if (nodetype == NodeType::OR_C) sub_type = "c";
                 if (nodetype == NodeType::OR_I) sub_type = "i";
-                emitter->emit_func_start(std::move(ret), "or_" + sub_type, !wrapped, true, 4);
+                emitter->emit_func_start(this, std::move(ret), "or_" + sub_type, !wrapped, true, 4);
                 subs[0]->MakeString(ctx, success, false, emitter);
-                emitter->emit(",", false, true, 0, true);
+                emitter->emit(this, ",", false, true, 0, true);
                 subs[1]->MakeString(ctx, success, false, emitter);
-                emitter->emit("", false, true, -4);
+                emitter->emit(this, "", false, true, -4);
                 emitter->set_avail(availability);
-                emitter->emit(")", false, true);
+                emitter->emit(this, ")", false, true);
                 return;
             case NodeType::ANDOR:
                 // and_n(X,Y) is syntactic sugar for andor(X,Y,0).
                 if (subs[2]->nodetype == NodeType::JUST_0) {
-                    emitter->emit_func_start(std::move(ret), "and_n", !wrapped, true, 4);
+                    emitter->emit_func_start(this, std::move(ret), "and_n", !wrapped, true, 4);
                     subs[0]->MakeString(ctx, success, false, emitter);
-                    emitter->emit(",", false, true, 0, true);
+                    emitter->emit(this, ",", false, true, 0, true);
                     subs[1]->MakeString(ctx, success, false, emitter);
-                    emitter->emit("", false, true, -4);
+                    emitter->emit(this, "", false, true, -4);
                     emitter->set_avail(availability);
-                    emitter->emit(")", false, true);
+                    emitter->emit(this, ")", false, true);
                     return;
                 }
-                emitter->emit_func_start(std::move(ret), "andor", !wrapped, true, 4);
+                emitter->emit_func_start(this, std::move(ret), "andor", !wrapped, true, 4);
                 subs[0]->MakeString(ctx, success, false, emitter);
-                emitter->emit(",", false, true, 0, true);
+                emitter->emit(this, ",", false, true, 0, true);
                 subs[1]->MakeString(ctx, success, false, emitter);
-                emitter->emit(",", false, true, 0, true);
+                emitter->emit(this, ",", false, true, 0, true);
                 subs[2]->MakeString(ctx, success, false, emitter);
-                emitter->emit("", false, true, -4);
+                emitter->emit(this, "", false, true, -4);
                 emitter->set_avail(availability);
-                emitter->emit(")", false, true);
+                emitter->emit(this, ")", false, true);
                 return;
             case NodeType::THRESH_M: {
-                emitter->emit_func_start(std::move(ret), "thresh_m", !wrapped, true, 4);
-                emitter->emit(std::to_string(k), EmitType::Value);
+                emitter->emit_func_start(this, std::move(ret), "thresh_m", !wrapped, true, 4);
+                emitter->emit(this, std::to_string(k), EmitType::Value);
                 for (const auto& key : keys) {
                     std::string key_str;
                     success &= ctx.ToString(key, key_str);
-                    emitter->emit(",", false, true, 0, true);
-                    emitter->emit(std::move(key_str), EmitType::Key);
+                    emitter->emit(this, ",", false, true, 0, true);
+                    emitter->emit(this, std::move(key_str), EmitType::Key);
                 }
-                emitter->emit("", false, true, -4);
+                emitter->emit(this, "", false, true, -4);
                 emitter->set_avail(availability);
-                emitter->emit(")", false, true);
+                emitter->emit(this, ")", false, true);
                 return;
             }
             case NodeType::THRESH: {
-                emitter->emit_func_start(std::move(ret), "thresh", !wrapped, true, 4);
-                emitter->emit(std::to_string(k), EmitType::Value);
+                emitter->emit_func_start(this, std::move(ret), "thresh", !wrapped, true, 4);
+                emitter->emit(this, std::to_string(k), EmitType::Value);
                 for (const auto& sub : subs) {
-                    emitter->emit(",", false, true, 0, true);
+                    emitter->emit(this, ",", false, true, 0, true);
                     sub->MakeString(ctx, success, false, emitter);
                 }
-                emitter->emit("", false, true, -4);
+                emitter->emit(this, "", false, true, -4);
                 emitter->set_avail(availability);
-                emitter->emit(")", false, true);
+                emitter->emit(this, ")", false, true);
                 return;
             }
-            default: assert(false); // Wrappers should have been handled above
+            default:
+                throw compile_error("invalid fall-through (all cases should be covered)");
         }
     }
 
@@ -574,6 +604,7 @@ private:
             case NodeType::RIPEMD160: return {4, 0, {}};
             case NodeType::HASH256: return {4, 0, {}};
             case NodeType::HASH160: return {4, 0, {}};
+            case NodeType::SIG: return {1,0, {}}; // {1 + subs[0]->ops.stat, subs[0]->ops.stat, {}};
             case NodeType::AND_V: return {subs[0]->ops.stat + subs[1]->ops.stat, subs[0]->ops.sat + subs[1]->ops.sat, {}};
             case NodeType::AND_B: return {1 + subs[0]->ops.stat + subs[1]->ops.stat, subs[0]->ops.sat + subs[1]->ops.sat, subs[0]->ops.dsat + subs[1]->ops.dsat};
             case NodeType::OR_B: return {1 + subs[0]->ops.stat + subs[1]->ops.stat, Choose(subs[0]->ops.sat + subs[1]->ops.dsat, subs[1]->ops.sat + subs[0]->ops.dsat), subs[0]->ops.dsat + subs[1]->ops.dsat};
@@ -618,6 +649,7 @@ private:
             case NodeType::RIPEMD160: return {1, {}};
             case NodeType::HASH256: return {1, {}};
             case NodeType::HASH160: return {1, {}};
+            case NodeType::SIG: return {1, {}};
             case NodeType::ANDOR: return {Choose(subs[0]->ss.sat + subs[1]->ss.sat, subs[0]->ss.dsat + subs[2]->ss.sat), subs[0]->ss.dsat + subs[2]->ss.dsat};
             case NodeType::AND_V: return {subs[0]->ss.sat + subs[1]->ss.sat, {}};
             case NodeType::AND_B: return {subs[0]->ss.sat + subs[1]->ss.sat, subs[0]->ss.dsat + subs[1]->ss.dsat};
@@ -694,6 +726,9 @@ private:
                 std::vector<unsigned char> key = ctx.ToPKBytes(keys[0]), sig;
                 Availability avail = ctx.Sign(keys[0], sig);
                 return InputResult(ZERO + InputStack(key), (InputStack(std::move(sig)).WithSig() + InputStack(key)).Available(avail));
+            }
+            case NodeType::SIG: {
+                return InputResult(ZERO, ZERO); // subs[0]->ProduceInputHelper(ctx, nonmal);
             }
             case NodeType::THRESH_M: {
                 std::vector<InputStack> sats = Vector(ZERO);
@@ -807,8 +842,7 @@ private:
             case NodeType::JUST_0: return InputResult(EMPTY, INVALID);
             case NodeType::JUST_1: return InputResult(INVALID, EMPTY);
         }
-        assert(false);
-        return InputResult(INVALID, INVALID);
+        throw compile_error("failed to generate input result");
     }
 
 public:
@@ -840,6 +874,8 @@ public:
             case NodeType::HASH256:   preimage(hash256, 32);
             case NodeType::HASH160:   preimage(hash160, 20);
             #undef preimage
+            case NodeType::SIG:
+                return availability = Availability::YES;
             case NodeType::WRAP_A:
             case NodeType::WRAP_S:
             case NodeType::WRAP_C:
@@ -933,7 +969,7 @@ public:
 
     //! Construct the script for this miniscript (including subexpressions).
     template<typename Ctx>
-    CScript ToScript(const Ctx& ctx) const { return MakeScript(ctx); }
+    CScript ToScript(const Ctx& ctx, Opmap& nodeopmap) const { size_t op = 0; return MakeScript(ctx, op, nodeopmap); }
 
     //! Convert this miniscript to its textual descriptor notation.
     template<typename Ctx>
@@ -990,9 +1026,11 @@ static constexpr int MAX_PARSE_RECURSION = 201;
 //! Parse a miniscript from its textual descriptor form.
 template<typename Key, typename Ctx>
 inline NodeRef<Key> Parse(Span<const char>& in, const Ctx& ctx, int recursion_depth) {
+    static size_t counter = 0;
+    ++counter;
     using namespace spanparsing;
     if (recursion_depth >= MAX_PARSE_RECURSION) {
-        return {};
+        throw compile_error("max recursion depth exceeded");
     }
     auto expr = Expr(in);
     // Parse wrappers
@@ -1000,7 +1038,9 @@ inline NodeRef<Key> Parse(Span<const char>& in, const Ctx& ctx, int recursion_de
         if (expr[i] == ':') {
             auto in2 = expr.subspan(i + 1);
             auto sub = Parse<Key>(in2, ctx, recursion_depth + 1);
-            if (!sub || in2.size()) return {};
+            if (!sub || in2.size()) {
+                throw compile_error("failed to parse wrapper");
+            }
             for (int j = i; j-- > 0; ) {
                 if (expr[j] == 'a') {
                     sub = MakeNodeRef<Key>(NodeType::WRAP_A, Vector(std::move(sub)));
@@ -1023,7 +1063,7 @@ inline NodeRef<Key> Parse(Span<const char>& in, const Ctx& ctx, int recursion_de
                 } else if (expr[j] == 'l') {
                     sub = MakeNodeRef<Key>(NodeType::OR_I, Vector(MakeNodeRef<Key>(NodeType::JUST_0), std::move(sub)));
                 } else {
-                    return {};
+                    throw compile_error("exhausted expression types (unknown type encountered)");
                 }
             }
             return sub;
@@ -1041,84 +1081,92 @@ inline NodeRef<Key> Parse(Span<const char>& in, const Ctx& ctx, int recursion_de
         if (ctx.FromString(expr.begin(), expr.end(), key)) {
             return MakeNodeRef<Key>(NodeType::PK, Vector(std::move(key)));
         }
-        return {};
+        throw compile_error("failed to retrieve direct pubkey from string via context");
     } else if (Func("pk_h", expr)) {
         Key key;
         if (ctx.FromString(expr.begin(), expr.end(), key)) {
             return MakeNodeRef<Key>(NodeType::PK_H, Vector(std::move(key)));
         }
-        return {};
+        throw compile_error("failed to retrieve pubkey via pubkey hash from string via context");
     } else if (expr == MakeSpan("0")) {
         return MakeNodeRef<Key>(NodeType::JUST_0);
     } else if (expr == MakeSpan("1")) {
         return MakeNodeRef<Key>(NodeType::JUST_1);
     } else if (Func("sha256", expr)) {
         auto hash = ParseHex(std::string(expr.begin(), expr.end()));
-        if (hash.size() != 32) return {};
+        if (hash.size() != 32) throw compile_error("hash size invalid for sha256 (must be 32)");
         return MakeNodeRef<Key>(NodeType::SHA256, std::move(hash));
     } else if (Func("ripemd160", expr)) {
         auto hash = ParseHex(std::string(expr.begin(), expr.end()));
-        if (hash.size() != 20) return {};
+        if (hash.size() != 20) throw compile_error("hash size invalid for ripemd160 (must be 20)");
         return MakeNodeRef<Key>(NodeType::RIPEMD160, std::move(hash));
     } else if (Func("hash256", expr)) {
         auto hash = ParseHex(std::string(expr.begin(), expr.end()));
-        if (hash.size() != 32) return {};
+        if (hash.size() != 32) throw compile_error("hash size invalid for hash256 (must be 32)");
         return MakeNodeRef<Key>(NodeType::HASH256, std::move(hash));
     } else if (Func("hash160", expr)) {
         auto hash = ParseHex(std::string(expr.begin(), expr.end()));
-        if (hash.size() != 20) return {};
+        if (hash.size() != 20) throw compile_error("hash size invalid for hash160 (must be 20)");
         return MakeNodeRef<Key>(NodeType::HASH160, std::move(hash));
+    } else if (Func("push", expr)) {
+        size_t i;
+        for (i = 0; expr[i] && expr[i] != ','; ++i);
+        auto hash = ParseHex(std::string(expr.begin(), expr.begin() + i));
+        // expr = expr.subspan(i);
+        // auto rem = Parse<Key>(expr, ctx, recursion_depth + 1);
+        // if (!rem) throw compile_error("signature suffix (pubkey + OP_CHECKSIG, usually) not found/failed to parse");
+        return MakeNodeRef<Key>(NodeType::SIG/*, Vector(std::move(rem))*/, std::move(hash));
     } else if (Func("after", expr)) {
         int64_t num;
-        if (!ParseInt64(std::string(expr.begin(), expr.end()), &num)) return {};
-        if (num < 1 || num >= 0x80000000L) return {};
+        if (!ParseInt64(std::string(expr.begin(), expr.end()), &num)) throw compile_error("unable to parse int64 value");
+        if (num < 1 || num >= 0x80000000L) throw compile_error("number is out of range 0x01..0x80000000");
         return MakeNodeRef<Key>(NodeType::AFTER, num);
     } else if (Func("older", expr)) {
         int64_t num;
-        if (!ParseInt64(std::string(expr.begin(), expr.end()), &num)) return {};
-        if (num < 1 || num >= 0x80000000L) return {};
+        if (!ParseInt64(std::string(expr.begin(), expr.end()), &num)) throw compile_error("unable to parse int64 value");
+        if (num < 1 || num >= 0x80000000L) throw compile_error("number is out of range 0x01..0x80000000");
         return MakeNodeRef<Key>(NodeType::OLDER, num);
     } else if (Func("and_n", expr)) {
         auto left = Parse<Key>(expr, ctx, recursion_depth + 1);
-        if (!left || !Const(",", expr)) return {};
+        if (!left || !Const(",", expr)) throw compile_error("left side not found or ',' not encountered");
         auto right = Parse<Key>(expr, ctx, recursion_depth + 1);
-        if (!right || expr.size()) return {};
+        if (!right || expr.size()) throw compile_error("right side not found or leftover data in expression");
         return MakeNodeRef<Key>(NodeType::ANDOR, Vector(std::move(left), std::move(right), MakeNodeRef<Key>(NodeType::JUST_0)));
     } else if (Func("andor", expr)) {
         auto left = Parse<Key>(expr, ctx, recursion_depth + 1);
-        if (!left || !Const(",", expr)) return {};
+        if (!left || !Const(",", expr)) throw compile_error("left not found or ',' not encountered");
         auto mid = Parse<Key>(expr, ctx, recursion_depth + 1);
-        if (!mid || !Const(",", expr)) return {};
+        if (!mid || !Const(",", expr)) throw compile_error("middle not found or ',' not encountered");
         auto right = Parse<Key>(expr, ctx, recursion_depth + 1);
-        if (!right || expr.size()) return {};
+        if (!right || expr.size()) throw compile_error("right not found or leftover data in expression");
         return MakeNodeRef<Key>(NodeType::ANDOR, Vector(std::move(left), std::move(mid), std::move(right)));
     } else if (Func("thresh_m", expr)) {
         auto arg = Expr(expr);
         int64_t count;
-        if (!ParseInt64(std::string(arg.begin(), arg.end()), &count)) return {};
+        if (!ParseInt64(std::string(arg.begin(), arg.end()), &count)) throw compile_error("failed to parse int64");
         std::vector<Key> keys;
         while (expr.size()) {
-            if (!Const(",", expr)) return {};
+            if (!Const(",", expr)) throw compile_error("',' not encountered between expressions");
             auto keyarg = Expr(expr);
             Key key;
-            if (!ctx.FromString(keyarg.begin(), keyarg.end(), key)) return {};
+            if (!ctx.FromString(keyarg.begin(), keyarg.end(), key)) throw compile_error("failed to retrieve key from string via context");
             keys.push_back(std::move(key));
         }
-        if (keys.size() < 1 || keys.size() > 20) return {};
-        if (count < 1 || count > (int64_t)keys.size()) return {};
+        if (keys.size() < 1 || keys.size() > 20) throw compile_error("key count is out of range 1..20");
+        if (count < 1 || count > (int64_t)keys.size()) throw compile_error("threshold count is out of range 1..(key size)");
         return MakeNodeRef<Key>(NodeType::THRESH_M, std::move(keys), count);
     } else if (Func("thresh", expr)) {
         auto arg = Expr(expr);
         int64_t count;
-        if (!ParseInt64(std::string(arg.begin(), arg.end()), &count)) return {};
+        if (!ParseInt64(std::string(arg.begin(), arg.end()), &count)) throw compile_error("failed to parse int64");
         std::vector<NodeRef<Key>> subs;
         while (expr.size()) {
-            if (!Const(",", expr)) return {};
+            if (!Const(",", expr)) throw compile_error("',' not encountered between expressions");
             auto sub = Parse<Key>(expr, ctx, recursion_depth + 1);
-            if (!sub) return {};
+            if (!sub) throw compile_error("failed to parse expression");
             subs.push_back(std::move(sub));
         }
-        if (count <= 1 || count >= (int64_t)subs.size()) return {};
+        if (count <= 1 || count >= (int64_t)subs.size()) throw compile_error("threshold count is out of range 2..(key size)");
         return MakeNodeRef<Key>(NodeType::THRESH, std::move(subs), count);
     } else if (Func("and_v", expr)) {
         nodetype = NodeType::AND_V;
@@ -1133,12 +1181,12 @@ inline NodeRef<Key> Parse(Span<const char>& in, const Ctx& ctx, int recursion_de
     } else if (Func("or_i", expr)) {
         nodetype = NodeType::OR_I;
     } else {
-        return {};
+        throw compile_error("exhausted node types");
     }
     auto left = Parse<Key>(expr, ctx, recursion_depth + 1);
-    if (!left || !Const(",", expr)) return {};
+    if (!left || !Const(",", expr)) throw compile_error("failed to parse left expression or ',' not encountered");
     auto right = Parse<Key>(expr, ctx, recursion_depth + 1);
-    if (!right || expr.size()) return {};
+    if (!right || expr.size()) throw compile_error("failed to parse right expression or leftover data in expression");
     return MakeNodeRef<Key>(nodetype, Vector(std::move(left), std::move(right)));
 }
 
@@ -1165,6 +1213,11 @@ inline NodeRef<Key> DecodeSingle(I& in, I last, const Ctx& ctx) {
     std::vector<NodeRef<Key>> subs;
     std::vector<Key> keys;
     int64_t k;
+    static size_t counter = 0;
+    ++counter;
+    if (counter == 4) {
+        printf("!\n");
+    }
 
     if (last > in && in[0].first == OP_1) {
         ++in;
@@ -1176,24 +1229,40 @@ inline NodeRef<Key> DecodeSingle(I& in, I last, const Ctx& ctx) {
     }
     if (last > in && in[0].second.size() == 33) {
         Key key;
-        if (!ctx.FromPKBytes(in[0].second.begin(), in[0].second.end(), key)) return {};
+        if (!ctx.FromPKBytes(in[0].second.begin(), in[0].second.end(), key)) throw compile_error("failed to retrieve key via PK bytes from context");
         ++in;
         return MakeNodeRef<Key>(NodeType::PK, Vector(std::move(key)));
     }
+    // btcdeb symbolic keys {
+    if (last > in && ctx.keymap.count(std::string(in[0].second.begin(), in[0].second.end()))) {
+        Key key = ctx.keymap.at(std::string(in[0].second.begin(), in[0].second.end()));
+        ++in;
+        return MakeNodeRef<Key>(NodeType::PK, Vector(std::move(key)));
+    }
+    // }
+    // btcdeb signature {
+    if (ctx.fake_sigs.count(in[0].second) || (last > in && in[0].second.size() > 63 && in[-1].second.size() == 33)) {
+        auto r = in[0].second;
+        ++in;
+        // auto sub = DecodeMulti<Key>(in, last, ctx);
+        // if (!sub) throw compile_error("failed to decode expression");
+        return MakeNodeRef<Key>(NodeType::SIG, /*Vector(std::move(sub)),*/ r);
+    }
+    // }
     if (last - in >= 5 && in[0].first == OP_VERIFY && in[1].first == OP_EQUAL && in[3].first == OP_HASH160 && in[4].first == OP_DUP && in[2].second.size() == 20) {
         Key key;
-        if (!ctx.FromPKHBytes(in[2].second.begin(), in[2].second.end(), key)) return {};
+        if (!ctx.FromPKHBytes(in[2].second.begin(), in[2].second.end(), key)) throw compile_error("failed to retrieve key via PKH bytes from context");
         in += 5;
         return MakeNodeRef<Key>(NodeType::PK_H, Vector(std::move(key)));
     }
     if (last - in >= 2 && in[0].first == OP_CHECKSEQUENCEVERIFY && ParseScriptNumber(in[1], k)) {
         in += 2;
-        if (k < 1 || k > 0x7FFFFFFFL) return {};
+        if (k < 1 || k > 0x7FFFFFFFL) throw compile_error("k out of range 1..0x7FFFFFFF");
         return MakeNodeRef<Key>(NodeType::OLDER, k);
     }
     if (last - in >= 2 && in[0].first == OP_CHECKLOCKTIMEVERIFY && ParseScriptNumber(in[1], k)) {
         in += 2;
-        if (k < 1 || k > 0x7FFFFFFFL) return {};
+        if (k < 1 || k > 0x7FFFFFFFL) throw compile_error("k out of range 1..0x7FFFFFFF");
         return MakeNodeRef<Key>(NodeType::AFTER, k);
     }
     if (last - in >= 7 && in[0].first == OP_EQUAL && in[1].second.size() == 32 && in[2].first == OP_SHA256 && in[3].first == OP_VERIFY && in[4].first == OP_EQUAL && ParseScriptNumber(in[5], k) && k == 32 && in[6].first == OP_SIZE) {
@@ -1215,53 +1284,53 @@ inline NodeRef<Key> DecodeSingle(I& in, I last, const Ctx& ctx) {
     if (last - in >= 2 && in[0].first == OP_CHECKSIG) {
         ++in;
         auto sub = DecodeSingle<Key>(in, last, ctx);
-        if (!sub) return {};
+        if (!sub) throw compile_error("failed to decode value for CHECKSIG");
         return MakeNodeRef<Key>(NodeType::WRAP_C, Vector(std::move(sub)));
     }
     if (last - in >= 3 && in[0].first == OP_BOOLAND) {
         ++in;
         auto sub1 = DecodeWrapped<Key>(in, last, ctx);
-        if (!sub1) return {};
+        if (!sub1) throw compile_error("failed to decode left expression for BOOLAND");
         auto sub2 = DecodeSingle<Key>(in, last, ctx);
-        if (!sub2) return {};
+        if (!sub2) throw compile_error("failed to decode right expression for BOOLAND");
         return MakeNodeRef<Key>(NodeType::AND_B, Vector(std::move(sub2), std::move(sub1)));
     }
     if (last - in >= 3 && in[0].first == OP_BOOLOR) {
         ++in;
         auto sub1 = DecodeWrapped<Key>(in, last, ctx);
-        if (!sub1) return {};
+        if (!sub1) throw compile_error("failed to decode left expression for BOOLOR");
         auto sub2 = DecodeSingle<Key>(in, last, ctx);
-        if (!sub2) return {};
+        if (!sub2) throw compile_error("failed to decode right expression for BOOLOR");
         return MakeNodeRef<Key>(NodeType::OR_B, Vector(std::move(sub2), std::move(sub1)));
     }
     if (last - in >= 2 && in[0].first == OP_VERIFY) {
         ++in;
         auto sub = DecodeSingle<Key>(in, last, ctx);
-        if (!sub) return {};
+        if (!sub) throw compile_error("failed to decode expression");
         return MakeNodeRef<Key>(NodeType::WRAP_V, Vector(std::move(sub)));
     }
     if (last - in >= 2 && in[0].first == OP_0NOTEQUAL) {
         ++in;
         auto sub = DecodeSingle<Key>(in, last, ctx);
-        if (!sub) return {};
+        if (!sub) throw compile_error("failed to decode expression");
         return MakeNodeRef<Key>(NodeType::WRAP_N, Vector(std::move(sub)));
     }
     if (last > in && in[0].first == OP_ENDIF) {
         ++in;
-        if (last - in == 0) return {};
+        if (last - in == 0) throw compile_error("last - in == 0");
         NodeRef<Key> sub1;
         sub1 = DecodeMulti<Key>(in, last, ctx);
-        if (!sub1) return {};
+        if (!sub1) throw compile_error("failed to decode expression");
         bool have_else = false;
         NodeRef<Key> sub2;
-        if (last - in == 0) return {};
+        if (last - in == 0) throw compile_error("last - in == 0");
         if (in[0].first == OP_ELSE) {
             ++in;
             have_else = true;
             sub2 = DecodeMulti<Key>(in, last, ctx);
-            if (!sub2) return {};
+            if (!sub2) throw compile_error("failed to decode multi expression");
         }
-        if (last - in == 0 || (in[0].first != OP_IF && in[0].first != OP_NOTIF)) return {};
+        if (last - in == 0 || (in[0].first != OP_IF && in[0].first != OP_NOTIF)) throw compile_error("last - in == 0 or not IF / NOTIF");
         bool negated = (in[0].first == OP_NOTIF);
         ++in;
 
@@ -1274,46 +1343,46 @@ inline NodeRef<Key> DecodeSingle(I& in, I last, const Ctx& ctx) {
                 in += 2;
                 return MakeNodeRef<Key>(NodeType::WRAP_J, Vector(std::move(sub1)));
             }
-            return {};
+            throw compile_error("exhausted non-negated no-else case");
         }
         if (have_else && negated) {
             auto sub3 = DecodeSingle<Key>(in, last, ctx);
-            if (!sub3) return {};
+            if (!sub3) throw compile_error("failed to decode expression");
             return MakeNodeRef<Key>(NodeType::ANDOR, Vector(std::move(sub3), std::move(sub1), std::move(sub2)));
         }
         if (!have_else && negated) {
             if (last - in >= 2 && in[0].first == OP_IFDUP) {
                 ++in;
                 auto sub3 = DecodeSingle<Key>(in, last, ctx);
-                if (!sub3) return {};
+                if (!sub3) throw compile_error("failed to decode expression");
                 return MakeNodeRef<Key>(NodeType::OR_D, Vector(std::move(sub3), std::move(sub1)));
             }
             if (last > in) {
                 auto sub3 = DecodeSingle<Key>(in, last, ctx);
-                if (!sub3) return {};
+                if (!sub3) throw compile_error("failed to decode expression");
                 return MakeNodeRef<Key>(NodeType::OR_C, Vector(std::move(sub3), std::move(sub1)));
             }
-            return {};
+            throw compile_error("exhausted negated no-else case");
         }
         if (have_else && !negated) {
             return MakeNodeRef<Key>(NodeType::OR_I, Vector(std::move(sub2), std::move(sub1)));
         }
-        return {};
+        throw compile_error("exhausted OP_ENDIF variants");
     }
     keys.clear();
     if (last - in >= 3 && in[0].first == OP_CHECKMULTISIG) {
         int64_t n;
-        if (!ParseScriptNumber(in[1], n)) return {};
-        if (last - in < 3 + n) return {};
-        if (n < 1 || n > 20) return {};
+        if (!ParseScriptNumber(in[1], n)) throw compile_error("failed to parse script number");
+        if (last - in < 3 + n) throw compile_error("last - in < 3 + n");
+        if (n < 1 || n > 20) throw compile_error("multisig pubkey count out of range 1..20");
         for (int i = 0; i < n; ++i) {
             Key key;
-            if (in[2 + i].second.size() != 33) return {};
-            if (!ctx.FromPKBytes(in[2 + i].second.begin(), in[2 + i].second.end(), key)) return {};
+            if (in[2 + i].second.size() != 33) throw compile_error("pubkey invalid size (must be 33)");
+            if (!ctx.FromPKBytes(in[2 + i].second.begin(), in[2 + i].second.end(), key)) throw compile_error("unable to retrieve key from PK bytes via context");
             keys.push_back(std::move(key));
         }
-        if (!ParseScriptNumber(in[2 + n], k)) return {};
-        if (k < 1 || k > n) return {};
+        if (!ParseScriptNumber(in[2 + n], k)) throw compile_error("failed to parse script number");
+        if (k < 1 || k > n) throw compile_error("k out of range 1..n");
         in += 3 + n;
         std::reverse(keys.begin(), keys.end());
         return MakeNodeRef<Key>(NodeType::THRESH_M, std::move(keys), k);
@@ -1324,28 +1393,30 @@ inline NodeRef<Key> DecodeSingle(I& in, I last, const Ctx& ctx) {
         while (last - in >= 2 && in[0].first == OP_ADD) {
             ++in;
             auto sub = DecodeWrapped<Key>(in, last, ctx);
-            if (!sub) return {};
+            if (!sub) throw compile_error("failed to decode expression");
             subs.push_back(std::move(sub));
         }
         auto sub = DecodeSingle<Key>(in, last, ctx);
-        if (!sub) return {};
+        if (!sub) throw compile_error("failed to decode expression");
         subs.push_back(std::move(sub));
         std::reverse(subs.begin(), subs.end());
         return MakeNodeRef<Key>(NodeType::THRESH, std::move(subs), k);
     }
 
-    return {};
+    // this could be a signature
+
+    throw compile_error("exhausted variants with no match (single)");
 }
 
 //! Decode a list of script elements into a miniscript (except a: and s:)
 template<typename Key, typename Ctx, typename I>
 inline NodeRef<Key> DecodeMulti(I& in, I last, const Ctx& ctx) {
-    if (in == last) return {};
+    if (in == last) throw compile_error("empty input");
     auto sub = DecodeSingle<Key>(in, last, ctx);
-    if (!sub) return {};
+    if (!sub) throw compile_error("failed to decode expression");
     while (in != last && in[0].first != OP_ELSE && in[0].first != OP_IF && in[0].first != OP_NOTIF && in[0].first != OP_TOALTSTACK && in[0].first != OP_SWAP) {
         auto sub2 = DecodeSingle<Key>(in, last, ctx);
-        if (!sub2) return {};
+        if (!sub2) throw compile_error("failed to decode expression");
         sub = MakeNodeRef<Key>(NodeType::AND_V, Vector(std::move(sub2), std::move(sub)));
     }
     return sub;
@@ -1357,14 +1428,14 @@ inline NodeRef<Key> DecodeWrapped(I& in, I last, const Ctx& ctx) {
     if (last - in >= 3 && in[0].first == OP_FROMALTSTACK) {
         ++in;
         auto sub = DecodeMulti<Key>(in, last, ctx);
-        if (!sub) return {};
-        if (in == last || in[0].first != OP_TOALTSTACK) return {};
+        if (!sub) throw compile_error("failed to decode multi expression");
+        if (in == last || in[0].first != OP_TOALTSTACK) throw compile_error("in == last or OP_TOALTSTACK missing");
         ++in;
         return MakeNodeRef<Key>(NodeType::WRAP_A, Vector(std::move(sub)));
     }
     auto sub = DecodeMulti<Key>(in, last, ctx);
-    if (!sub) return {};
-    if (in == last || in[0].first != OP_SWAP) return {};
+    if (!sub) throw compile_error("failed to decode multi expression");
+    if (in == last || in[0].first != OP_SWAP) throw compile_error("in == last pr OP_SWAP missing");
     ++in;
     return MakeNodeRef<Key>(NodeType::WRAP_S, Vector(std::move(sub)));
 }
@@ -1376,7 +1447,7 @@ inline NodeRef<typename Ctx::Key> FromString(const std::string& str, const Ctx& 
     using namespace internal;
     Span<const char> span = MakeSpan(str);
     auto ret = Parse<typename Ctx::Key>(span, ctx, 0);
-    if (!ret || span.size()) return {};
+    if (!ret || span.size()) throw compile_error("failed to parse data, or leftover data after parse");
     return ret;
 }
 
@@ -1384,11 +1455,11 @@ template<typename Ctx>
 inline NodeRef<typename Ctx::Key> FromScript(const CScript& script, const Ctx& ctx) {
     using namespace internal;
     std::vector<std::pair<opcodetype, std::vector<unsigned char>>> decomposed;
-    if (!DecomposeScript(script, decomposed)) return {};
+    if (!DecomposeScript(script, decomposed)) throw compile_error("failed to decompose script");
     auto it = decomposed.begin();
     auto ret = DecodeMulti<typename Ctx::Key>(it, decomposed.end(), ctx);
-    if (!ret) return {};
-    if (it != decomposed.end()) return {};
+    if (!ret) throw compile_error("failed to decode multi expression");
+    if (it != decomposed.end()) throw compile_error("leftover data after decode complete");
     return ret;
 }
 
