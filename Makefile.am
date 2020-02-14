@@ -147,6 +147,8 @@ btcdeb_LDADD = \
 tap_SOURCES = \
 	instance.h \
 	instance.cpp \
+	msenv.h \
+	msenv.cpp \
 	functions.h \
 	functions.cpp \
 	tap.cpp \
