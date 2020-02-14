@@ -9,6 +9,7 @@
 #include <value.h>
 #include <vector>
 #include <map>
+#include <msenv.h>
 
 typedef std::vector<unsigned char> valtype;
 
@@ -18,6 +19,7 @@ public:
     TaprootCommitmentEnv* tce;
     ScriptExecutionData execdata;
     PrecomputedTransactionData txdata;
+    MSEnv* msenv;
     int count;
     ECCVerifyHandle evh;
     CTransactionRef tx;
@@ -44,6 +46,7 @@ public:
 
     Instance()
     : env(nullptr)
+    , msenv(nullptr)
     , count(0)
     , tx_internal_vin_index_of_txin(-1)
     , txin_vout_index_spent_by_tx(-1)

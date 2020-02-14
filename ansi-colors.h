@@ -32,6 +32,72 @@ const std::string bg_magenta("\033[0;45m");
 const std::string bg_cyan   ("\033[0;46m");
 const std::string bg_white  ("\033[0;47m");
 
+inline size_t length(const std::string& s) {
+    size_t l = 0;
+    for (size_t i = 0; s[i]; ++i) {
+        char ch = s[i];
+        if (ch == 033) {
+            for (++i; s[i] != 'm'; ++i);
+            continue;
+        }
+        ++l;
+    }
+    return l;
+}
+
+inline std::string substring(const std::string& s, size_t start, size_t length) {
+    char buf[1024];
+    size_t p = 0;
+    size_t l = 0;
+    size_t end = start + length;
+    for (size_t i = 0; l < end && s[i]; ++i) {
+        bool xfer = l >= start;
+        if (s[i] == 033) {
+            if (xfer) buf[p++] = s[i];
+            for (++i; s[i] != 'm'; ++i) if (xfer) buf[p++] = s[i];
+            if (xfer) buf[p++] = s[i];
+            continue;
+        }
+        if (xfer) buf[p++] = s[i];
+        ++l;
+    }
+    buf[p] = 0;
+    return std::string(buf) + reset;
+}
+
+inline std::string trimmed_right(const std::string& s) {
+    size_t len = s.length();
+    if (len == 0) return s;
+    size_t j;
+    for (size_t i = len - 1; i > 1; --i) {
+        switch (s[i]) {
+            case ' ':
+            case '\t':
+            case '\n':
+                continue;
+            case 'm':
+                // ansi sequence?
+                j = i - 1;
+                while (j > 0 && s[j] >= '0' && s[j] <= '9') --j;
+                if (j > 0 && s[j] == ';') {
+                    --j;
+                    while (j > 0 && s[j] >= '0' && s[j] <= '9') --j;
+                    if (j > 0 && s[j] == ']') {
+                        if (s[j] == 033) {
+                            i = j;
+                            continue;
+                        }
+                    }
+                }
+                // nope, not an ansi sequence; we're done! fall-through
+            default:
+                return s.substr(0, i + 1);
+        }
+    }
+    // the entire string was whitespace and/or ansi codes
+    return "";
+}
+
 } // namespace ansi
 
 #endif // included_ansicolors_h_

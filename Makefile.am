@@ -127,6 +127,8 @@ libkerl_a_SOURCES = kerl/kerl.c kerl/kerl.h
 btcdeb_SOURCES = \
 	instance.h \
 	instance.cpp \
+	msenv.h \
+	msenv.cpp \
 	functions.h \
 	functions.cpp \
 	btcdeb.cpp \
@@ -194,6 +196,8 @@ btcc_LDADD = \
 test_btcdeb_SOURCES = \
 	instance.h \
 	instance.cpp \
+	msenv.h \
+	msenv.cpp \
 	functions.h \
 	functions.cpp \
 	test/catch.hpp \

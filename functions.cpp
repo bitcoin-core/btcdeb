@@ -1,6 +1,9 @@
 
+#include <sstream>
+
 #include <functions.h>
 #include <value.h>
+#include <ansi-colors.h>
 
 InterpreterEnv* env;
 Instance instance;
@@ -127,6 +130,19 @@ void print_dualstack() {
             r.push_back(s);
         }
     }
+
+    if (r.size() > 0 && instance.msenv) r.push_back(""); // spacing between stack and miniscript
+    size_t ms_start = r.size();
+
+    // miniscript representation
+    if (instance.msenv) {
+        std::istringstream ms(instance.msenv->TreeString(env->curr_op_seq));
+        for (std::string l; std::getline(ms, l); ) {
+            if (ansi::length(l) > rmax) rmax = ansi::length(l);
+            r.push_back(l);
+        }
+    }
+
     if (glmax < lmax) glmax = lmax;
     if (grmax < rmax) grmax = rmax;
     lmax = glmax; rmax = grmax;
@@ -155,8 +171,15 @@ void print_dualstack() {
         printf("| ");
         if (ri < r.size()) {
             auto s = r[ri++];
-            if (s.length() > rcap) s = s.substr(0, rcap-3) + "...";
-            printf(rfmt, s.c_str());
+            if (ms_start > ri) {
+                // printing stack items; right-align, no ansi
+                if (s.length() > rcap) s = s.substr(0, rcap-3) + "...";
+                printf(rfmt, s.c_str());
+            } else {
+                // printing miniscript tree; left-align, ansi enabled
+                if (ansi::length(s) > rcap) s = ansi::substring(s, 0, rcap-3) + "...";
+                printf("%s", s.c_str());
+            }
         }
         printf("\n");
     }

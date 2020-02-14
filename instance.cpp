@@ -97,13 +97,19 @@ bool Instance::parse_input_transaction(const char* txdata, int select_index) {
 bool Instance::parse_script(const char* script_str) {
     std::vector<unsigned char> scriptData = Value(script_str).data_value();
     script = CScript(scriptData.begin(), scriptData.end());
-    for (const auto& keymap : COMPILER_CTX.KeyMap) {
+    for (const auto& keymap : COMPILER_CTX.keymap) {
         auto cs = keymap.first.c_str();
         auto key = Value(std::vector<uint8_t>(keymap.second.begin(), keymap.second.end())).data;
         auto sig = Value((std::string("sig:") + keymap.first).c_str()).data_value();
         pretend_valid_map[sig] = key;
         pretend_valid_pubkeys.insert(key);
         printf("info: provide sig:%s as signature for %s [%s=%s]\n", cs, cs, HexStr(sig).c_str(), HexStr(key).c_str());
+    }
+    try {
+        msenv = new MSEnv(script, true);
+    } catch (const std::exception& ex) {
+        printf("miniscript failed to parse script; miniscript support disabled\n");
+        msenv = nullptr;
     }
     return script.HasValidOps();
 }
@@ -116,31 +122,43 @@ bool Instance::parse_script(const std::vector<uint8_t>& script_data) {
 bool Instance::parse_pretend_valid_expr(const char* expr) {
     const char* p = expr;
     const char* c = p;
-    valtype key;
-    bool got_key = false;
+    valtype sig;
+    uint160 keyid;
+    bool got_sig = false;
+    COMPILER_CTX.symbolic_outputs = true;
     while (*c) {
         while (*c && *c != ',' && *c != ':') ++c;
         char* cs = strndup(p, c-p);
-        valtype s = Value(cs).data_value();
+        Value v = Value(cs);
+        valtype s = v.data_value();
         free(cs);
         switch (*c) {
         case ':':
-            if (got_key) {
+            if (got_sig) {
                 fprintf(stderr, "parse error (unexpected colon) near %s\n", p);
                 return false;
             }
-            key = s;
-            got_key = true;
+            sig = s;
+            got_sig = true;
             break;
         case ',':
         case 0:
-            if (!got_key) {
-                fprintf(stderr, "parse error (missing key) near %s\n", p);
+            if (!got_sig) {
+                fprintf(stderr, "parse error (missing signature) near %s\n", p);
                 return false;
             }
-            got_key = false;
-            pretend_valid_map[key] = s;
+            got_sig = false;
+            COMPILER_CTX.fake_sigs.insert(sig);
+            v.do_hash160();
+            keyid = uint160(v.data_value());
+            // pretend_valid_map[sig] = s;
             pretend_valid_pubkeys.insert(s);
+            CompilerContext::Key ctx_key;
+            COMPILER_CTX.FromString(p, c, ctx_key);
+            COMPILER_CTX.pkh_map[CKeyID(keyid)] = ctx_key;
+            pretend_valid_pubkeys.insert(valtype(ctx_key.begin(), ctx_key.end()));
+            // note: we override below; this may lead to issues
+            pretend_valid_map[sig] = valtype(ctx_key.begin(), ctx_key.end());
             break;
         }
         p = c = c + (*c != 0);
@@ -150,7 +168,13 @@ bool Instance::parse_pretend_valid_expr(const char* expr) {
 
 void Instance::parse_stack_args(const std::vector<const char*> args) {
     for (auto& v : args) {
-        stack.push_back(Value(v).data_value());
+        auto z = Value(v).data_value();
+        stack.push_back(z);
+        if (z.size() == 33) {
+            // add if valid pubkey
+            CompilerContext::Key key;
+            COMPILER_CTX.FromPKBytes(z.begin(), z.end(), key);
+        }
     }
 }
 
@@ -197,7 +221,7 @@ bool Instance::step(size_t steps) {
         if (env->done) return false;
         try {
             if (!StepScript(*env)) return false;
-        } catch (std::exception const& ex) {
+        } catch (const std::exception& ex) {
             exception_string = ex.what();
             return false;
         }
@@ -346,7 +370,7 @@ bool Instance::configure_tx_txin() {
         if (scriptSig.size() > 0) {
             btc_segwit_logf("script sig non-empty; embedded P2SH (extracting payload)\n");
             // Embedded in P2SH -- payload extraction required
-            auto it2 = scriptSig.begin();
+            CScript::const_iterator it2 = scriptSig.begin();
             if (!scriptSig.GetOp(it2, opcode, pushval)) {
                 fprintf(stderr, "can't parse sig script, or sig script ended prematurely\n");
                 return false;
@@ -532,10 +556,28 @@ bool Instance::configure_tx_txin() {
         script = scriptSig;
         successor_script = scriptPubKey;
     }
+
     parse_stack_args(push_del);
     while (!push_del.empty()) {
         delete push_del.back();
         push_del.pop_back();
+    }
+
+    // extract pubkeys from script
+    CScript::const_iterator it = script.begin();
+    while (script.GetOp(it, opcode, pushval)) {
+        if (pushval.size() == 33) {
+            // add if valid pubkey
+            CompilerContext::Key key;
+            COMPILER_CTX.FromPKBytes(pushval.begin(), pushval.end(), key);
+        }
+    }
+
+    try {
+        msenv = new MSEnv(successor_script, true);
+    } catch (const std::exception& ex) {
+        printf("miniscript failed to parse script; miniscript support disabled\n");
+        msenv = nullptr;
     }
 
     return true;

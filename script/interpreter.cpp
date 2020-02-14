@@ -1008,7 +1008,7 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                     fprintf(stderr, "note: pretend signature mismatch: got %s=%s, expected %s=%s\n",
                         sig_str.c_str(), pub_str.c_str(),
                         pretend_valid_map.count(vchSig) ? HexStr(vchSig).c_str() : "<null>",
-                        pub_str.c_str()
+                        pretend_valid_map.count(vchSig) ? HexStr(pretend_valid_map.at(vchSig)).c_str() : "<null>"
                     );
                 }
             } else if (sigversion == SigVersion::TAPROOT) {

@@ -55,7 +55,7 @@ int main(int argc, char* const* argv)
         btc_logf("approach %d.%d.%d -- type `%s -h` for start up options\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, argv[0]);
     }
 
-    COMPILER_CTX.SymbolicOutputs = true;
+    COMPILER_CTX.symbolic_outputs = true;
 
     char* script_str = nullptr;
     if (pipe_in) {
