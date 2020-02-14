@@ -13,11 +13,17 @@
 #include <string>
 
 struct CompilerContext {
-    mutable bool SymbolicOutputs{false};
     typedef CPubKey Key;
 
+    mutable arith_uint256 symkeys;
+    mutable std::map<std::string,CPubKey> keymap;
+    mutable std::map<CPubKey,std::string> symbols;
+    mutable bool symbolic_outputs{false};
+    mutable std::map<CKeyID, Key> pkh_map;
+    mutable std::set<std::vector<uint8_t>> fake_sigs;
+
     bool ToString(const Key& key, std::string& str) const {
-        str = SymbolicOutputs && Symbols.count(key) ? Symbols.at(key) : key.ToString();
+        str = symbolic_outputs && symbols.count(key) ? symbols.at(key) : key.ToString();
         return true;
     }
 
@@ -28,6 +34,11 @@ struct CompilerContext {
         }
         if (std::distance(first, last) < 17) {
             // symbolic
+            auto s = std::string(first, last);
+            if (keymap.count(s)) {
+                key = keymap.at(s);
+                return true;
+            }
             do {
                 symkeys++;
                 uint256 u = ArithToUint256(symkeys);
@@ -36,13 +47,15 @@ struct CompilerContext {
                 k.insert(k.end(), u.begin(), u.end());
                 key = CPubKey(k);
             } while (!key.IsFullyValid());
-            auto s = std::string(first, last);
-            KeyMap[s] = key;
-            Symbols[key] = s;
+            keymap[s] = key;
+            pkh_map[key.GetID()] = key;
+            symbols[key] = s;
             return true;
         }
         key = CPubKey(ParseHex(first));
-        return key.IsFullyValid();
+        if (!key.IsFullyValid()) return false;
+        pkh_map[key.GetID()] = key;
+        return true;
     }
 
     std::vector<unsigned char> ToPKBytes(const Key& key) const {
@@ -54,9 +67,40 @@ struct CompilerContext {
         return std::vector<unsigned char>(pkh.begin(), pkh.end());
     }
 
-    mutable arith_uint256 symkeys;
-    mutable std::map<std::string,CPubKey> KeyMap;
-    mutable std::map<CPubKey,std::string> Symbols;
+    template<typename I>
+    bool FromPKBytes(I first, I last, Key& key) const {
+        key.Set(first, last);
+        if (!key.IsFullyValid()) return false;
+        pkh_map[key.GetID()] = key;
+        return true;
+    }
+
+    template<typename I>
+    bool FromPKHBytes(I first, I last, Key& key) const {
+        assert(last - first == 20);
+        CKeyID keyid;
+        std::copy(first, last, keyid.begin());
+        auto it = pkh_map.find(keyid);
+        if (it == pkh_map.end()) {
+            // we don't have it, so let's make one and mark it as unknown
+            printf("unknown key ID %s: returning fake key\n", HexStr(keyid.begin(), keyid.end()).c_str());
+            do {
+                symkeys++;
+                uint256 u = ArithToUint256(symkeys);
+                std::vector<uint8_t> k;
+                k.push_back(0x03);
+                k.insert(k.end(), u.begin(), u.end());
+                key = CPubKey(k);
+            } while (!key.IsFullyValid());
+            auto s = std::string(first, last);
+            keymap[s] = key;
+            pkh_map[key.GetID()] = key;
+            symbols[key] = s;
+            return true;
+        }
+        key = it->second;
+        return true;
+    }
 };
 
 extern const CompilerContext COMPILER_CTX;

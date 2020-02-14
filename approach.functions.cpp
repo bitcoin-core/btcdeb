@@ -34,7 +34,7 @@ int fn_rewind(const char* arg) {
 }
 
 int fn_script(const char* arg) {
-    CScript script = env->m_root.m_node->ToScript(COMPILER_CTX);
+    CScript& script = env->m_script;
     CScript::const_iterator it = script.begin();
     opcodetype opcode;
     std::vector<uint8_t> vchPushValue;
