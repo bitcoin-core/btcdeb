@@ -34,7 +34,7 @@ bool Value::extract_values(std::vector<std::vector<uint8_t>>& values) {
     return true;
 }
 
-void Value::do_verify_sig() {
+void Value::verify_sig(bool compact) {
     // the value is a script-style push of the sighash, pubkey, and signature
     if (type != T_DATA) abort("invalid type (must be data)\n");
     std::vector<std::vector<uint8_t>> args;
@@ -43,7 +43,7 @@ void Value::do_verify_sig() {
     const uint256 sighash(args[0]);
     CPubKey pubkey(args[1]);
     if (!pubkey.IsValid()) abort("invalid pubkey\n");
-    int64 = pubkey.Verify(sighash, args[2]);
+    int64 = pubkey.Verify(sighash, args[2], compact);
     type = T_INT;
 }
 
@@ -296,7 +296,7 @@ void Value::do_get_pubkey() {
     data = std::vector<uint8_t>(result.begin(), result.end());
 }
 
-void Value::do_sign() {
+void Value::sign(bool compact) {
     if (!secp256k1_context_sign) ECC_Start();
 
     // the value is a script-style push of the sighash followed by the private key
@@ -319,13 +319,17 @@ void Value::do_sign() {
     const uint256 sighash(sighash_arg);
 
     std::vector<uint8_t> sigdata;
-    size_t siglen = CPubKey::SIGNATURE_SIZE;
+    size_t siglen = compact ? 64 : CPubKey::SIGNATURE_SIZE;
     sigdata.resize(siglen);
     uint8_t extra_entropy[32] = {0};
     secp256k1_ecdsa_signature sig;
     int ret = secp256k1_ecdsa_sign(secp256k1_context_sign, &sig, sighash.begin(), data.data(), secp256k1_nonce_function_rfc6979, nullptr);
     assert(ret);
-    secp256k1_ecdsa_signature_serialize_der(secp256k1_context_sign, (unsigned char*)sigdata.data(), &siglen, &sig);
+    if (compact) {
+        secp256k1_ecdsa_signature_serialize_compact(secp256k1_context_sign, (unsigned char*)sigdata.data(), &sig);
+    } else {
+        secp256k1_ecdsa_signature_serialize_der(secp256k1_context_sign, (unsigned char*)sigdata.data(), &siglen, &sig);
+    }
     sigdata.resize(siglen);
     data = sigdata;
 }

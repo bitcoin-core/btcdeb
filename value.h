@@ -515,7 +515,9 @@ struct Value {
             return;
         }
     }
-    void do_verify_sig();
+    void verify_sig(bool compact);
+    void do_verify_sig() { verify_sig(false); }
+    void do_verify_sig_compact() { verify_sig(true); }
     void do_combine_pubkeys();
     void do_tweak_pubkey();
     void do_add();
@@ -563,7 +565,9 @@ struct Value {
         }
         data = std::vector<uint8_t>(data.begin() + 1, data.end());
     }
-    void do_sign();
+    void sign(bool compact);
+    void do_sign() { sign(false); }
+    void do_sign_compact() { sign(true); }
     void do_get_pubkey();
 #endif // ENABLE_DANGEROUS
 
