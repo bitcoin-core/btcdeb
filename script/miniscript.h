@@ -1213,11 +1213,6 @@ inline NodeRef<Key> DecodeSingle(I& in, I last, const Ctx& ctx) {
     std::vector<NodeRef<Key>> subs;
     std::vector<Key> keys;
     int64_t k;
-    static size_t counter = 0;
-    ++counter;
-    if (counter == 4) {
-        printf("!\n");
-    }
 
     if (last > in && in[0].first == OP_1) {
         ++in;
