@@ -488,7 +488,9 @@ struct Value {
             return;
         }
     }
-    void do_verify_sig();
+    void verify_sig(bool compact);
+    void do_verify_sig() { verify_sig(false); }
+    void do_verify_sig_compact() { verify_sig(true); }
     void do_combine_pubkeys();
     void do_tweak_pubkey();
     void do_add();

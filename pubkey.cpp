@@ -166,7 +166,7 @@ static int ecdsa_signature_parse_der_lax(const secp256k1_context* ctx, secp256k1
     return 1;
 }
 
-bool CPubKey::Verify(const uint256 &hash, const std::vector<unsigned char>& vchSig) const {
+bool CPubKey::Verify(const uint256 &hash, const std::vector<unsigned char>& vchSig, bool compact) const {
     if (!IsValid())
         return false;
     secp256k1_pubkey pubkey;
@@ -175,12 +175,23 @@ bool CPubKey::Verify(const uint256 &hash, const std::vector<unsigned char>& vchS
     if (!secp256k1_ec_pubkey_parse(secp256k1_context_verify, &pubkey, vch, size())) {
         return false;
     }
-    if (!ecdsa_signature_parse_der_lax(secp256k1_context_verify, &sig, vchSig.data(), vchSig.size())) {
-        return false;
+    if (compact) {
+        if (vchSig.size() != 64) {
+            fprintf(stderr, "vchSig.size()=%zu != 64\n", vchSig.size());
+            return false;
+        }
+        if (!secp256k1_ecdsa_signature_parse_compact(secp256k1_context_verify, &sig, vchSig.data())) {
+            fprintf(stderr, "signature_parse_compact failed\n");
+            return false;
+        }
+    } else {
+        if (!ecdsa_signature_parse_der_lax(secp256k1_context_verify, &sig, vchSig.data(), vchSig.size())) {
+            return false;
+        }
+        /* libsecp256k1's ECDSA verification requires lower-S signatures, which have
+        * not historically been enforced in Bitcoin, so normalize them first. */
+        secp256k1_ecdsa_signature_normalize(secp256k1_context_verify, &sig, &sig);
     }
-    /* libsecp256k1's ECDSA verification requires lower-S signatures, which have
-     * not historically been enforced in Bitcoin, so normalize them first. */
-    secp256k1_ecdsa_signature_normalize(secp256k1_context_verify, &sig, &sig);
     return secp256k1_ecdsa_verify(secp256k1_context_verify, &sig, hash.begin(), &pubkey);
 }
 

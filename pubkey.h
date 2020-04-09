@@ -196,7 +196,7 @@ public:
      * Verify a DER signature (~72 bytes).
      * If this public key is not fully valid, the return value will be false.
      */
-    bool Verify(const uint256& hash, const std::vector<unsigned char>& vchSig) const;
+    bool Verify(const uint256& hash, const std::vector<unsigned char>& vchSig, bool compact = false) const;
 
     /**
      * Check whether a signature is normalized (lower-S).

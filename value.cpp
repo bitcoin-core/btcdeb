@@ -34,7 +34,7 @@ bool Value::extract_values(std::vector<std::vector<uint8_t>>& values) {
     return true;
 }
 
-void Value::do_verify_sig() {
+void Value::verify_sig(bool compact) {
     // the value is a script-style push of the sighash, pubkey, and signature
     if (type != T_DATA) abort("invalid type (must be data)\n");
     std::vector<std::vector<uint8_t>> args;
@@ -43,7 +43,7 @@ void Value::do_verify_sig() {
     const uint256 sighash(args[0]);
     CPubKey pubkey(args[1]);
     if (!pubkey.IsValid()) abort("invalid pubkey\n");
-    int64 = pubkey.Verify(sighash, args[2]);
+    int64 = pubkey.Verify(sighash, args[2], compact);
     type = T_INT;
 }
 
