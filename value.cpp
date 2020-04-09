@@ -303,18 +303,20 @@ void Value::do_sign() {
     if (type != T_DATA) abort("invalid type (must be data)\n");
     std::vector<std::vector<uint8_t>> args;
     if (!extract_values(args) || args.size() != 2) abort("invalid input (needs a sighash and a private key)\n");
-    if (args[0].size() != 32) {
+    auto& sighash_arg = args[0];
+    auto& privkey_arg = args[1];
+    if (privkey_arg.size() != 32) {
         // it is probably a WIF encoded key
-        Value wif(args[0]);
+        Value wif(privkey_arg);
         wif.str_value();
-        if (wif.str.length() != args[0].size()) abort("invalid input (private key must be 32 byte data or a WIF encoded privkey)\n");
+        if (wif.str.length() != privkey_arg.size()) abort("invalid input (private key must be 32 byte data or a WIF encoded privkey)\n");
         wif.do_decode_wif();
-        args[0] = wif.data;
+        privkey_arg = wif.data;
     }
-    if (args[0].size() != 32) abort("invalid input (private key must be 32 bytes)\n");
-    data = args[0];
-    if (args[1].size() != 32) abort("invalid input (sighash must be 32 bytes)\n");
-    const uint256 sighash(args[1]);
+    if (privkey_arg.size() != 32) abort("invalid input (private key must be 32 bytes)\n");
+    data = privkey_arg;
+    if (sighash_arg.size() != 32) abort("invalid input (sighash must be 32 bytes)\n");
+    const uint256 sighash(sighash_arg);
 
     std::vector<uint8_t> sigdata;
     size_t siglen = CPubKey::SIGNATURE_SIZE;
