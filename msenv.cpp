@@ -278,12 +278,9 @@ MSEnv::MSEnv(const CScript& script, bool quiet) {
     m_root = Branch(ret);
     // we re-convert into script again
     m_script = m_root.m_node->ToScript(COMPILER_CTX, m_nodeopmap);
-    // and assert that the two are identical, unless there are fake signatures
-    if (COMPILER_CTX.fake_sigs.size() == 0) {
-        if (HexStr(script) != HexStr(m_script)) {
-            fprintf(stderr, "assertion hit: strings different after MSEnv reparsed:\n%s\n%s\n", HexStr(script).c_str(), HexStr(m_script).c_str());
-        }
-        assert(HexStr(script) == HexStr(m_script));
+    // and warn if the two are not identical
+    if (COMPILER_CTX.fake_sigs.size() == 0 && COMPILER_CTX.symkeys == 0 && HexStr(script) != HexStr(m_script)) {
+        fprintf(stderr, "note: strings different after MSEnv reparsed:\n%s\n%s\n", HexStr(script).c_str(), HexStr(m_script).c_str());
     }
     if (quiet) {
         // we want to do analysis still
