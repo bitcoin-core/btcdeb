@@ -22,8 +22,10 @@ btc_logf_t btc_segwit_logf = btc_logf_dummy;
 opcodetype GetOpCode(const char* name)
 {
     // trim out "OP_" as people tend to skip those
+    bool expected_opcode = false;
     if (name[0] == 'O' && name[1] == 'P' && name[2] == '_') {
         name = &name[3];
+        expected_opcode = true;
     }
     // push value
     #define c(v) if (!strcmp(#v, name)) return OP_##v
@@ -161,6 +163,9 @@ opcodetype GetOpCode(const char* name)
     c(PUBKEYHASH);
     c(PUBKEY);
 
+    if (expected_opcode) {
+        btc_logf("warning: opcode-like string was not an opcode: %s\n", name);
+    }
     return OP_INVALIDOPCODE;
 }
 
