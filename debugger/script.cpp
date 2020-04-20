@@ -4,7 +4,7 @@
 
 #include <debugger/script.h>
 
-// #include <util/strencodings.h>
+#include <util/strencodings.h>
 #include <cstdarg>
 
 void btc_logf_dummy(const char* fmt...) {}
@@ -26,6 +26,17 @@ opcodetype GetOpCode(const char* name)
     if (name[0] == 'O' && name[1] == 'P' && name[2] == '_') {
         name = &name[3];
         expected_opcode = true;
+    }
+    if (name[0] == 'x') {
+        // OP_xNN is a short-hand for emitting an arbitrary opcode NN
+        if (!IsHex(&name[1])) {
+            btc_logf("warning: opcode beginning with 'x' prefix is not a hex value\n");
+        } else if (strlen(name) != 3) {
+            btc_logf("warning: opcode 'x' prefix must be followed by a one byte (2 hex digit) value\n");
+        } else {
+            int v = (HexDigit(name[1]) << 4) | HexDigit(name[2]);
+            return (opcodetype)v;
+        }
     }
     // push value
     #define c(v) if (!strcmp(#v, name)) return OP_##v
