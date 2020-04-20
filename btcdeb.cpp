@@ -432,11 +432,12 @@ static const char* opnames[] = {
     "OP_NOP9",
     "OP_NOP10",
 
-    // // template matching params
-    // "OP_SMALLINTEGER",
-    // "OP_PUBKEYS",
-    // "OP_PUBKEYHASH",
-    // "OP_PUBKEY",
+    // template matching params
+    "OP_SMALLINTEGER",
+    "OP_PUBKEYS",
+    "OP_PUBKEYHASH",
+    "OP_PUBKEY",
+
     nullptr,
 };
 

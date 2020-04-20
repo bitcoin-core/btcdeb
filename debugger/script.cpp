@@ -155,6 +155,12 @@ opcodetype GetOpCode(const char* name)
     c(NOP9);
     c(NOP10);
 
+    // template matching params
+    c(SMALLINTEGER);
+    c(PUBKEYS);
+    c(PUBKEYHASH);
+    c(PUBKEY);
+
     return OP_INVALIDOPCODE;
 }
 
@@ -266,6 +272,12 @@ void GetStackFeatures(opcodetype opcode, size_t& spawns, size_t& slays)
     case OP_NOP8                   :
     case OP_NOP9                   :
     case OP_NOP10                  : _(0, 0);
+
+    // template matching params
+    case OP_SMALLINTEGER           :
+    case OP_PUBKEYS                :
+    case OP_PUBKEYHASH             :
+    case OP_PUBKEY                 : _(1, 0);
 
     default:
         _(1, 0); // default is all the push commands
