@@ -335,6 +335,7 @@ struct Value {
         case T_STRING:
             return HexStr(data_value());
         }
+        return "<INVALID TYPE>";
     }
     int64_t int_value() const {
         switch (type) {

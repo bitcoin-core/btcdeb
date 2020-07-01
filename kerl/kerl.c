@@ -381,7 +381,7 @@ int kerl_com_help(const char *arg)
     }
   }
   int found = 0;
-  char fmt[16];
+  char fmt[18];
   sprintf(fmt, "%%-%ds %%s\n", max_clen);
   for (i = 0; i < command_count; i++) {
     if (!arglen || !strncmp(commands[i].name, arg, arglen)) {

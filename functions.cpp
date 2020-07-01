@@ -126,7 +126,7 @@ void print_dualstack() {
     lmax = glmax; rmax = grmax;
     int lcap = //66, rcap = 66; // 
     lmax > 66 ? 66 : lmax, rcap = rmax > 66 ? 66 : rmax;
-    char lfmt[10], rfmt[10];
+    char lfmt[15], rfmt[14];
     sprintf(lfmt, "%%-%ds", lcap + 1);
     sprintf(rfmt, "%%%ds", rcap);
     printf(lfmt, "script");
