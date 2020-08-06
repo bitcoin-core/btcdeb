@@ -962,12 +962,14 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                 return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
 
             int nKeysCount = CScriptNum(stacktop(-i), fRequireMinimal).getint();
+            int total_keys = nKeysCount;
             if (nKeysCount < 0 || nKeysCount > MAX_PUBKEYS_PER_MULTISIG)
                 return set_error(serror, SCRIPT_ERR_PUBKEY_COUNT);
             nOpCount += nKeysCount;
             if (nOpCount > MAX_OPS_PER_SCRIPT)
                 return set_error(serror, SCRIPT_ERR_OP_COUNT);
             int ikey = ++i;
+            int starting_key_pos = ikey;
             // ikey2 is the position of last non-signature item in the stack. Top stack item = 1.
             // With SCRIPT_VERIFY_NULLFAIL, this is used for cleanup if operation fails.
             int ikey2 = nKeysCount + 2;
@@ -1027,6 +1029,22 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
 
                     // Check signature
                     fOk = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
+                    if (!fOk) {
+                        // quietly test this signature against all previous pubkeys and point out any that are successful
+                        // to help with signature mis-ordering mishaps
+                        // to not confuse the observer, we quiet the sign/sighash debug output temporarily
+                        auto bsl = btc_sign_logf;
+                        auto bsh = btc_sighash_logf;
+                        btc_sign_logf = btc_sighash_logf = btc_logf_dummy;
+                        for (int i = starting_key_pos; i < ikey; ++i) {
+                            valtype& vchPubkeyAlt = stacktop(-i);
+                            if (checker.CheckSig(vchSig, vchPubkeyAlt, scriptCode, sigversion)) {
+                                btc_logf("!!! note: signature %s is in the wrong position: it fails for pubkey %s, but succeeds for previous pubkey %s\n", sig_str.c_str(), pub_str.c_str(), HexStr(vchPubkeyAlt).c_str());
+                            }
+                        }
+                        btc_sign_logf = bsl;
+                        btc_sighash_logf = bsh;
+                    }
                 }
                 btc_sign_logf("- sig check %s\n", fOk ? "succeeded" : "failed");
 
@@ -1040,8 +1058,27 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                 // If there are more signatures left than keys left,
                 // then too many signatures have failed. Exit early,
                 // without checking any further signatures.
-                if (nSigsCount > nKeysCount)
+                if (nSigsCount > nKeysCount) {
                     fSuccess = false;
+
+                    // see if remaining sigs would have solved for any of the pubkeys
+                    auto bsl = btc_sign_logf;
+                    auto bsh = btc_sighash_logf;
+                    while (nSigsCount > 0) {
+                        valtype& vchSig = stacktop(-isig);
+                        btc_sign_logf = btc_sighash_logf = btc_logf_dummy;
+                        for (int i = starting_key_pos; i < starting_key_pos + total_keys; ++i) {
+                            valtype& vchPubkeyAlt = stacktop(-i);
+                            if (checker.CheckSig(vchSig, vchPubkeyAlt, scriptCode, sigversion)) {
+                                btc_logf("!!! note: signature %s is probably in the wrong position: it successfully signs a (previous) pubkey %s\n", HexStr(vchSig).c_str(), HexStr(vchPubkeyAlt).c_str());
+                            }
+                        }
+                        ++isig;
+                        --nSigsCount;
+                    }
+                    btc_sign_logf = bsl;
+                    btc_sighash_logf = bsh;
+                }
             }
             btc_sign_logf("loop ended in %s state\n", fSuccess ? "successful" : "failure");
 
