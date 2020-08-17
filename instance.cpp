@@ -5,7 +5,6 @@
 #include <pubkey.h>
 #include <value.h>
 #include <vector>
-#include <miniscript/compiler.h>
 
 #include <instance.h>
 
@@ -97,20 +96,20 @@ bool Instance::parse_input_transaction(const char* txdata, int select_index) {
 bool Instance::parse_script(const char* script_str) {
     std::vector<unsigned char> scriptData = Value(script_str).data_value();
     script = CScript(scriptData.begin(), scriptData.end());
-    for (const auto& keymap : COMPILER_CTX.keymap) {
-        auto cs = keymap.first.c_str();
-        auto key = Value(std::vector<uint8_t>(keymap.second.begin(), keymap.second.end())).data;
-        auto sig = Value((std::string("sig:") + keymap.first).c_str()).data_value();
-        pretend_valid_map[sig] = key;
-        pretend_valid_pubkeys.insert(key);
-        printf("info: provide sig:%s as signature for %s [%s=%s]\n", cs, cs, HexStr(sig).c_str(), HexStr(key).c_str());
-    }
-    try {
-        msenv = new MSEnv(script, true);
-    } catch (const std::exception& ex) {
-        printf("miniscript failed to parse script; miniscript support disabled\n");
-        msenv = nullptr;
-    }
+    // for (const auto& keymap : COMPILER_CTX.keymap) {
+    //     auto cs = keymap.first.c_str();
+    //     auto key = Value(std::vector<uint8_t>(keymap.second.begin(), keymap.second.end())).data;
+    //     auto sig = Value((std::string("sig:") + keymap.first).c_str()).data_value();
+    //     pretend_valid_map[sig] = key;
+    //     pretend_valid_pubkeys.insert(key);
+    //     printf("info: provide sig:%s as signature for %s [%s=%s]\n", cs, cs, HexStr(sig).c_str(), HexStr(key).c_str());
+    // }
+    // try {
+    //     msenv = new MSEnv(script, true);
+    // } catch (const std::exception& ex) {
+    //     printf("miniscript failed to parse script; miniscript support disabled\n");
+    //     msenv = nullptr;
+    // }
     return script.HasValidOps();
 }
 
@@ -125,7 +124,7 @@ bool Instance::parse_pretend_valid_expr(const char* expr) {
     valtype sig;
     uint160 keyid;
     bool got_sig = false;
-    COMPILER_CTX.symbolic_outputs = true;
+    // COMPILER_CTX.symbolic_outputs = true;
     while (*c) {
         while (*c && *c != ',' && *c != ':') ++c;
         char* cs = strndup(p, c-p);
@@ -148,17 +147,18 @@ bool Instance::parse_pretend_valid_expr(const char* expr) {
                 return false;
             }
             got_sig = false;
-            COMPILER_CTX.fake_sigs.insert(sig);
             v.do_hash160();
             keyid = uint160(v.data_value());
             // pretend_valid_map[sig] = s;
             pretend_valid_pubkeys.insert(s);
-            CompilerContext::Key ctx_key;
-            COMPILER_CTX.FromString(p, c, ctx_key);
-            COMPILER_CTX.pkh_map[CKeyID(keyid)] = ctx_key;
-            pretend_valid_pubkeys.insert(valtype(ctx_key.begin(), ctx_key.end()));
+            auto key = CPubKey(ParseHex(p));
+            if (!key.IsFullyValid()) {
+                fprintf(stderr, "invalid pubkey %s\n", p);
+                return false;
+            }
+            pretend_valid_pubkeys.insert(valtype(key.begin(), key.end()));
             // note: we override below; this may lead to issues
-            pretend_valid_map[sig] = valtype(ctx_key.begin(), ctx_key.end());
+            pretend_valid_map[sig] = valtype(key.begin(), key.end());
             break;
         }
         p = c = c + (*c != 0);
@@ -170,11 +170,11 @@ void Instance::parse_stack_args(const std::vector<const char*> args) {
     for (auto& v : args) {
         auto z = Value(v).data_value();
         stack.push_back(z);
-        if (z.size() == 33) {
-            // add if valid pubkey
-            CompilerContext::Key key;
-            COMPILER_CTX.FromPKBytes(z.begin(), z.end(), key);
-        }
+        // if (z.size() == 33) {
+        //     // add if valid pubkey
+        //     CompilerContext::Key key;
+        //     COMPILER_CTX.FromPKBytes(z.begin(), z.end(), key);
+        // }
     }
 }
 
@@ -482,22 +482,22 @@ bool Instance::configure_tx_txin() {
         push_del.pop_back();
     }
 
-    // extract pubkeys from script
-    CScript::const_iterator it = script.begin();
-    while (script.GetOp(it, opcode, pushval)) {
-        if (pushval.size() == 33) {
-            // add if valid pubkey
-            CompilerContext::Key key;
-            COMPILER_CTX.FromPKBytes(pushval.begin(), pushval.end(), key);
-        }
-    }
+    // // extract pubkeys from script
+    // CScript::const_iterator it = script.begin();
+    // while (script.GetOp(it, opcode, pushval)) {
+    //     if (pushval.size() == 33) {
+    //         // add if valid pubkey
+    //         CompilerContext::Key key;
+    //         COMPILER_CTX.FromPKBytes(pushval.begin(), pushval.end(), key);
+    //     }
+    // }
 
-    try {
-        msenv = new MSEnv(successor_script, true);
-    } catch (const std::exception& ex) {
-        printf("miniscript failed to parse script; miniscript support disabled\n");
-        msenv = nullptr;
-    }
+    // try {
+    //     msenv = new MSEnv(successor_script, true);
+    // } catch (const std::exception& ex) {
+    //     printf("miniscript failed to parse script; miniscript support disabled\n");
+    //     msenv = nullptr;
+    // }
 
     return true;
 }
