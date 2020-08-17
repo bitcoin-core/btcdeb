@@ -6,6 +6,7 @@
 #include <crypto/common.h>
 #include <crypto/hmac_sha512.h>
 
+bool CHashWriter::debug = false;
 
 inline uint32_t ROTL32(uint32_t x, int8_t r)
 {

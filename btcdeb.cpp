@@ -255,9 +255,9 @@ int main(int argc, char* const* argv)
             char* pbuf = buf;
             pbuf += sprintf(pbuf, "#%04d ", i);
             if (vchPushValue.size() > 0) {
-                sprintf(pbuf, "%s", HexStr(vchPushValue.begin(), vchPushValue.end()).c_str());
+                sprintf(pbuf, "%s", HexStr(std::vector<uint8_t>(vchPushValue.begin(), vchPushValue.end())).c_str());
             } else {
-                sprintf(pbuf, "%s", GetOpName(opcode));
+                sprintf(pbuf, "%s", GetOpName(opcode).c_str());
             }
             script_lines[i++] = strdup(buf);
         }
@@ -265,7 +265,7 @@ int main(int argc, char* const* argv)
 
     if (pipe_in || pipe_out) {
         if (!ContinueScript(*env)) {
-            fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror));
+            fprintf(stderr, "error: %s\n", ScriptErrorString(*env->serror).c_str());
             print_dualstack();
             return 1;
         }

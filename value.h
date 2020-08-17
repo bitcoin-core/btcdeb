@@ -316,7 +316,7 @@ struct Value {
         case T_OPCODE:
             return opcode;
         case T_DATA:
-            return CScriptNum(data, false).GetInt64();
+            return CScriptNum(data, false).getint64();
         default:
             fprintf(stderr, "cannot convert string into integer value: %s\n", str.c_str());
             return -1;
@@ -381,7 +381,7 @@ struct Value {
             fprintf(stderr, "cannot base58-decode non-string value\n");
             return;
         }
-        if (!DecodeBase58(str, data)) {
+        if (!DecodeBase58(str, data, 200)) {
             fprintf(stderr, "decode failed\n");
         }
         type = T_DATA;
@@ -396,7 +396,7 @@ struct Value {
             fprintf(stderr, "cannot base58-decode non-string value\n");
             return;
         }
-        if (!DecodeBase58Check(str, data)) {
+        if (!DecodeBase58Check(str, data, 200)) {
             fprintf(stderr, "decode failed\n");
         }
         type = T_DATA;
@@ -488,9 +488,7 @@ struct Value {
             return;
         }
     }
-    void verify_sig(bool compact);
-    void do_verify_sig() { verify_sig(false); }
-    void do_verify_sig_compact() { verify_sig(true); }
+    void do_verify_sig();
     void do_combine_pubkeys();
     void do_tweak_pubkey();
     void do_add();
@@ -584,7 +582,7 @@ struct Value {
             printf("%" PRId64, int64);
             return;
         case T_OPCODE:
-            printf("%s (%02x)", GetOpName(opcode), opcode);
+            printf("%s (%02x)", GetOpName(opcode).c_str(), opcode);
         case T_DATA:
             for (auto it : data) printf("%02x", it);
             return;
@@ -601,7 +599,7 @@ struct Value {
         case T_INT:
             return strprintf("%" PRId64, int64);
         case T_OPCODE:
-            return strprintf("%s (%02x)", GetOpName(opcode), opcode);
+            return strprintf("%s (%02x)", GetOpName(opcode).c_str(), opcode);
         case T_DATA:
             for (auto it : data) s = s + strprintf("%02x", it);
             return s;

@@ -6,15 +6,17 @@
 #ifndef BITCOIN_HASH_H
 #define BITCOIN_HASH_H
 
-#include <crypto/common.h>
 #include <crypto/ripemd160.h>
 #include <crypto/sha256.h>
 #include <prevector.h>
 #include <serialize.h>
 #include <uint256.h>
-#include <version.h>
 
 #include <vector>
+
+// version.h {
+static const int PROTOCOL_VERSION = 70015;
+// } // version.h
 
 typedef uint256 ChainCode;
 
@@ -103,6 +105,7 @@ private:
     const int nType;
     const int nVersion;
 public:
+    static bool debug;
 
     CHashWriter(int nTypeIn, int nVersionIn) : nType(nTypeIn), nVersion(nVersionIn) {}
 
@@ -110,6 +113,10 @@ public:
     int GetVersion() const { return nVersion; }
 
     void write(const char *pch, size_t size) {
+        if (debug) {
+            printf("#%03zu ", size); for (size_t i = 0; i < size; i++) printf("%02x", (uint8_t)pch[i]);
+            printf("\n");
+        }
         ctx.Write({(const unsigned char*)pch, size});
     }
 
@@ -118,15 +125,6 @@ public:
         uint256 result;
         ctx.Finalize(result);
         return result;
-    }
-
-    /**
-     * Returns the first 64 bits from the resulting hash.
-     */
-    inline uint64_t GetCheapHash() {
-        unsigned char result[CHash256::OUTPUT_SIZE];
-        ctx.Finalize(result);
-        return ReadLE64(result);
     }
 
     template<typename T>

@@ -4,33 +4,17 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <script/interpreter.h>
+#include <debugger/interpreter.h>
+
+#include <inttypes.h> // PRId64 ...
+#include <util/strencodings.h> // for Join<>
 
 #include <crypto/ripemd160.h>
 #include <crypto/sha1.h>
 #include <crypto/sha256.h>
 #include <pubkey.h>
-#include <script/script.h>
+#include <debugger/script.h>
 #include <uint256.h>
-
-typedef std::vector<unsigned char> valtype;
-
-namespace {
-
-inline bool set_success(ScriptError* ret)
-{
-    if (ret)
-        *ret = SCRIPT_ERR_OK;
-    return true;
-}
-
-inline bool set_error(ScriptError* ret, const ScriptError serror)
-{
-    if (ret)
-        *ret = serror;
-    return false;
-}
-
-} // namespace
 
 bool CastToBool(const valtype& vch)
 {
@@ -53,12 +37,6 @@ bool CastToBool(const valtype& vch)
  */
 #define stacktop(i)  (stack.at(stack.size()+(i)))
 #define altstacktop(i)  (altstack.at(altstack.size()+(i)))
-static inline void popstack(std::vector<valtype>& stack)
-{
-    if (stack.empty())
-        throw std::runtime_error("popstack(): stack empty");
-    stack.pop_back();
-}
 
 bool static IsCompressedOrUncompressedPubKey(const valtype &vchPubKey) {
     if (vchPubKey.size() < CPubKey::COMPRESSED_SIZE) {
@@ -278,77 +256,16 @@ int FindAndDelete(CScript& script, const CScript& b)
     return nFound;
 }
 
-namespace {
-/** A data type to abstract out the condition stack during script execution.
- *
- * Conceptually it acts like a vector of booleans, one for each level of nested
- * IF/THEN/ELSE, indicating whether we're in the active or inactive branch of
- * each.
- *
- * The elements on the stack cannot be observed individually; we only need to
- * expose whether the stack is empty and whether or not any false values are
- * present at all. To implement OP_ELSE, a toggle_top modifier is added, which
- * flips the last value without returning it.
- *
- * This uses an optimized implementation that does not materialize the
- * actual stack. Instead, it just stores the size of the would-be stack,
- * and the position of the first false value in it.
- */
-class ConditionStack {
-private:
-    //! A constant for m_first_false_pos to indicate there are no falses.
-    static constexpr uint32_t NO_FALSE = std::numeric_limits<uint32_t>::max();
-
-    //! The size of the implied stack.
-    uint32_t m_stack_size = 0;
-    //! The position of the first false value on the implied stack, or NO_FALSE if all true.
-    uint32_t m_first_false_pos = NO_FALSE;
-
-public:
-    bool empty() { return m_stack_size == 0; }
-    bool all_true() { return m_first_false_pos == NO_FALSE; }
-    void push_back(bool f)
-    {
-        if (m_first_false_pos == NO_FALSE && !f) {
-            // The stack consists of all true values, and a false is added.
-            // The first false value will appear at the current size.
-            m_first_false_pos = m_stack_size;
-        }
-        ++m_stack_size;
-    }
-    void pop_back()
-    {
-        assert(m_stack_size > 0);
-        --m_stack_size;
-        if (m_first_false_pos == m_stack_size) {
-            // When popping off the first false value, everything becomes true.
-            m_first_false_pos = NO_FALSE;
-        }
-    }
-    void toggle_top()
-    {
-        assert(m_stack_size > 0);
-        if (m_first_false_pos == NO_FALSE) {
-            // The current stack is all true values; the first false will be the top.
-            m_first_false_pos = m_stack_size - 1;
-        } else if (m_first_false_pos == m_stack_size - 1) {
-            // The top is the first false value; toggling it will make everything true.
-            m_first_false_pos = NO_FALSE;
-        } else {
-            // There is a false value, but not on top. No action is needed as toggling
-            // anything but the first false value is unobservable.
-        }
-    }
-};
-}
-
 /** Helper for OP_CHECKSIG and OP_CHECKSIGVERIFY
  *
  * A return value of false means the script fails entirely. When true is returned, the
  * fSuccess variable indicates whether the signature check itself succeeded.
  */
-static bool EvalChecksig(const valtype& vchSig, const valtype& vchPubKey, CScript::const_iterator pbegincodehash, CScript::const_iterator pend, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror, bool& fSuccess)
+static bool EvalChecksig(ScriptExecutionEnvironment& env, const valtype& vchSig, const valtype& vchPubKey, CScript::const_iterator pbegincodehash, CScript::const_iterator pend, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror, bool& fSuccess)
 {
+    auto& pretend_valid_map = env.pretend_valid_map;
+    auto& pretend_valid_pubkeys = env.pretend_valid_pubkeys;
+
     // Subset of script starting at the most recent codeseparator
     CScript scriptCode(pbegincodehash, pend);
 
@@ -359,11 +276,30 @@ static bool EvalChecksig(const valtype& vchSig, const valtype& vchPubKey, CScrip
             return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
     }
 
-    if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
-        //serror is set
-        return false;
+    std::string sig_str = HexStr(vchSig);
+    std::string pub_str = HexStr(vchPubKey);
+    if (pretend_valid_pubkeys.count(vchPubKey)) {
+        fSuccess = pretend_valid_map.count(vchSig) && pretend_valid_map.at(vchSig) == vchPubKey;
+        if (!fSuccess) {
+            fprintf(stderr, "note: pretend signature mismatch: got %s=%s, expected %s=%s\n",
+                sig_str.c_str(), pub_str.c_str(),
+                pretend_valid_map.count(vchSig) ? HexStr(pretend_valid_map.at(vchSig)).c_str() : "<null>",
+                pub_str.c_str()
+            );
+        }
+    } else {
+        if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
+            //serror is set
+            if (pretend_valid_map.size() > 0) {
+                fprintf(stderr, "note: pubkey not found in pretend set: %s not in (%s)\n", pub_str.c_str(), Join<std::set<valtype>,std::vector<unsigned char>>(pretend_valid_pubkeys, ", ", JoinHexStrFun).c_str());
+            }
+            return false;
+        }
+        fSuccess = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
+        if (!fSuccess && pretend_valid_map.size() > 0) {
+            fprintf(stderr, "note: pubkey not found in pretend set: %s not in (%s)\n", pub_str.c_str(), Join<std::set<valtype>,std::vector<unsigned char>>(pretend_valid_pubkeys, ", ", JoinHexStrFun).c_str());
+        }
     }
-    fSuccess = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
 
     if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && vchSig.size())
         return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
@@ -371,7 +307,7 @@ static bool EvalChecksig(const valtype& vchSig, const valtype& vchPubKey, CScrip
     return true;
 }
 
-bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror)
+bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script)
 {
     static const CScriptNum bnZero(0);
     static const CScriptNum bnOne(1);
@@ -381,771 +317,819 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
     // static const valtype vchZero(0);
     static const valtype vchTrue(1, 1);
 
-    CScript::const_iterator pc = script.begin();
-    CScript::const_iterator pend = script.end();
-    CScript::const_iterator pbegincodehash = script.begin();
-    opcodetype opcode;
-    valtype vchPushValue;
-    ConditionStack vfExec;
-    std::vector<valtype> altstack;
-    set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
-    if (script.size() > MAX_SCRIPT_SIZE)
-        return set_error(serror, SCRIPT_ERR_SCRIPT_SIZE);
-    int nOpCount = 0;
-    bool fRequireMinimal = (flags & SCRIPT_VERIFY_MINIMALDATA) != 0;
+     auto& pend = env.pend;
+     auto& pbegincodehash = env.pbegincodehash;
+     auto& opcode = env.opcode;
+     auto& vchPushValue = env.vchPushValue;
+     auto& vfExec = env.vfExec;
+     auto& altstack = env.altstack;
+     auto& nOpCount = env.nOpCount;
+     auto& fRequireMinimal = env.fRequireMinimal;
+     auto& stack = env.stack;
+     auto& script = local_script ? *local_script : env.script;
+     auto& flags = env.flags;
+     auto& checker = env.checker;
+     auto& sigversion = env.sigversion;
+     auto& serror = env.serror;
+     auto& pretend_valid_map = env.pretend_valid_map;
+     auto& pretend_valid_pubkeys = env.pretend_valid_pubkeys;
 
-    try
+    bool fExec = vfExec.all_true();
+
+    //
+    // Read instruction
+    //
+    if (!script.GetOp(pc, opcode, vchPushValue))
+        return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+    if (vchPushValue.size() > MAX_SCRIPT_ELEMENT_SIZE)
+        return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
+
+    // Note how OP_RESERVED does not count towards the opcode limit.
+    if (opcode > OP_16 && ++nOpCount > MAX_OPS_PER_SCRIPT)
+        return set_error(serror, SCRIPT_ERR_OP_COUNT);
+
+    if (opcode == OP_CAT ||
+        opcode == OP_SUBSTR ||
+        opcode == OP_LEFT ||
+        opcode == OP_RIGHT ||
+        opcode == OP_INVERT ||
+        opcode == OP_AND ||
+        opcode == OP_OR ||
+        opcode == OP_XOR ||
+        opcode == OP_2MUL ||
+        opcode == OP_2DIV ||
+        opcode == OP_MUL ||
+        opcode == OP_DIV ||
+        opcode == OP_MOD ||
+        opcode == OP_LSHIFT ||
+        opcode == OP_RSHIFT)
+        return set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
+
+    // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR in non-segwit script is rejected even in an unexecuted branch
+    if (opcode == OP_CODESEPARATOR && sigversion == SigVersion::BASE && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
+        return set_error(serror, SCRIPT_ERR_OP_CODESEPARATOR);
+
+    if (fExec && 0 <= opcode && opcode <= OP_PUSHDATA4) {
+        if (fRequireMinimal && !CheckMinimalPush(vchPushValue, opcode)) {
+            return set_error(serror, SCRIPT_ERR_MINIMALDATA);
+        }
+        pushstack(stack, vchPushValue);
+    } else if (fExec || (OP_IF <= opcode && opcode <= OP_ENDIF))
+    switch (opcode)
     {
-        while (pc < pend)
+        //
+        // Push value
+        //
+        case OP_1NEGATE:
+        case OP_1:
+        case OP_2:
+        case OP_3:
+        case OP_4:
+        case OP_5:
+        case OP_6:
+        case OP_7:
+        case OP_8:
+        case OP_9:
+        case OP_10:
+        case OP_11:
+        case OP_12:
+        case OP_13:
+        case OP_14:
+        case OP_15:
+        case OP_16:
         {
-            bool fExec = vfExec.all_true();
+            // ( -- value)
+            CScriptNum bn((int)opcode - (int)(OP_1 - 1));
+            pushstack(stack, bn.getvch());
+            // The result of these opcodes should always be the minimal way to push the data
+            // they push, so no need for a CheckMinimalPush here.
+        }
+        break;
 
-            //
-            // Read instruction
-            //
-            if (!script.GetOp(pc, opcode, vchPushValue))
-                return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
-            if (vchPushValue.size() > MAX_SCRIPT_ELEMENT_SIZE)
-                return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
 
-            // Note how OP_RESERVED does not count towards the opcode limit.
-            if (opcode > OP_16 && ++nOpCount > MAX_OPS_PER_SCRIPT)
-                return set_error(serror, SCRIPT_ERR_OP_COUNT);
+        //
+        // Control
+        //
+        case OP_NOP:
+            break;
 
-            if (opcode == OP_CAT ||
-                opcode == OP_SUBSTR ||
-                opcode == OP_LEFT ||
-                opcode == OP_RIGHT ||
-                opcode == OP_INVERT ||
-                opcode == OP_AND ||
-                opcode == OP_OR ||
-                opcode == OP_XOR ||
-                opcode == OP_2MUL ||
-                opcode == OP_2DIV ||
-                opcode == OP_MUL ||
-                opcode == OP_DIV ||
-                opcode == OP_MOD ||
-                opcode == OP_LSHIFT ||
-                opcode == OP_RSHIFT)
-                return set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
-
-            // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR in non-segwit script is rejected even in an unexecuted branch
-            if (opcode == OP_CODESEPARATOR && sigversion == SigVersion::BASE && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
-                return set_error(serror, SCRIPT_ERR_OP_CODESEPARATOR);
-
-            if (fExec && 0 <= opcode && opcode <= OP_PUSHDATA4) {
-                if (fRequireMinimal && !CheckMinimalPush(vchPushValue, opcode)) {
-                    return set_error(serror, SCRIPT_ERR_MINIMALDATA);
-                }
-                stack.push_back(vchPushValue);
-            } else if (fExec || (OP_IF <= opcode && opcode <= OP_ENDIF))
-            switch (opcode)
-            {
-                //
-                // Push value
-                //
-                case OP_1NEGATE:
-                case OP_1:
-                case OP_2:
-                case OP_3:
-                case OP_4:
-                case OP_5:
-                case OP_6:
-                case OP_7:
-                case OP_8:
-                case OP_9:
-                case OP_10:
-                case OP_11:
-                case OP_12:
-                case OP_13:
-                case OP_14:
-                case OP_15:
-                case OP_16:
-                {
-                    // ( -- value)
-                    CScriptNum bn((int)opcode - (int)(OP_1 - 1));
-                    stack.push_back(bn.getvch());
-                    // The result of these opcodes should always be the minimal way to push the data
-                    // they push, so no need for a CheckMinimalPush here.
-                }
+        case OP_CHECKLOCKTIMEVERIFY:
+        {
+            if (!(flags & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY)) {
+                // not enabled; treat as a NOP2
                 break;
-
-
-                //
-                // Control
-                //
-                case OP_NOP:
-                    break;
-
-                case OP_CHECKLOCKTIMEVERIFY:
-                {
-                    if (!(flags & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY)) {
-                        // not enabled; treat as a NOP2
-                        break;
-                    }
-
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-
-                    // Note that elsewhere numeric opcodes are limited to
-                    // operands in the range -2**31+1 to 2**31-1, however it is
-                    // legal for opcodes to produce results exceeding that
-                    // range. This limitation is implemented by CScriptNum's
-                    // default 4-byte limit.
-                    //
-                    // If we kept to that limit we'd have a year 2038 problem,
-                    // even though the nLockTime field in transactions
-                    // themselves is uint32 which only becomes meaningless
-                    // after the year 2106.
-                    //
-                    // Thus as a special case we tell CScriptNum to accept up
-                    // to 5-byte bignums, which are good until 2**39-1, well
-                    // beyond the 2**32-1 limit of the nLockTime field itself.
-                    const CScriptNum nLockTime(stacktop(-1), fRequireMinimal, 5);
-
-                    // In the rare event that the argument may be < 0 due to
-                    // some arithmetic being done first, you can always use
-                    // 0 MAX CHECKLOCKTIMEVERIFY.
-                    if (nLockTime < 0)
-                        return set_error(serror, SCRIPT_ERR_NEGATIVE_LOCKTIME);
-
-                    // Actually compare the specified lock time with the transaction.
-                    if (!checker.CheckLockTime(nLockTime))
-                        return set_error(serror, SCRIPT_ERR_UNSATISFIED_LOCKTIME);
-
-                    break;
-                }
-
-                case OP_CHECKSEQUENCEVERIFY:
-                {
-                    if (!(flags & SCRIPT_VERIFY_CHECKSEQUENCEVERIFY)) {
-                        // not enabled; treat as a NOP3
-                        break;
-                    }
-
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-
-                    // nSequence, like nLockTime, is a 32-bit unsigned integer
-                    // field. See the comment in CHECKLOCKTIMEVERIFY regarding
-                    // 5-byte numeric operands.
-                    const CScriptNum nSequence(stacktop(-1), fRequireMinimal, 5);
-
-                    // In the rare event that the argument may be < 0 due to
-                    // some arithmetic being done first, you can always use
-                    // 0 MAX CHECKSEQUENCEVERIFY.
-                    if (nSequence < 0)
-                        return set_error(serror, SCRIPT_ERR_NEGATIVE_LOCKTIME);
-
-                    // To provide for future soft-fork extensibility, if the
-                    // operand has the disabled lock-time flag set,
-                    // CHECKSEQUENCEVERIFY behaves as a NOP.
-                    if ((nSequence & CTxIn::SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0)
-                        break;
-
-                    // Compare the specified sequence number with the input.
-                    if (!checker.CheckSequence(nSequence))
-                        return set_error(serror, SCRIPT_ERR_UNSATISFIED_LOCKTIME);
-
-                    break;
-                }
-
-                case OP_NOP1: case OP_NOP4: case OP_NOP5:
-                case OP_NOP6: case OP_NOP7: case OP_NOP8: case OP_NOP9: case OP_NOP10:
-                {
-                    if (flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS)
-                        return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS);
-                }
-                break;
-
-                case OP_IF:
-                case OP_NOTIF:
-                {
-                    // <expression> if [statements] [else [statements]] endif
-                    bool fValue = false;
-                    if (fExec)
-                    {
-                        if (stack.size() < 1)
-                            return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
-                        valtype& vch = stacktop(-1);
-                        if (sigversion == SigVersion::WITNESS_V0 && (flags & SCRIPT_VERIFY_MINIMALIF)) {
-                            if (vch.size() > 1)
-                                return set_error(serror, SCRIPT_ERR_MINIMALIF);
-                            if (vch.size() == 1 && vch[0] != 1)
-                                return set_error(serror, SCRIPT_ERR_MINIMALIF);
-                        }
-                        fValue = CastToBool(vch);
-                        if (opcode == OP_NOTIF)
-                            fValue = !fValue;
-                        popstack(stack);
-                    }
-                    vfExec.push_back(fValue);
-                }
-                break;
-
-                case OP_ELSE:
-                {
-                    if (vfExec.empty())
-                        return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
-                    vfExec.toggle_top();
-                }
-                break;
-
-                case OP_ENDIF:
-                {
-                    if (vfExec.empty())
-                        return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
-                    vfExec.pop_back();
-                }
-                break;
-
-                case OP_VERIFY:
-                {
-                    // (true -- ) or
-                    // (false -- false) and return
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    bool fValue = CastToBool(stacktop(-1));
-                    if (fValue)
-                        popstack(stack);
-                    else
-                        return set_error(serror, SCRIPT_ERR_VERIFY);
-                }
-                break;
-
-                case OP_RETURN:
-                {
-                    return set_error(serror, SCRIPT_ERR_OP_RETURN);
-                }
-                break;
-
-
-                //
-                // Stack ops
-                //
-                case OP_TOALTSTACK:
-                {
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    altstack.push_back(stacktop(-1));
-                    popstack(stack);
-                }
-                break;
-
-                case OP_FROMALTSTACK:
-                {
-                    if (altstack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_ALTSTACK_OPERATION);
-                    stack.push_back(altstacktop(-1));
-                    popstack(altstack);
-                }
-                break;
-
-                case OP_2DROP:
-                {
-                    // (x1 x2 -- )
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    popstack(stack);
-                    popstack(stack);
-                }
-                break;
-
-                case OP_2DUP:
-                {
-                    // (x1 x2 -- x1 x2 x1 x2)
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype vch1 = stacktop(-2);
-                    valtype vch2 = stacktop(-1);
-                    stack.push_back(vch1);
-                    stack.push_back(vch2);
-                }
-                break;
-
-                case OP_3DUP:
-                {
-                    // (x1 x2 x3 -- x1 x2 x3 x1 x2 x3)
-                    if (stack.size() < 3)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype vch1 = stacktop(-3);
-                    valtype vch2 = stacktop(-2);
-                    valtype vch3 = stacktop(-1);
-                    stack.push_back(vch1);
-                    stack.push_back(vch2);
-                    stack.push_back(vch3);
-                }
-                break;
-
-                case OP_2OVER:
-                {
-                    // (x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2)
-                    if (stack.size() < 4)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype vch1 = stacktop(-4);
-                    valtype vch2 = stacktop(-3);
-                    stack.push_back(vch1);
-                    stack.push_back(vch2);
-                }
-                break;
-
-                case OP_2ROT:
-                {
-                    // (x1 x2 x3 x4 x5 x6 -- x3 x4 x5 x6 x1 x2)
-                    if (stack.size() < 6)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype vch1 = stacktop(-6);
-                    valtype vch2 = stacktop(-5);
-                    stack.erase(stack.end()-6, stack.end()-4);
-                    stack.push_back(vch1);
-                    stack.push_back(vch2);
-                }
-                break;
-
-                case OP_2SWAP:
-                {
-                    // (x1 x2 x3 x4 -- x3 x4 x1 x2)
-                    if (stack.size() < 4)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    swap(stacktop(-4), stacktop(-2));
-                    swap(stacktop(-3), stacktop(-1));
-                }
-                break;
-
-                case OP_IFDUP:
-                {
-                    // (x - 0 | x x)
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype vch = stacktop(-1);
-                    if (CastToBool(vch))
-                        stack.push_back(vch);
-                }
-                break;
-
-                case OP_DEPTH:
-                {
-                    // -- stacksize
-                    CScriptNum bn(stack.size());
-                    stack.push_back(bn.getvch());
-                }
-                break;
-
-                case OP_DROP:
-                {
-                    // (x -- )
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    popstack(stack);
-                }
-                break;
-
-                case OP_DUP:
-                {
-                    // (x -- x x)
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype vch = stacktop(-1);
-                    stack.push_back(vch);
-                }
-                break;
-
-                case OP_NIP:
-                {
-                    // (x1 x2 -- x2)
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    stack.erase(stack.end() - 2);
-                }
-                break;
-
-                case OP_OVER:
-                {
-                    // (x1 x2 -- x1 x2 x1)
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype vch = stacktop(-2);
-                    stack.push_back(vch);
-                }
-                break;
-
-                case OP_PICK:
-                case OP_ROLL:
-                {
-                    // (xn ... x2 x1 x0 n - xn ... x2 x1 x0 xn)
-                    // (xn ... x2 x1 x0 n - ... x2 x1 x0 xn)
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    int n = CScriptNum(stacktop(-1), fRequireMinimal).getint();
-                    popstack(stack);
-                    if (n < 0 || n >= (int)stack.size())
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype vch = stacktop(-n-1);
-                    if (opcode == OP_ROLL)
-                        stack.erase(stack.end()-n-1);
-                    stack.push_back(vch);
-                }
-                break;
-
-                case OP_ROT:
-                {
-                    // (x1 x2 x3 -- x2 x3 x1)
-                    //  x2 x1 x3  after first swap
-                    //  x2 x3 x1  after second swap
-                    if (stack.size() < 3)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    swap(stacktop(-3), stacktop(-2));
-                    swap(stacktop(-2), stacktop(-1));
-                }
-                break;
-
-                case OP_SWAP:
-                {
-                    // (x1 x2 -- x2 x1)
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    swap(stacktop(-2), stacktop(-1));
-                }
-                break;
-
-                case OP_TUCK:
-                {
-                    // (x1 x2 -- x2 x1 x2)
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype vch = stacktop(-1);
-                    stack.insert(stack.end()-2, vch);
-                }
-                break;
-
-
-                case OP_SIZE:
-                {
-                    // (in -- in size)
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    CScriptNum bn(stacktop(-1).size());
-                    stack.push_back(bn.getvch());
-                }
-                break;
-
-
-                //
-                // Bitwise logic
-                //
-                case OP_EQUAL:
-                case OP_EQUALVERIFY:
-                //case OP_NOTEQUAL: // use OP_NUMNOTEQUAL
-                {
-                    // (x1 x2 - bool)
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype& vch1 = stacktop(-2);
-                    valtype& vch2 = stacktop(-1);
-                    bool fEqual = (vch1 == vch2);
-                    // OP_NOTEQUAL is disabled because it would be too easy to say
-                    // something like n != 1 and have some wiseguy pass in 1 with extra
-                    // zero bytes after it (numerically, 0x01 == 0x0001 == 0x000001)
-                    //if (opcode == OP_NOTEQUAL)
-                    //    fEqual = !fEqual;
-                    popstack(stack);
-                    popstack(stack);
-                    stack.push_back(fEqual ? vchTrue : vchFalse);
-                    if (opcode == OP_EQUALVERIFY)
-                    {
-                        if (fEqual)
-                            popstack(stack);
-                        else
-                            return set_error(serror, SCRIPT_ERR_EQUALVERIFY);
-                    }
-                }
-                break;
-
-
-                //
-                // Numeric
-                //
-                case OP_1ADD:
-                case OP_1SUB:
-                case OP_NEGATE:
-                case OP_ABS:
-                case OP_NOT:
-                case OP_0NOTEQUAL:
-                {
-                    // (in -- out)
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    CScriptNum bn(stacktop(-1), fRequireMinimal);
-                    switch (opcode)
-                    {
-                    case OP_1ADD:       bn += bnOne; break;
-                    case OP_1SUB:       bn -= bnOne; break;
-                    case OP_NEGATE:     bn = -bn; break;
-                    case OP_ABS:        if (bn < bnZero) bn = -bn; break;
-                    case OP_NOT:        bn = (bn == bnZero); break;
-                    case OP_0NOTEQUAL:  bn = (bn != bnZero); break;
-                    default:            assert(!"invalid opcode"); break;
-                    }
-                    popstack(stack);
-                    stack.push_back(bn.getvch());
-                }
-                break;
-
-                case OP_ADD:
-                case OP_SUB:
-                case OP_BOOLAND:
-                case OP_BOOLOR:
-                case OP_NUMEQUAL:
-                case OP_NUMEQUALVERIFY:
-                case OP_NUMNOTEQUAL:
-                case OP_LESSTHAN:
-                case OP_GREATERTHAN:
-                case OP_LESSTHANOREQUAL:
-                case OP_GREATERTHANOREQUAL:
-                case OP_MIN:
-                case OP_MAX:
-                {
-                    // (x1 x2 -- out)
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    CScriptNum bn1(stacktop(-2), fRequireMinimal);
-                    CScriptNum bn2(stacktop(-1), fRequireMinimal);
-                    CScriptNum bn(0);
-                    switch (opcode)
-                    {
-                    case OP_ADD:
-                        bn = bn1 + bn2;
-                        break;
-
-                    case OP_SUB:
-                        bn = bn1 - bn2;
-                        break;
-
-                    case OP_BOOLAND:             bn = (bn1 != bnZero && bn2 != bnZero); break;
-                    case OP_BOOLOR:              bn = (bn1 != bnZero || bn2 != bnZero); break;
-                    case OP_NUMEQUAL:            bn = (bn1 == bn2); break;
-                    case OP_NUMEQUALVERIFY:      bn = (bn1 == bn2); break;
-                    case OP_NUMNOTEQUAL:         bn = (bn1 != bn2); break;
-                    case OP_LESSTHAN:            bn = (bn1 < bn2); break;
-                    case OP_GREATERTHAN:         bn = (bn1 > bn2); break;
-                    case OP_LESSTHANOREQUAL:     bn = (bn1 <= bn2); break;
-                    case OP_GREATERTHANOREQUAL:  bn = (bn1 >= bn2); break;
-                    case OP_MIN:                 bn = (bn1 < bn2 ? bn1 : bn2); break;
-                    case OP_MAX:                 bn = (bn1 > bn2 ? bn1 : bn2); break;
-                    default:                     assert(!"invalid opcode"); break;
-                    }
-                    popstack(stack);
-                    popstack(stack);
-                    stack.push_back(bn.getvch());
-
-                    if (opcode == OP_NUMEQUALVERIFY)
-                    {
-                        if (CastToBool(stacktop(-1)))
-                            popstack(stack);
-                        else
-                            return set_error(serror, SCRIPT_ERR_NUMEQUALVERIFY);
-                    }
-                }
-                break;
-
-                case OP_WITHIN:
-                {
-                    // (x min max -- out)
-                    if (stack.size() < 3)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    CScriptNum bn1(stacktop(-3), fRequireMinimal);
-                    CScriptNum bn2(stacktop(-2), fRequireMinimal);
-                    CScriptNum bn3(stacktop(-1), fRequireMinimal);
-                    bool fValue = (bn2 <= bn1 && bn1 < bn3);
-                    popstack(stack);
-                    popstack(stack);
-                    popstack(stack);
-                    stack.push_back(fValue ? vchTrue : vchFalse);
-                }
-                break;
-
-
-                //
-                // Crypto
-                //
-                case OP_RIPEMD160:
-                case OP_SHA1:
-                case OP_SHA256:
-                case OP_HASH160:
-                case OP_HASH256:
-                {
-                    // (in -- hash)
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    valtype& vch = stacktop(-1);
-                    valtype vchHash((opcode == OP_RIPEMD160 || opcode == OP_SHA1 || opcode == OP_HASH160) ? 20 : 32);
-                    if (opcode == OP_RIPEMD160)
-                        CRIPEMD160().Write(vch.data(), vch.size()).Finalize(vchHash.data());
-                    else if (opcode == OP_SHA1)
-                        CSHA1().Write(vch.data(), vch.size()).Finalize(vchHash.data());
-                    else if (opcode == OP_SHA256)
-                        CSHA256().Write(vch.data(), vch.size()).Finalize(vchHash.data());
-                    else if (opcode == OP_HASH160)
-                        CHash160().Write(vch).Finalize(vchHash);
-                    else if (opcode == OP_HASH256)
-                        CHash256().Write(vch).Finalize(vchHash);
-                    popstack(stack);
-                    stack.push_back(vchHash);
-                }
-                break;
-
-                case OP_CODESEPARATOR:
-                {
-                    // If SCRIPT_VERIFY_CONST_SCRIPTCODE flag is set, use of OP_CODESEPARATOR is rejected in pre-segwit
-                    // script, even in an unexecuted branch (this is checked above the opcode case statement).
-
-                    // Hash starts after the code separator
-                    pbegincodehash = pc;
-                }
-                break;
-
-                case OP_CHECKSIG:
-                case OP_CHECKSIGVERIFY:
-                {
-                    // (sig pubkey -- bool)
-                    if (stack.size() < 2)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-
-                    valtype& vchSig    = stacktop(-2);
-                    valtype& vchPubKey = stacktop(-1);
-
-                    bool fSuccess = true;
-                    if (!EvalChecksig(vchSig, vchPubKey, pbegincodehash, pend, flags, checker, sigversion, serror, fSuccess)) return false;
-                    popstack(stack);
-                    popstack(stack);
-                    stack.push_back(fSuccess ? vchTrue : vchFalse);
-                    if (opcode == OP_CHECKSIGVERIFY)
-                    {
-                        if (fSuccess)
-                            popstack(stack);
-                        else
-                            return set_error(serror, SCRIPT_ERR_CHECKSIGVERIFY);
-                    }
-                }
-                break;
-
-                case OP_CHECKMULTISIG:
-                case OP_CHECKMULTISIGVERIFY:
-                {
-                    // ([sig ...] num_of_signatures [pubkey ...] num_of_pubkeys -- bool)
-
-                    int i = 1;
-                    if ((int)stack.size() < i)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-
-                    int nKeysCount = CScriptNum(stacktop(-i), fRequireMinimal).getint();
-                    if (nKeysCount < 0 || nKeysCount > MAX_PUBKEYS_PER_MULTISIG)
-                        return set_error(serror, SCRIPT_ERR_PUBKEY_COUNT);
-                    nOpCount += nKeysCount;
-                    if (nOpCount > MAX_OPS_PER_SCRIPT)
-                        return set_error(serror, SCRIPT_ERR_OP_COUNT);
-                    int ikey = ++i;
-                    // ikey2 is the position of last non-signature item in the stack. Top stack item = 1.
-                    // With SCRIPT_VERIFY_NULLFAIL, this is used for cleanup if operation fails.
-                    int ikey2 = nKeysCount + 2;
-                    i += nKeysCount;
-                    if ((int)stack.size() < i)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-
-                    int nSigsCount = CScriptNum(stacktop(-i), fRequireMinimal).getint();
-                    if (nSigsCount < 0 || nSigsCount > nKeysCount)
-                        return set_error(serror, SCRIPT_ERR_SIG_COUNT);
-                    int isig = ++i;
-                    i += nSigsCount;
-                    if ((int)stack.size() < i)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-
-                    // Subset of script starting at the most recent codeseparator
-                    CScript scriptCode(pbegincodehash, pend);
-
-                    // Drop the signature in pre-segwit scripts but not segwit scripts
-                    for (int k = 0; k < nSigsCount; k++)
-                    {
-                        valtype& vchSig = stacktop(-isig-k);
-                        if (sigversion == SigVersion::BASE) {
-                            int found = FindAndDelete(scriptCode, CScript() << vchSig);
-                            if (found > 0 && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
-                                return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
-                        }
-                    }
-
-                    bool fSuccess = true;
-                    while (fSuccess && nSigsCount > 0)
-                    {
-                        valtype& vchSig    = stacktop(-isig);
-                        valtype& vchPubKey = stacktop(-ikey);
-
-                        // Note how this makes the exact order of pubkey/signature evaluation
-                        // distinguishable by CHECKMULTISIG NOT if the STRICTENC flag is set.
-                        // See the script_(in)valid tests for details.
-                        if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
-                            // serror is set
-                            return false;
-                        }
-
-                        // Check signature
-                        bool fOk = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
-
-                        if (fOk) {
-                            isig++;
-                            nSigsCount--;
-                        }
-                        ikey++;
-                        nKeysCount--;
-
-                        // If there are more signatures left than keys left,
-                        // then too many signatures have failed. Exit early,
-                        // without checking any further signatures.
-                        if (nSigsCount > nKeysCount)
-                            fSuccess = false;
-                    }
-
-                    // Clean up stack of actual arguments
-                    while (i-- > 1) {
-                        // If the operation failed, we require that all signatures must be empty vector
-                        if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && !ikey2 && stacktop(-1).size())
-                            return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
-                        if (ikey2 > 0)
-                            ikey2--;
-                        popstack(stack);
-                    }
-
-                    // A bug causes CHECKMULTISIG to consume one extra argument
-                    // whose contents were not checked in any way.
-                    //
-                    // Unfortunately this is a potential source of mutability,
-                    // so optionally verify it is exactly equal to zero prior
-                    // to removing it from the stack.
-                    if (stack.size() < 1)
-                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                    if ((flags & SCRIPT_VERIFY_NULLDUMMY) && stacktop(-1).size())
-                        return set_error(serror, SCRIPT_ERR_SIG_NULLDUMMY);
-                    popstack(stack);
-
-                    stack.push_back(fSuccess ? vchTrue : vchFalse);
-
-                    if (opcode == OP_CHECKMULTISIGVERIFY)
-                    {
-                        if (fSuccess)
-                            popstack(stack);
-                        else
-                            return set_error(serror, SCRIPT_ERR_CHECKMULTISIGVERIFY);
-                    }
-                }
-                break;
-
-                default:
-                    return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
             }
 
-            // Size limits
-            if (stack.size() + altstack.size() > MAX_STACK_SIZE)
-                return set_error(serror, SCRIPT_ERR_STACK_SIZE);
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+
+            // Note that elsewhere numeric opcodes are limited to
+            // operands in the range -2**31+1 to 2**31-1, however it is
+            // legal for opcodes to produce results exceeding that
+            // range. This limitation is implemented by CScriptNum's
+            // default 4-byte limit.
+            //
+            // If we kept to that limit we'd have a year 2038 problem,
+            // even though the nLockTime field in transactions
+            // themselves is uint32 which only becomes meaningless
+            // after the year 2106.
+            //
+            // Thus as a special case we tell CScriptNum to accept up
+            // to 5-byte bignums, which are good until 2**39-1, well
+            // beyond the 2**32-1 limit of the nLockTime field itself.
+            const CScriptNum nLockTime(stacktop(-1), fRequireMinimal, 5);
+
+            // In the rare event that the argument may be < 0 due to
+            // some arithmetic being done first, you can always use
+            // 0 MAX CHECKLOCKTIMEVERIFY.
+            if (nLockTime < 0)
+                return set_error(serror, SCRIPT_ERR_NEGATIVE_LOCKTIME);
+
+            // Actually compare the specified lock time with the transaction.
+            if (!checker.CheckLockTime(nLockTime))
+                return set_error(serror, SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+
+            break;
+        }
+
+        case OP_CHECKSEQUENCEVERIFY:
+        {
+            if (!(flags & SCRIPT_VERIFY_CHECKSEQUENCEVERIFY)) {
+                // not enabled; treat as a NOP3
+                break;
+            }
+
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+
+            // nSequence, like nLockTime, is a 32-bit unsigned integer
+            // field. See the comment in CHECKLOCKTIMEVERIFY regarding
+            // 5-byte numeric operands.
+            const CScriptNum nSequence(stacktop(-1), fRequireMinimal, 5);
+
+            // In the rare event that the argument may be < 0 due to
+            // some arithmetic being done first, you can always use
+            // 0 MAX CHECKSEQUENCEVERIFY.
+            if (nSequence < 0)
+                return set_error(serror, SCRIPT_ERR_NEGATIVE_LOCKTIME);
+
+            // To provide for future soft-fork extensibility, if the
+            // operand has the disabled lock-time flag set,
+            // CHECKSEQUENCEVERIFY behaves as a NOP.
+            if ((nSequence & CTxIn::SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0)
+                break;
+
+            // Compare the specified sequence number with the input.
+            if (!checker.CheckSequence(nSequence))
+                return set_error(serror, SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+
+            break;
+        }
+
+        case OP_NOP1: case OP_NOP4: case OP_NOP5:
+        case OP_NOP6: case OP_NOP7: case OP_NOP8: case OP_NOP9: case OP_NOP10:
+        {
+            if (flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS)
+                return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS);
+        }
+        break;
+
+        case OP_IF:
+        case OP_NOTIF:
+        {
+            // <expression> if [statements] [else [statements]] endif
+            bool fValue = false;
+            if (fExec)
+            {
+                if (stack.size() < 1)
+                    return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
+                valtype& vch = stacktop(-1);
+                if (sigversion == SigVersion::WITNESS_V0 && (flags & SCRIPT_VERIFY_MINIMALIF)) {
+                    if (vch.size() > 1)
+                        return set_error(serror, SCRIPT_ERR_MINIMALIF);
+                    if (vch.size() == 1 && vch[0] != 1)
+                        return set_error(serror, SCRIPT_ERR_MINIMALIF);
+                }
+                fValue = CastToBool(vch);
+                if (opcode == OP_NOTIF)
+                    fValue = !fValue;
+                popstack(stack);
+            }
+            vfExec.push_back(fValue);
+        }
+        break;
+
+        case OP_ELSE:
+        {
+            if (vfExec.empty())
+                return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
+            vfExec.toggle_top();
+        }
+        break;
+
+        case OP_ENDIF:
+        {
+            if (vfExec.empty())
+                return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
+            vfExec.pop_back();
+        }
+        break;
+
+        case OP_VERIFY:
+        {
+            // (true -- ) or
+            // (false -- false) and return
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            bool fValue = CastToBool(stacktop(-1));
+            if (fValue)
+                popstack(stack);
+            else
+                return set_error(serror, SCRIPT_ERR_VERIFY);
+        }
+        break;
+
+        case OP_RETURN:
+        {
+            return set_error(serror, SCRIPT_ERR_OP_RETURN);
+        }
+        break;
+
+
+        //
+        // Stack ops
+        //
+        case OP_TOALTSTACK:
+        {
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            pushstack(altstack, stacktop(-1));
+            popstack(stack);
+        }
+        break;
+
+        case OP_FROMALTSTACK:
+        {
+            if (altstack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_ALTSTACK_OPERATION);
+            pushstack(stack, altstacktop(-1));
+            popstack(altstack);
+        }
+        break;
+
+        case OP_2DROP:
+        {
+            // (x1 x2 -- )
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            popstack(stack);
+            popstack(stack);
+        }
+        break;
+
+        case OP_2DUP:
+        {
+            // (x1 x2 -- x1 x2 x1 x2)
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype vch1 = stacktop(-2);
+            valtype vch2 = stacktop(-1);
+            pushstack(stack, vch1);
+            pushstack(stack, vch2);
+        }
+        break;
+
+        case OP_3DUP:
+        {
+            // (x1 x2 x3 -- x1 x2 x3 x1 x2 x3)
+            if (stack.size() < 3)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype vch1 = stacktop(-3);
+            valtype vch2 = stacktop(-2);
+            valtype vch3 = stacktop(-1);
+            pushstack(stack, vch1);
+            pushstack(stack, vch2);
+            pushstack(stack, vch3);
+        }
+        break;
+
+        case OP_2OVER:
+        {
+            // (x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2)
+            if (stack.size() < 4)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype vch1 = stacktop(-4);
+            valtype vch2 = stacktop(-3);
+            pushstack(stack, vch1);
+            pushstack(stack, vch2);
+        }
+        break;
+
+        case OP_2ROT:
+        {
+            // (x1 x2 x3 x4 x5 x6 -- x3 x4 x5 x6 x1 x2)
+            if (stack.size() < 6)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype vch1 = stacktop(-6);
+            valtype vch2 = stacktop(-5);
+            stack.erase(stack.end()-6, stack.end()-4);
+            pushstack(stack, vch1);
+            pushstack(stack, vch2);
+        }
+        break;
+
+        case OP_2SWAP:
+        {
+            // (x1 x2 x3 x4 -- x3 x4 x1 x2)
+            if (stack.size() < 4)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            swap(stacktop(-4), stacktop(-2));
+            swap(stacktop(-3), stacktop(-1));
+        }
+        break;
+
+        case OP_IFDUP:
+        {
+            // (x - 0 | x x)
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype vch = stacktop(-1);
+            if (CastToBool(vch))
+                pushstack(stack, vch);
+        }
+        break;
+
+        case OP_DEPTH:
+        {
+            // -- stacksize
+            CScriptNum bn(stack.size());
+            pushstack(stack, bn.getvch());
+        }
+        break;
+
+        case OP_DROP:
+        {
+            // (x -- )
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            popstack(stack);
+        }
+        break;
+
+        case OP_DUP:
+        {
+            // (x -- x x)
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype vch = stacktop(-1);
+            pushstack(stack, vch);
+        }
+        break;
+
+        case OP_NIP:
+        {
+            // (x1 x2 -- x2)
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            stack.erase(stack.end() - 2);
+        }
+        break;
+
+        case OP_OVER:
+        {
+            // (x1 x2 -- x1 x2 x1)
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype vch = stacktop(-2);
+            pushstack(stack, vch);
+        }
+        break;
+
+        case OP_PICK:
+        case OP_ROLL:
+        {
+            // (xn ... x2 x1 x0 n - xn ... x2 x1 x0 xn)
+            // (xn ... x2 x1 x0 n - ... x2 x1 x0 xn)
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            int n = CScriptNum(stacktop(-1), fRequireMinimal).getint();
+            popstack(stack);
+            if (n < 0 || n >= (int)stack.size())
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype vch = stacktop(-n-1);
+            if (opcode == OP_ROLL)
+                stack.erase(stack.end()-n-1);
+            pushstack(stack, vch);
+        }
+        break;
+
+        case OP_ROT:
+        {
+            // (x1 x2 x3 -- x2 x3 x1)
+            //  x2 x1 x3  after first swap
+            //  x2 x3 x1  after second swap
+            if (stack.size() < 3)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            swap(stacktop(-3), stacktop(-2));
+            swap(stacktop(-2), stacktop(-1));
+        }
+        break;
+
+        case OP_SWAP:
+        {
+            // (x1 x2 -- x2 x1)
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            swap(stacktop(-2), stacktop(-1));
+        }
+        break;
+
+        case OP_TUCK:
+        {
+            // (x1 x2 -- x2 x1 x2)
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype vch = stacktop(-1);
+            stack.insert(stack.end()-2, vch);
+        }
+        break;
+
+
+        case OP_SIZE:
+        {
+            // (in -- in size)
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            CScriptNum bn(stacktop(-1).size());
+            pushstack(stack, bn.getvch());
+        }
+        break;
+
+
+        //
+        // Bitwise logic
+        //
+        case OP_EQUAL:
+        case OP_EQUALVERIFY:
+        //case OP_NOTEQUAL: // use OP_NUMNOTEQUAL
+        {
+            // (x1 x2 - bool)
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype& vch1 = stacktop(-2);
+            valtype& vch2 = stacktop(-1);
+            bool fEqual = (vch1 == vch2);
+            // OP_NOTEQUAL is disabled because it would be too easy to say
+            // something like n != 1 and have some wiseguy pass in 1 with extra
+            // zero bytes after it (numerically, 0x01 == 0x0001 == 0x000001)
+            //if (opcode == OP_NOTEQUAL)
+            //    fEqual = !fEqual;
+            popstack(stack);
+            popstack(stack);
+            pushstack(stack, fEqual ? vchTrue : vchFalse);
+            if (opcode == OP_EQUALVERIFY)
+            {
+                if (fEqual)
+                    popstack(stack);
+                else
+                    return set_error(serror, SCRIPT_ERR_EQUALVERIFY);
+            }
+        }
+        break;
+
+
+        //
+        // Numeric
+        //
+        case OP_1ADD:
+        case OP_1SUB:
+        case OP_NEGATE:
+        case OP_ABS:
+        case OP_NOT:
+        case OP_0NOTEQUAL:
+        {
+            // (in -- out)
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            CScriptNum bn(stacktop(-1), fRequireMinimal);
+            switch (opcode)
+            {
+            case OP_1ADD:       bn += bnOne; break;
+            case OP_1SUB:       bn -= bnOne; break;
+            case OP_NEGATE:     bn = -bn; break;
+            case OP_ABS:        if (bn < bnZero) bn = -bn; break;
+            case OP_NOT:        bn = (bn == bnZero); break;
+            case OP_0NOTEQUAL:  bn = (bn != bnZero); break;
+            default:            assert(!"invalid opcode"); break;
+            }
+            popstack(stack);
+            pushstack(stack, bn.getvch());
+        }
+        break;
+
+        case OP_ADD:
+        case OP_SUB:
+        case OP_BOOLAND:
+        case OP_BOOLOR:
+        case OP_NUMEQUAL:
+        case OP_NUMEQUALVERIFY:
+        case OP_NUMNOTEQUAL:
+        case OP_LESSTHAN:
+        case OP_GREATERTHAN:
+        case OP_LESSTHANOREQUAL:
+        case OP_GREATERTHANOREQUAL:
+        case OP_MIN:
+        case OP_MAX:
+        {
+            // (x1 x2 -- out)
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            CScriptNum bn1(stacktop(-2), fRequireMinimal);
+            CScriptNum bn2(stacktop(-1), fRequireMinimal);
+            CScriptNum bn(0);
+            switch (opcode)
+            {
+            case OP_ADD:
+                bn = bn1 + bn2;
+                break;
+
+            case OP_SUB:
+                bn = bn1 - bn2;
+                break;
+
+            case OP_BOOLAND:             bn = (bn1 != bnZero && bn2 != bnZero); break;
+            case OP_BOOLOR:              bn = (bn1 != bnZero || bn2 != bnZero); break;
+            case OP_NUMEQUAL:            bn = (bn1 == bn2); break;
+            case OP_NUMEQUALVERIFY:      bn = (bn1 == bn2); break;
+            case OP_NUMNOTEQUAL:         bn = (bn1 != bn2); break;
+            case OP_LESSTHAN:            bn = (bn1 < bn2); break;
+            case OP_GREATERTHAN:         bn = (bn1 > bn2); break;
+            case OP_LESSTHANOREQUAL:     bn = (bn1 <= bn2); break;
+            case OP_GREATERTHANOREQUAL:  bn = (bn1 >= bn2); break;
+            case OP_MIN:                 bn = (bn1 < bn2 ? bn1 : bn2); break;
+            case OP_MAX:                 bn = (bn1 > bn2 ? bn1 : bn2); break;
+            default:                     assert(!"invalid opcode"); break;
+            }
+            popstack(stack);
+            popstack(stack);
+            pushstack(stack, bn.getvch());
+
+            if (opcode == OP_NUMEQUALVERIFY)
+            {
+                if (CastToBool(stacktop(-1)))
+                    popstack(stack);
+                else
+                    return set_error(serror, SCRIPT_ERR_NUMEQUALVERIFY);
+            }
+        }
+        break;
+
+        case OP_WITHIN:
+        {
+            // (x min max -- out)
+            if (stack.size() < 3)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            CScriptNum bn1(stacktop(-3), fRequireMinimal);
+            CScriptNum bn2(stacktop(-2), fRequireMinimal);
+            CScriptNum bn3(stacktop(-1), fRequireMinimal);
+            bool fValue = (bn2 <= bn1 && bn1 < bn3);
+            popstack(stack);
+            popstack(stack);
+            popstack(stack);
+            pushstack(stack, fValue ? vchTrue : vchFalse);
+        }
+        break;
+
+
+        //
+        // Crypto
+        //
+        case OP_RIPEMD160:
+        case OP_SHA1:
+        case OP_SHA256:
+        case OP_HASH160:
+        case OP_HASH256:
+        {
+            // (in -- hash)
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            valtype& vch = stacktop(-1);
+            valtype vchHash((opcode == OP_RIPEMD160 || opcode == OP_SHA1 || opcode == OP_HASH160) ? 20 : 32);
+            if (opcode == OP_RIPEMD160)
+                CRIPEMD160().Write(vch.data(), vch.size()).Finalize(vchHash.data());
+            else if (opcode == OP_SHA1)
+                CSHA1().Write(vch.data(), vch.size()).Finalize(vchHash.data());
+            else if (opcode == OP_SHA256)
+                CSHA256().Write(vch.data(), vch.size()).Finalize(vchHash.data());
+            else if (opcode == OP_HASH160)
+                CHash160().Write(vch).Finalize(vchHash);
+            else if (opcode == OP_HASH256)
+                CHash256().Write(vch).Finalize(vchHash);
+            popstack(stack);
+            pushstack(stack, vchHash);
+        }
+        break;
+
+        case OP_CODESEPARATOR:
+        {
+            // If SCRIPT_VERIFY_CONST_SCRIPTCODE flag is set, use of OP_CODESEPARATOR is rejected in pre-segwit
+            // script, even in an unexecuted branch (this is checked above the opcode case statement).
+
+            // Hash starts after the code separator
+            pbegincodehash = pc;
+        }
+        break;
+
+        case OP_CHECKSIG:
+        case OP_CHECKSIGVERIFY:
+        {
+            // (sig pubkey -- bool)
+            if (stack.size() < 2)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+
+            valtype& vchSig    = stacktop(-2);
+            valtype& vchPubKey = stacktop(-1);
+
+            bool fSuccess = true;
+            if (!EvalChecksig(env, vchSig, vchPubKey, pbegincodehash, pend, flags, checker, sigversion, serror, fSuccess)) return false;
+            popstack(stack);
+            popstack(stack);
+            pushstack(stack, fSuccess ? vchTrue : vchFalse);
+            if (opcode == OP_CHECKSIGVERIFY)
+            {
+                if (fSuccess)
+                    popstack(stack);
+                else
+                    return set_error(serror, SCRIPT_ERR_CHECKSIGVERIFY);
+            }
+        }
+        break;
+
+        case OP_CHECKMULTISIG:
+        case OP_CHECKMULTISIGVERIFY:
+        {
+            // ([sig ...] num_of_signatures [pubkey ...] num_of_pubkeys -- bool)
+
+            int i = 1;
+            btc_sign_logf("stack has %zu entries [require 1]\n", stack.size());
+            if ((int)stack.size() < i)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+
+            int nKeysCount = CScriptNum(stacktop(-i), fRequireMinimal).getint();
+            if (nKeysCount < 0 || nKeysCount > MAX_PUBKEYS_PER_MULTISIG)
+                return set_error(serror, SCRIPT_ERR_PUBKEY_COUNT);
+            nOpCount += nKeysCount;
+            if (nOpCount > MAX_OPS_PER_SCRIPT)
+                return set_error(serror, SCRIPT_ERR_OP_COUNT);
+            int ikey = ++i;
+            // ikey2 is the position of last non-signature item in the stack. Top stack item = 1.
+            // With SCRIPT_VERIFY_NULLFAIL, this is used for cleanup if operation fails.
+            int ikey2 = nKeysCount + 2;
+            i += nKeysCount;
+            btc_sign_logf("stack has %zu entries [require %d]\n", stack.size(), i);
+            if ((int)stack.size() < i)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+
+            int nSigsCount = CScriptNum(stacktop(-i), fRequireMinimal).getint();
+            if (nSigsCount < 0 || nSigsCount > nKeysCount)
+                return set_error(serror, SCRIPT_ERR_SIG_COUNT);
+            int isig = ++i;
+            i += nSigsCount;
+            btc_sign_logf("stack has %zu entries [require %d]\n", stack.size(), i);
+            if ((int)stack.size() < i)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+
+            // Subset of script starting at the most recent codeseparator
+            CScript scriptCode(pbegincodehash, pend);
+
+            // Drop the signature in pre-segwit scripts but not segwit scripts
+            for (int k = 0; k < nSigsCount; k++)
+            {
+                valtype& vchSig = stacktop(-isig-k);
+                if (sigversion == SigVersion::BASE) {
+                    int found = FindAndDelete(scriptCode, CScript() << vchSig);
+                    if (found > 0 && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
+                        return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
+                }
+            }
+            btc_sign_logf("scriptCode = %s\n", HexStr(scriptCode).c_str());
+
+            bool fSuccess = true;
+            btc_sign_logf("looping for multisig\n");
+            while (fSuccess && nSigsCount > 0)
+            {
+                btc_sign_logf("loop: sigs = %d, keys = %d\n", nSigsCount, nKeysCount);
+                valtype& vchSig    = stacktop(-isig);
+                valtype& vchPubKey = stacktop(-ikey);
+                std::string sig_str = HexStr(vchSig);
+                std::string pub_str = HexStr(vchPubKey);
+                btc_sign_logf("- got sig %s\n", sig_str.c_str());
+                btc_sign_logf("- got key %s\n", pub_str.c_str());
+                bool fOk;
+                if (pretend_valid_pubkeys.count(vchPubKey)) {
+                    fOk = pretend_valid_map.count(vchSig) && pretend_valid_map.at(vchSig) == vchPubKey;
+                    if (!fOk) btc_sign_logf("- [mock] wrong pubkey for sig; marking as failed\n");
+                } else {
+                    // Note how this makes the exact order of pubkey/signature evaluation
+                    // distinguishable by CHECKMULTISIG NOT if the STRICTENC flag is set.
+                    // See the script_(in)valid tests for details.
+                    if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
+                        // serror is set
+                        btc_sign_logf("! CheckSignatureEncoding() or CheckPubKeyEncoding() failed!\n");
+                        return false;
+                    }
+
+                    // Check signature
+                    fOk = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
+                }
+                btc_sign_logf("- sig check %s\n", fOk ? "succeeded" : "failed");
+
+                if (fOk) {
+                    isig++;
+                    nSigsCount--;
+                }
+                ikey++;
+                nKeysCount--;
+
+                // If there are more signatures left than keys left,
+                // then too many signatures have failed. Exit early,
+                // without checking any further signatures.
+                if (nSigsCount > nKeysCount)
+                    fSuccess = false;
+            }
+            btc_sign_logf("loop ended in %s state\n", fSuccess ? "successful" : "failure");
+
+            // Clean up stack of actual arguments
+            while (i-- > 1) {
+                // If the operation failed, we require that all signatures must be empty vector
+                if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && !ikey2 && stacktop(-1).size())
+                    return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
+                if (ikey2 > 0)
+                    ikey2--;
+                popstack(stack);
+            }
+
+            // A bug causes CHECKMULTISIG to consume one extra argument
+            // whose contents were not checked in any way.
+            //
+            // Unfortunately this is a potential source of mutability,
+            // so optionally verify it is exactly equal to zero prior
+            // to removing it from the stack.
+            if (stack.size() < 1)
+                return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+            if ((flags & SCRIPT_VERIFY_NULLDUMMY) && stacktop(-1).size()) {
+                printf("\n* * * * * * *\n\nHint: with Segwit activation, the OP_CHECKMULTISIG extra argument must be set to the empty push value (0x). If you are experimenting with older scripts, you may run into a 'Dummy CHECKMULTISIG argument must be zero' error. To move past this, you need to modify the verification flags, disabling the NULLDUMMY flag specifically. I.e. call btcdeb again with -f\"-NULLDUMMY\"\n\n* * * * * * *\n\n");
+                return set_error(serror, SCRIPT_ERR_SIG_NULLDUMMY);
+            }
+            popstack(stack);
+
+            pushstack(stack, fSuccess ? vchTrue : vchFalse);
+
+            if (opcode == OP_CHECKMULTISIGVERIFY)
+            {
+                if (fSuccess)
+                    popstack(stack);
+                else
+                    return set_error(serror, SCRIPT_ERR_CHECKMULTISIGVERIFY);
+            }
+        }
+        break;
+
+        default:
+            return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+    }
+
+    // Size limits
+    if (stack.size() + altstack.size() > MAX_STACK_SIZE)
+        return set_error(serror, SCRIPT_ERR_STACK_SIZE);
+
+    return true;
+}
+
+ScriptExecutionEnvironment::ScriptExecutionEnvironment(std::vector<std::vector<unsigned char> >& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in)
+: script(script_in)
+, pend(script.end())
+, pbegincodehash(script.begin())
+, nOpCount(0)
+, fRequireMinimal((flags_in & SCRIPT_VERIFY_MINIMALDATA) != 0)
+, stack(stack_in)
+, flags(flags_in)
+, checker(checker_in)
+{}
+
+bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror)
+{
+    ScriptExecutionEnvironment env(stack, script, flags, checker);
+    CScript::const_iterator pc = env.script.begin();
+    set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+    if (env.script.size() > MAX_SCRIPT_SIZE)
+        return set_error(serror, SCRIPT_ERR_SCRIPT_SIZE);
+
+    try {
+        while (pc < env.pend) {
+            if (!StepScript(env, pc)) {
+                return false;
+            }
         }
     }
     catch (...)
@@ -1153,7 +1137,7 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
         return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
     }
 
-    if (!vfExec.empty())
+    if (!env.vfExec.empty())
         return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
 
     return set_success(serror);
@@ -1194,7 +1178,9 @@ public:
             if (opcode == OP_CODESEPARATOR)
                 nCodeSeparators++;
         }
+        btc_sign_logf(" << scriptCode.size()=%zu - nCodeSeparators=%d\n", scriptCode.size(), nCodeSeparators);
         ::WriteCompactSize(s, scriptCode.size() - nCodeSeparators);
+        btc_sign_logf(" << script:"); print_vec(scriptCode, btc_sign_logf); btc_sign_logf("\n");
         it = itBegin;
         while (scriptCode.GetOp(it, opcode)) {
             if (opcode == OP_CODESEPARATOR) {
@@ -1210,22 +1196,31 @@ public:
     template<typename S>
     void SerializeInput(S &s, unsigned int nInput) const {
         // In case of SIGHASH_ANYONECANPAY, only the input being signed is serialized
-        if (fAnyoneCanPay)
+        if (fAnyoneCanPay) {
             nInput = nIn;
+            btc_sign_logf("    (fAnyoneCanPay: nInput = nIn)\n");
+        }
         // Serialize the prevout
+        btc_sign_logf(" << txTo.vin[nInput=%d].prevout = %s\n", nInput, txTo.vin[nInput].prevout.ToString().c_str());
         ::Serialize(s, txTo.vin[nInput].prevout);
         // Serialize the script
-        if (nInput != nIn)
+        if (nInput != nIn) {
             // Blank out other inputs' signatures
             ::Serialize(s, CScript());
-        else
+            btc_sign_logf(" << [empty script] (reason: nInput != nIn)\n");
+        } else {
+            btc_sign_logf("(SerializeScriptCode)\n");
             SerializeScriptCode(s);
+        }
         // Serialize the nSequence
-        if (nInput != nIn && (fHashSingle || fHashNone))
+        if (nInput != nIn && (fHashSingle || fHashNone)) {
             // let the others update at will
+            btc_sign_logf(" << sequence = 0 (nInput != nIn && (fHashSingle || fHashNone))\n");
             ::Serialize(s, (int)0);
-        else
+        } else {
+            btc_sign_logf(" << txTo.vin[nInput].nSequence = %u [0x%x]\n", txTo.vin[nInput].nSequence, txTo.vin[nInput].nSequence);
             ::Serialize(s, txTo.vin[nInput].nSequence);
+        }
     }
 
     /** Serialize an output of txTo */
@@ -1241,19 +1236,28 @@ public:
     /** Serialize txTo */
     template<typename S>
     void Serialize(S &s) const {
+        btc_sign_logf("Serializing transaction\n");
         // Serialize nVersion
+        btc_sign_logf(" << txTo.nVersion (%08x)\n", txTo.nVersion);
         ::Serialize(s, txTo.nVersion);
         // Serialize vin
         unsigned int nInputs = fAnyoneCanPay ? 1 : txTo.vin.size();
+        btc_sign_logf(" << nInputs = %d [compact]\n", nInputs);
         ::WriteCompactSize(s, nInputs);
-        for (unsigned int nInput = 0; nInput < nInputs; nInput++)
-             SerializeInput(s, nInput);
+        for (unsigned int nInput = 0; nInput < nInputs; nInput++) {
+            btc_sign_logf("(serialize input %d)\n", nInput);
+            SerializeInput(s, nInput);
+        }
         // Serialize vout
         unsigned int nOutputs = fHashNone ? 0 : (fHashSingle ? nIn+1 : txTo.vout.size());
+        btc_sign_logf(" << nOutputs = %d [compact]\n", nOutputs);
         ::WriteCompactSize(s, nOutputs);
-        for (unsigned int nOutput = 0; nOutput < nOutputs; nOutput++)
-             SerializeOutput(s, nOutput);
+        for (unsigned int nOutput = 0; nOutput < nOutputs; nOutput++) {
+            btc_sign_logf("(serialize output %d)\n", nOutput);
+            SerializeOutput(s, nOutput);
+        }
         // Serialize nLockTime
+        btc_sign_logf(" << txTo.nLockTime = %d [0x%x]\n", txTo.nLockTime, txTo.nLockTime);
         ::Serialize(s, txTo.nLockTime);
     }
 };
@@ -1262,8 +1266,10 @@ template <class T>
 uint256 GetPrevoutHash(const T& txTo)
 {
     CHashWriter ss(SER_GETHASH, 0);
+    btc_sign_logf("- generating prevout hash from %zu ins\n", txTo.vin.size());
     for (const auto& txin : txTo.vin) {
         ss << txin.prevout;
+        btc_sign_logf("[+] %s\n", txin.prevout.ToString().c_str());
     }
     return ss.GetHash();
 }
@@ -1320,9 +1326,11 @@ template PrecomputedTransactionData::PrecomputedTransactionData(const CMutableTr
 template <class T>
 uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache)
 {
+    btc_sign_logf("SignatureHash(nIn=%d, nHashType=%02x, amount=%lld)\n", nIn, nHashType, amount);
     assert(nIn < txTo.vin.size());
 
     if (sigversion == SigVersion::WITNESS_V0) {
+        btc_sign_logf("- sigversion == SIGVERSION_WITNESS_V0\n");
         uint256 hashPrevouts;
         uint256 hashSequence;
         uint256 hashOutputs;
@@ -1330,48 +1338,68 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
 
         if (!(nHashType & SIGHASH_ANYONECANPAY)) {
             hashPrevouts = cacheready ? cache->hashPrevouts : GetPrevoutHash(txTo);
+            btc_sign_logf("  hashPrevouts = %s\n", hashPrevouts.ToString().c_str());
         }
 
         if (!(nHashType & SIGHASH_ANYONECANPAY) && (nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
             hashSequence = cacheready ? cache->hashSequence : GetSequenceHash(txTo);
+            btc_sign_logf("  hashSequence = %s\n", hashSequence.ToString().c_str());
         }
 
 
         if ((nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
             hashOutputs = cacheready ? cache->hashOutputs : GetOutputsHash(txTo);
+            btc_sign_logf("  hashOutputs [!single] = %s\n", hashOutputs.ToString().c_str());
         } else if ((nHashType & 0x1f) == SIGHASH_SINGLE && nIn < txTo.vout.size()) {
             CHashWriter ss(SER_GETHASH, 0);
             ss << txTo.vout[nIn];
             hashOutputs = ss.GetHash();
+            btc_sign_logf("  hashOutputs [single] = %s\n", hashOutputs.ToString().c_str());
         }
 
+        CHashWriter::debug = btc_enabled(btc_sighash_logf);
         CHashWriter ss(SER_GETHASH, 0);
         // Version
+        btc_sign_logf("SERIALIZING:\n");
         ss << txTo.nVersion;
+        btc_sign_logf(" << txTo.nVersion = %d\n", txTo.nVersion);
         // Input prevouts/nSequence (none/all, depending on flags)
         ss << hashPrevouts;
+        btc_sign_logf(" << hashPrevouts\n");
         ss << hashSequence;
+        btc_sign_logf(" << hashSequence\n");
         // The input being signed (replacing the scriptSig with scriptCode + amount)
         // The prevout may already be contained in hashPrevout, and the nSequence
         // may already be contain in hashSequence.
         ss << txTo.vin[nIn].prevout;
+        btc_sign_logf(" << txTo.vin[nIn=%d].prevout = %s\n", nIn, txTo.vin[nIn].prevout.ToString().c_str());
         ss << scriptCode;
+        btc_sign_logf(" << scriptCode\n");
         ss << amount;
+        btc_sign_logf(" << amount = %" PRId64 "\n", amount);
         ss << txTo.vin[nIn].nSequence;
+        btc_sign_logf(" << txTo.vin[nIn].nSequence = %u (0x%x)\n", txTo.vin[nIn].nSequence, txTo.vin[nIn].nSequence);
         // Outputs (none/one/all, depending on flags)
         ss << hashOutputs;
+        btc_sign_logf(" << hashOutputs\n");
         // Locktime
         ss << txTo.nLockTime;
+        btc_sign_logf(" << txTo.nLockTime = %d\n", txTo.nLockTime);
         // Sighash type
         ss << nHashType;
-
-        return ss.GetHash();
+        btc_sign_logf(" << nHashType = %02x\n", nHashType);
+        CHashWriter::debug = false;
+        uint256 sighash = ss.GetHash();
+        btc_sign_logf("RESULTING HASH = %s\n", sighash.ToString().c_str());
+        return sighash;
     }
+    btc_sign_logf("- sigversion = SIGVERSION_BASE (non-segwit style)\n");
 
     // Check for invalid use of SIGHASH_SINGLE
     if ((nHashType & 0x1f) == SIGHASH_SINGLE) {
         if (nIn >= txTo.vout.size()) {
             //  nOut out of range
+            btc_sign_logf("  nIn >= txTo.vout.size() [nOut out of range]\n");
             return UINT256_ONE();
         }
     }
@@ -1380,35 +1408,52 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
     CTransactionSignatureSerializer<T> txTmp(txTo, scriptCode, nIn, nHashType);
 
     // Serialize and hash
+    CHashWriter::debug = btc_enabled(btc_sighash_logf);
     CHashWriter ss(SER_GETHASH, 0);
     ss << txTmp << nHashType;
+    CHashWriter::debug = false;
     return ss.GetHash();
 }
 
 template <class T>
 bool GenericTransactionSignatureChecker<T>::VerifySignature(const std::vector<unsigned char>& vchSig, const CPubKey& pubkey, const uint256& sighash) const
 {
-    return pubkey.Verify(sighash, vchSig);
+    btc_sign_logf("  pubkey.Verify(sig="); print_vec(vchSig, btc_sign_logf); btc_sign_logf(", sighash=%s):\n", sighash.ToString().c_str());
+    bool res = pubkey.Verify(sighash, vchSig);
+    btc_sign_logf("  result: %s\n", res ? "success" : "FAILURE");
+    return res;
 }
 
 template <class T>
 bool GenericTransactionSignatureChecker<T>::CheckSig(const std::vector<unsigned char>& vchSigIn, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const
 {
+    btc_sign_logf("GenericTransactionSignatureChecker::CheckSig(%zu len sig, %zu len pubkey, sigversion=%d)\n", vchSigIn.size(), vchPubKey.size(), sigversion);
+    btc_sign_logf("  sig         = "); print_vec(vchSigIn, btc_sign_logf); btc_sign_logf("\n");
+    btc_sign_logf("  pub key     = "); print_vec(vchPubKey, btc_sign_logf); btc_sign_logf("\n");
+    btc_sign_logf("  script code = "); print_vec(scriptCode, btc_sign_logf); btc_sign_logf("\n");
     CPubKey pubkey(vchPubKey);
-    if (!pubkey.IsValid())
+    if (!pubkey.IsValid()) {
+        btc_sign_logf("- failed: pubkey is not valid\n");
         return false;
+    }
 
     // Hash type is one byte tacked on to the end of the signature
     std::vector<unsigned char> vchSig(vchSigIn);
-    if (vchSig.empty())
+    if (vchSig.empty()) {
+        btc_sign_logf("- failed: signature is empty\n");
         return false;
+    }
     int nHashType = vchSig.back();
     vchSig.pop_back();
+    btc_sign_logf("  hash type   = %02x (%s)\n", nHashType, hashtype_str(nHashType).c_str());
 
     uint256 sighash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, sigversion, this->txdata);
+    btc_sign_logf("  sighash     = %s\n", sighash.ToString().c_str());
 
-    if (!VerifySignature(vchSig, pubkey, sighash))
+    if (!VerifySignature(vchSig, pubkey, sighash)) {
+        btc_sign_logf("- failed: VerifySignature() failed\n");
         return false;
+    }
 
     return true;
 }

@@ -34,16 +34,16 @@ bool Value::extract_values(std::vector<std::vector<uint8_t>>& values) {
     return true;
 }
 
-void Value::verify_sig(bool compact) {
+void Value::do_verify_sig() {
     // the value is a script-style push of the sighash, pubkey, and signature
     if (type != T_DATA) abort("invalid type (must be data)\n");
     std::vector<std::vector<uint8_t>> args;
     if (!extract_values(args) || args.size() != 3) abort("invalid input (needs a sighash, a pubkey, and a signature)\n");
-    if (args[0].size() != 32) abort("invalid input (sighash must be 32 bytes)\n");
+    if (args[0].size() != 32 && args[0].size() != 64) abort("invalid input (sighash must be 32 or 64 bytes)\n");
     const uint256 sighash(args[0]);
     CPubKey pubkey(args[1]);
     if (!pubkey.IsValid()) abort("invalid pubkey\n");
-    int64 = pubkey.Verify(sighash, args[2], compact);
+    int64 = pubkey.Verify(sighash, args[2]);
     type = T_INT;
 }
 
@@ -124,7 +124,7 @@ void Value::do_negate_pubkey() {
 Value Value::from_secp256k1_pubkey(const void* secp256k1_pubkey_ptr) {
     if (!secp256k1_context_sign) ECC_Start();
 
-    size_t clen = CPubKey::PUBLIC_KEY_SIZE;
+    size_t clen = CPubKey::SIZE;
     CPubKey result;
     secp256k1_ec_pubkey_serialize(secp256k1_context_sign, (unsigned char*)result.begin(), &clen, (const secp256k1_pubkey *)secp256k1_pubkey_ptr, SECP256K1_EC_COMPRESSED);
     assert(result.size() == clen);
@@ -286,7 +286,7 @@ void Value::do_get_pubkey() {
         do_decode_wif();
     }
     secp256k1_pubkey pubkey;
-    size_t clen = CPubKey::PUBLIC_KEY_SIZE;
+    size_t clen = CPubKey::SIZE;
     CPubKey result;
     int ret = secp256k1_ec_pubkey_create(secp256k1_context_sign, &pubkey, data.data());
     assert(ret);

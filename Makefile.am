@@ -43,6 +43,7 @@ BITCOIN_CORE_H = \
 	bech32.h \
 	compat.h \
 	compat/byteswap.h \
+	compat/cpuid.h \
 	compat/endian.h \
 	crypto/common.h \
 	crypto/hmac_sha512.h \

@@ -14,6 +14,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include <util/strencodings.h>
+
 const unsigned int BIP32_EXTKEY_SIZE = 74;
 
 /** A reference to a CKey: the Hash160 of its serialized public key */
@@ -164,6 +166,11 @@ public:
     uint256 GetHash() const
     {
         return Hash(MakeSpan(vch).first(size()));
+    }
+
+    const std::string ToString() const
+    {
+        return HexStr(std::vector<uint8_t>(vch, vch + size()));
     }
 
     /*
