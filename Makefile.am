@@ -24,7 +24,7 @@ EXTRA_LIBRARIES += \
   $(LIBBITCOIN) \
   $(LIBKERL)
 
-bin_PROGRAMS = btcdeb btcc test-btcdeb approach
+bin_PROGRAMS = btcdeb btcc test-btcdeb
 noinst_PROGRAMS =
 
 # debugger #
@@ -52,13 +52,11 @@ BITCOIN_CORE_H = \
 	crypto/sha512.h \
 	hash.h \
 	merkle.h \
-	miniscript/compiler.h \
 	policy/policy.h \
 	prevector.h \
 	primitives/transaction.h \
 	pubkey.h \
 	script/interpreter.h \
-	script/miniscript.h \
 	script/script.h \
 	script/script_error.h \
 	serialize.h \
@@ -100,11 +98,9 @@ libbitcoin_a_SOURCES = \
 	crypto/sha512.cpp \
 	hash.cpp \
 	merkle.cpp \
-	miniscript/compiler.cpp \
 	primitives/transaction.cpp \
 	pubkey.cpp \
 	script/interpreter.cpp \
-	script/miniscript.cpp \
 	script/script.cpp \
 	script/script_error.cpp \
 	support/cleanse.cpp \
@@ -124,8 +120,6 @@ libkerl_a_SOURCES = kerl/kerl.c kerl/kerl.h
 btcdeb_SOURCES = \
 	instance.h \
 	instance.cpp \
-	msenv.h \
-	msenv.cpp \
 	functions.h \
 	functions.cpp \
 	btcdeb.cpp \
@@ -135,26 +129,6 @@ btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 btcdeb_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
 
 btcdeb_LDADD = \
-	$(LIBBITCOIN_DEB) \
-	$(LIBBITCOIN) \
-	$(LIBSECP256K1) \
-	$(LIBKERL)
-
-# approach binary #
-approach_SOURCES = \
-	instance.h \
-	instance.cpp \
-	approach.functions.h \
-	approach.functions.cpp \
-	msenv.h \
-	msenv.cpp \
-	approach.cpp \
-	cliargs.h
-approach_CPPFLAGS = $(AM_CPPFLAGS)
-approach_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-approach_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
-
-approach_LDADD = \
 	$(LIBBITCOIN_DEB) \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
@@ -175,8 +149,6 @@ btcc_LDADD = \
 test_btcdeb_SOURCES = \
 	instance.h \
 	instance.cpp \
-	msenv.h \
-	msenv.cpp \
 	functions.h \
 	functions.cpp \
 	test/catch.hpp \

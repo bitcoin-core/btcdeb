@@ -9,14 +9,12 @@
 #include <value.h>
 #include <vector>
 #include <map>
-#include <msenv.h>
 
 typedef std::vector<unsigned char> valtype;
 
 class Instance {
 public:
     InterpreterEnv* env;
-    MSEnv* msenv;
     int count;
     ECCVerifyHandle evh;
     CTransactionRef tx;
@@ -43,7 +41,6 @@ public:
 
     Instance()
     : env(nullptr)
-    , msenv(nullptr)
     , count(0)
     , txin_index(-1)
     , txin_vout_index(-1)
