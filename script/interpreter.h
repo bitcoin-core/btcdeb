@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,7 +11,6 @@
 
 #include <vector>
 #include <stdint.h>
-#include <string>
 
 class CPubKey;
 class CScript;
@@ -122,7 +121,12 @@ bool CheckSignatureEncoding(const std::vector<unsigned char> &vchSig, unsigned i
 struct PrecomputedTransactionData
 {
     uint256 hashPrevouts, hashSequence, hashOutputs;
-    bool ready = false;
+    bool m_ready = false;
+
+    PrecomputedTransactionData() = default;
+
+    template <class T>
+    void Init(const T& tx);
 
     template <class T>
     explicit PrecomputedTransactionData(const T& tx);
@@ -184,28 +188,6 @@ public:
 
 using TransactionSignatureChecker = GenericTransactionSignatureChecker<CTransaction>;
 using MutableTransactionSignatureChecker = GenericTransactionSignatureChecker<CMutableTransaction>;
-
-struct ScriptExecutionEnvironment {
-    CScript script;
-    CScript::const_iterator pend;
-    CScript::const_iterator pbegincodehash;
-    opcodetype opcode;
-    std::vector<uint8_t> vchPushValue;
-    std::vector<bool> vfExec;
-    std::vector<std::vector<uint8_t>> altstack;
-    int nOpCount;
-    bool fRequireMinimal;
-    std::vector<std::vector<unsigned char> >& stack;
-    unsigned int flags;
-    const BaseSignatureChecker& checker;
-    SigVersion sigversion;
-    ScriptError* serror;
-    std::map<std::vector<unsigned char>,std::vector<unsigned char>> pretend_valid_map;
-    std::set<std::vector<unsigned char>> pretend_valid_pubkeys;
-    ScriptExecutionEnvironment(std::vector<std::vector<unsigned char> >& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in);
-};
-
-bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script = nullptr);
 
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* error = nullptr);
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror = nullptr);
