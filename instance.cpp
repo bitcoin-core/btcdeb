@@ -280,7 +280,7 @@ bool Instance::eval(const size_t argc, char* const* argv) {
     CScript::const_iterator it = script.begin();
     while (it != script.end()) {
         if (!StepScript(*env, it, &script)) {
-            fprintf(stderr, "Error: %s\n", ScriptErrorString(*env->serror));
+            fprintf(stderr, "Error: %s\n", ScriptErrorString(*env->serror).c_str());
             return false;
         }
     }
@@ -376,7 +376,7 @@ bool Instance::configure_tx_txin() {
                 return false;
             }
             if (opcode != OP_HASH160) {
-                fprintf(stderr, "unknown/non-standard script pub key (expected OP_HASH160, got %s)\n", GetOpName(opcode));
+                fprintf(stderr, "unknown/non-standard script pub key (expected OP_HASH160, got %s)\n", GetOpName(opcode).c_str());
                 return false;
             }
             if (!scriptPubKey.GetOp(it, opcode, pushval)) {
@@ -413,7 +413,7 @@ bool Instance::configure_tx_txin() {
             return false;
         }
         if (opcode != OP_0) {
-            fprintf(stderr, "%s declared version=%s not supported: %s=%s\n", source.c_str(), GetOpName(opcode), source.c_str(), HexStr(validation).c_str());
+            fprintf(stderr, "%s declared version=%s not supported: %s=%s\n", source.c_str(), GetOpName(opcode).c_str(), source.c_str(), HexStr(validation).c_str());
             return false;
         }
         if (!validation.GetOp(it, opcode, pushval)) {

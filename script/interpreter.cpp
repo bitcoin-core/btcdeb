@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2009-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -39,17 +39,17 @@ bool CastToBool(const valtype& vch)
 #define altstacktop(i)  (altstack.at(altstack.size()+(i)))
 
 bool static IsCompressedOrUncompressedPubKey(const valtype &vchPubKey) {
-    if (vchPubKey.size() < CPubKey::COMPRESSED_PUBLIC_KEY_SIZE) {
+    if (vchPubKey.size() < CPubKey::COMPRESSED_SIZE) {
         //  Non-canonical public key: too short
         return false;
     }
     if (vchPubKey[0] == 0x04) {
-        if (vchPubKey.size() != CPubKey::PUBLIC_KEY_SIZE) {
+        if (vchPubKey.size() != CPubKey::SIZE) {
             //  Non-canonical public key: invalid length for uncompressed key
             return false;
         }
     } else if (vchPubKey[0] == 0x02 || vchPubKey[0] == 0x03) {
-        if (vchPubKey.size() != CPubKey::COMPRESSED_PUBLIC_KEY_SIZE) {
+        if (vchPubKey.size() != CPubKey::COMPRESSED_SIZE) {
             //  Non-canonical public key: invalid length for compressed key
             return false;
         }
@@ -61,7 +61,7 @@ bool static IsCompressedOrUncompressedPubKey(const valtype &vchPubKey) {
 }
 
 bool static IsCompressedPubKey(const valtype &vchPubKey) {
-    if (vchPubKey.size() != CPubKey::COMPRESSED_PUBLIC_KEY_SIZE) {
+    if (vchPubKey.size() != CPubKey::COMPRESSED_SIZE) {
         //  Non-canonical public key: invalid length for compressed key
         return false;
     }
@@ -256,6 +256,57 @@ int FindAndDelete(CScript& script, const CScript& b)
     return nFound;
 }
 
+/** Helper for OP_CHECKSIG and OP_CHECKSIGVERIFY
+ *
+ * A return value of false means the script fails entirely. When true is returned, the
+ * fSuccess variable indicates whether the signature check itself succeeded.
+ */
+static bool EvalChecksig(ScriptExecutionEnvironment& env, const valtype& vchSig, const valtype& vchPubKey, CScript::const_iterator pbegincodehash, CScript::const_iterator pend, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror, bool& fSuccess)
+{
+    auto& pretend_valid_map = env.pretend_valid_map;
+    auto& pretend_valid_pubkeys = env.pretend_valid_pubkeys;
+
+    // Subset of script starting at the most recent codeseparator
+    CScript scriptCode(pbegincodehash, pend);
+
+    // Drop the signature in pre-segwit scripts but not segwit scripts
+    if (sigversion == SigVersion::BASE) {
+        int found = FindAndDelete(scriptCode, CScript() << vchSig);
+        if (found > 0 && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
+            return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
+    }
+
+    std::string sig_str = HexStr(vchSig);
+    std::string pub_str = HexStr(vchPubKey);
+    if (pretend_valid_pubkeys.count(vchPubKey)) {
+        fSuccess = pretend_valid_map.count(vchSig) && pretend_valid_map.at(vchSig) == vchPubKey;
+        if (!fSuccess) {
+            fprintf(stderr, "note: pretend signature mismatch: got %s=%s, expected %s=%s\n",
+                sig_str.c_str(), pub_str.c_str(),
+                pretend_valid_map.count(vchSig) ? HexStr(pretend_valid_map.at(vchSig)).c_str() : "<null>",
+                pub_str.c_str()
+            );
+        }
+    } else {
+        if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
+            //serror is set
+            if (pretend_valid_map.size() > 0) {
+                fprintf(stderr, "note: pubkey not found in pretend set: %s not in (%s)\n", pub_str.c_str(), Join<std::set<valtype>,std::vector<unsigned char>>(pretend_valid_pubkeys, ", ", JoinHexStrFun).c_str());
+            }
+            return false;
+        }
+        fSuccess = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
+        if (!fSuccess && pretend_valid_map.size() > 0) {
+            fprintf(stderr, "note: pubkey not found in pretend set: %s not in (%s)\n", pub_str.c_str(), Join<std::set<valtype>,std::vector<unsigned char>>(pretend_valid_pubkeys, ", ", JoinHexStrFun).c_str());
+        }
+    }
+
+    if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && vchSig.size())
+        return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
+
+    return true;
+}
+
 bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script)
 {
     static const CScriptNum bnZero(0);
@@ -266,24 +317,24 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
     // static const valtype vchZero(0);
     static const valtype vchTrue(1, 1);
 
-    auto& pend = env.pend;
-    auto& pbegincodehash = env.pbegincodehash;
-    auto& opcode = env.opcode;
-    auto& vchPushValue = env.vchPushValue;
-    auto& vfExec = env.vfExec;
-    auto& altstack = env.altstack;
-    auto& nOpCount = env.nOpCount;
-    auto& fRequireMinimal = env.fRequireMinimal;
-    auto& stack = env.stack;
-    auto& script = local_script ? *local_script : env.script;
-    auto& flags = env.flags;
-    auto& checker = env.checker;
-    auto& sigversion = env.sigversion;
-    auto& serror = env.serror;
-    auto& pretend_valid_map = env.pretend_valid_map;
-    auto& pretend_valid_pubkeys = env.pretend_valid_pubkeys;
+     auto& pend = env.pend;
+     auto& pbegincodehash = env.pbegincodehash;
+     auto& opcode = env.opcode;
+     auto& vchPushValue = env.vchPushValue;
+     auto& vfExec = env.vfExec;
+     auto& altstack = env.altstack;
+     auto& nOpCount = env.nOpCount;
+     auto& fRequireMinimal = env.fRequireMinimal;
+     auto& stack = env.stack;
+     auto& script = local_script ? *local_script : env.script;
+     auto& flags = env.flags;
+     auto& checker = env.checker;
+     auto& sigversion = env.sigversion;
+     auto& serror = env.serror;
+     auto& pretend_valid_map = env.pretend_valid_map;
+     auto& pretend_valid_pubkeys = env.pretend_valid_pubkeys;
 
-    bool fExec = !count(vfExec.begin(), vfExec.end(), false);
+    bool fExec = vfExec.all_true();
 
     //
     // Read instruction
@@ -472,7 +523,7 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
         {
             if (vfExec.empty())
                 return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
-            vfExec.back() = !vfExec.back();
+            vfExec.toggle_top();
         }
         break;
 
@@ -871,9 +922,9 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
             else if (opcode == OP_SHA256)
                 CSHA256().Write(vch.data(), vch.size()).Finalize(vchHash.data());
             else if (opcode == OP_HASH160)
-                CHash160().Write(vch.data(), vch.size()).Finalize(vchHash.data());
+                CHash160().Write(vch).Finalize(vchHash);
             else if (opcode == OP_HASH256)
-                CHash256().Write(vch.data(), vch.size()).Finalize(vchHash.data());
+                CHash256().Write(vch).Finalize(vchHash);
             popstack(stack);
             pushstack(stack, vchHash);
         }
@@ -899,45 +950,8 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
             valtype& vchSig    = stacktop(-2);
             valtype& vchPubKey = stacktop(-1);
 
-            // Subset of script starting at the most recent codeseparator
-            CScript scriptCode(pbegincodehash, pend);
-
-            // Drop the signature in pre-segwit scripts but not segwit scripts
-            if (sigversion == SigVersion::BASE) {
-                int found = FindAndDelete(scriptCode, CScript() << vchSig);
-                if (found > 0 && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
-                    return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
-            }
-
-            bool fSuccess;
-            std::string sig_str = HexStr(vchSig);
-            std::string pub_str = HexStr(vchPubKey);
-            if (pretend_valid_pubkeys.count(vchPubKey)) {
-                fSuccess = pretend_valid_map.count(vchSig) && pretend_valid_map.at(vchSig) == vchPubKey;
-                if (!fSuccess) {
-                    fprintf(stderr, "note: pretend signature mismatch: got %s=%s, expected %s=%s\n",
-                        sig_str.c_str(), pub_str.c_str(),
-                        pretend_valid_map.count(vchSig) ? HexStr(vchSig).c_str() : "<null>",
-                        pretend_valid_map.count(vchSig) ? HexStr(pretend_valid_map.at(vchSig)).c_str() : "<null>"
-                    );
-                }
-            } else {
-                if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
-                    //serror is set
-                    if (pretend_valid_map.size() > 0) {
-                        fprintf(stderr, "note: pubkey not found in pretend set: %s not in (%s)\n", pub_str.c_str(), Join<std::set<valtype>,std::vector<unsigned char>>(pretend_valid_pubkeys, ", ", JoinHexStrFun).c_str());
-                    }
-                    return false;
-                }
-                fSuccess = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
-                if (!fSuccess && pretend_valid_map.size() > 0) {
-                    fprintf(stderr, "note: pubkey not found in pretend set: %s not in (%s)\n", pub_str.c_str(), Join<std::set<valtype>,std::vector<unsigned char>>(pretend_valid_pubkeys, ", ", JoinHexStrFun).c_str());
-                }
-            }
-
-            if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && vchSig.size())
-                return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
-
+            bool fSuccess = true;
+            if (!EvalChecksig(env, vchSig, vchPubKey, pbegincodehash, pend, flags, checker, sigversion, serror, fSuccess)) return false;
             popstack(stack);
             popstack(stack);
             pushstack(stack, fSuccess ? vchTrue : vchFalse);
@@ -962,14 +976,12 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                 return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
 
             int nKeysCount = CScriptNum(stacktop(-i), fRequireMinimal).getint();
-            int total_keys = nKeysCount;
             if (nKeysCount < 0 || nKeysCount > MAX_PUBKEYS_PER_MULTISIG)
                 return set_error(serror, SCRIPT_ERR_PUBKEY_COUNT);
             nOpCount += nKeysCount;
             if (nOpCount > MAX_OPS_PER_SCRIPT)
                 return set_error(serror, SCRIPT_ERR_OP_COUNT);
             int ikey = ++i;
-            int starting_key_pos = ikey;
             // ikey2 is the position of last non-signature item in the stack. Top stack item = 1.
             // With SCRIPT_VERIFY_NULLFAIL, this is used for cleanup if operation fails.
             int ikey2 = nKeysCount + 2;
@@ -1029,22 +1041,6 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
 
                     // Check signature
                     fOk = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
-                    if (!fOk) {
-                        // quietly test this signature against all previous pubkeys and point out any that are successful
-                        // to help with signature mis-ordering mishaps
-                        // to not confuse the observer, we quiet the sign/sighash debug output temporarily
-                        auto bsl = btc_sign_logf;
-                        auto bsh = btc_sighash_logf;
-                        btc_sign_logf = btc_sighash_logf = btc_logf_dummy;
-                        for (int i = starting_key_pos; i < ikey; ++i) {
-                            valtype& vchPubkeyAlt = stacktop(-i);
-                            if (checker.CheckSig(vchSig, vchPubkeyAlt, scriptCode, sigversion)) {
-                                btc_logf("!!! note: signature %s is in the wrong position: it fails for pubkey %s, but succeeds for previous pubkey %s\n", sig_str.c_str(), pub_str.c_str(), HexStr(vchPubkeyAlt).c_str());
-                            }
-                        }
-                        btc_sign_logf = bsl;
-                        btc_sighash_logf = bsh;
-                    }
                 }
                 btc_sign_logf("- sig check %s\n", fOk ? "succeeded" : "failed");
 
@@ -1058,27 +1054,8 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                 // If there are more signatures left than keys left,
                 // then too many signatures have failed. Exit early,
                 // without checking any further signatures.
-                if (nSigsCount > nKeysCount) {
+                if (nSigsCount > nKeysCount)
                     fSuccess = false;
-
-                    // see if remaining sigs would have solved for any of the pubkeys
-                    auto bsl = btc_sign_logf;
-                    auto bsh = btc_sighash_logf;
-                    while (nSigsCount > 0) {
-                        valtype& vchSig = stacktop(-isig);
-                        btc_sign_logf = btc_sighash_logf = btc_logf_dummy;
-                        for (int i = starting_key_pos; i < starting_key_pos + total_keys; ++i) {
-                            valtype& vchPubkeyAlt = stacktop(-i);
-                            if (checker.CheckSig(vchSig, vchPubkeyAlt, scriptCode, sigversion)) {
-                                btc_logf("!!! note: signature %s is probably in the wrong position: it successfully signs a (previous) pubkey %s\n", HexStr(vchSig).c_str(), HexStr(vchPubkeyAlt).c_str());
-                            }
-                        }
-                        ++isig;
-                        --nSigsCount;
-                    }
-                    btc_sign_logf = bsl;
-                    btc_sighash_logf = bsh;
-                }
             }
             btc_sign_logf("loop ended in %s state\n", fSuccess ? "successful" : "failure");
 
@@ -1122,9 +1099,9 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
             return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
     }
 
-            // Size limits
-            if (stack.size() + altstack.size() > MAX_STACK_SIZE)
-                return set_error(serror, SCRIPT_ERR_STACK_SIZE);
+    // Size limits
+    if (stack.size() + altstack.size() > MAX_STACK_SIZE)
+        return set_error(serror, SCRIPT_ERR_STACK_SIZE);
 
     return true;
 }
@@ -1320,18 +1297,29 @@ uint256 GetOutputsHash(const T& txTo)
 } // namespace
 
 template <class T>
-PrecomputedTransactionData::PrecomputedTransactionData(const T& txTo)
+void PrecomputedTransactionData::Init(const T& txTo)
 {
+    assert(!m_ready);
+
     // Cache is calculated only for transactions with witness
     if (txTo.HasWitness()) {
         hashPrevouts = GetPrevoutHash(txTo);
         hashSequence = GetSequenceHash(txTo);
         hashOutputs = GetOutputsHash(txTo);
-        ready = true;
     }
+
+    m_ready = true;
+}
+
+template <class T>
+PrecomputedTransactionData::PrecomputedTransactionData(const T& txTo)
+{
+    Init(txTo);
 }
 
 // explicit instantiation
+template void PrecomputedTransactionData::Init(const CTransaction& txTo);
+template void PrecomputedTransactionData::Init(const CMutableTransaction& txTo);
 template PrecomputedTransactionData::PrecomputedTransactionData(const CTransaction& txTo);
 template PrecomputedTransactionData::PrecomputedTransactionData(const CMutableTransaction& txTo);
 
@@ -1346,7 +1334,7 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
         uint256 hashPrevouts;
         uint256 hashSequence;
         uint256 hashOutputs;
-        const bool cacheready = cache && cache->ready;
+        const bool cacheready = cache && cache->m_ready;
 
         if (!(nHashType & SIGHASH_ANYONECANPAY)) {
             hashPrevouts = cacheready ? cache->hashPrevouts : GetPrevoutHash(txTo);
@@ -1407,14 +1395,12 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
     }
     btc_sign_logf("- sigversion = SIGVERSION_BASE (non-segwit style)\n");
 
-    static const uint256 one(uint256S("0000000000000000000000000000000000000000000000000000000000000001"));
-
     // Check for invalid use of SIGHASH_SINGLE
     if ((nHashType & 0x1f) == SIGHASH_SINGLE) {
         if (nIn >= txTo.vout.size()) {
             //  nOut out of range
-            btc_sign_logf("  nIn >= txTo.vout.size()\n");
-            return one;
+            btc_sign_logf("  nIn >= txTo.vout.size() [nOut out of range]\n");
+            return UINT256_ONE();
         }
     }
 
@@ -1560,57 +1546,61 @@ bool GenericTransactionSignatureChecker<T>::CheckSequence(const CScriptNum& nSeq
 template class GenericTransactionSignatureChecker<CTransaction>;
 template class GenericTransactionSignatureChecker<CMutableTransaction>;
 
+static bool ExecuteWitnessScript(const Span<const valtype>& stack_span, const CScript& scriptPubKey, unsigned int flags, SigVersion sigversion, const BaseSignatureChecker& checker, ScriptError* serror)
+{
+    std::vector<valtype> stack{stack_span.begin(), stack_span.end()};
+
+    // Disallow stack item size > MAX_SCRIPT_ELEMENT_SIZE in witness stack
+    for (const valtype& elem : stack) {
+        if (elem.size() > MAX_SCRIPT_ELEMENT_SIZE) return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
+    }
+
+    // Run the script interpreter.
+    if (!EvalScript(stack, scriptPubKey, flags, checker, sigversion, serror)) return false;
+
+    // Scripts inside witness implicitly require cleanstack behaviour
+    if (stack.size() != 1) return set_error(serror, SCRIPT_ERR_CLEANSTACK);
+    if (!CastToBool(stack.back())) return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
+    return true;
+}
+
 static bool VerifyWitnessProgram(const CScriptWitness& witness, int witversion, const std::vector<unsigned char>& program, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror)
 {
-    std::vector<std::vector<unsigned char> > stack;
     CScript scriptPubKey;
+    Span<const valtype> stack{witness.stack};
 
     if (witversion == 0) {
         if (program.size() == WITNESS_V0_SCRIPTHASH_SIZE) {
             // Version 0 segregated witness program: SHA256(CScript) inside the program, CScript + inputs in witness
-            if (witness.stack.size() == 0) {
+            if (stack.size() == 0) {
                 return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_WITNESS_EMPTY);
             }
-            scriptPubKey = CScript(witness.stack.back().begin(), witness.stack.back().end());
-            stack = std::vector<std::vector<unsigned char> >(witness.stack.begin(), witness.stack.end() - 1);
+            const valtype& script_bytes = SpanPopBack(stack);
+            scriptPubKey = CScript(script_bytes.begin(), script_bytes.end());
             uint256 hashScriptPubKey;
             CSHA256().Write(&scriptPubKey[0], scriptPubKey.size()).Finalize(hashScriptPubKey.begin());
             if (memcmp(hashScriptPubKey.begin(), program.data(), 32)) {
                 return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_MISMATCH);
             }
+            return ExecuteWitnessScript(stack, scriptPubKey, flags, SigVersion::WITNESS_V0, checker, serror);
         } else if (program.size() == WITNESS_V0_KEYHASH_SIZE) {
             // Special case for pay-to-pubkeyhash; signature + pubkey in witness
-            if (witness.stack.size() != 2) {
+            if (stack.size() != 2) {
                 return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_MISMATCH); // 2 items in witness
             }
             scriptPubKey << OP_DUP << OP_HASH160 << program << OP_EQUALVERIFY << OP_CHECKSIG;
-            stack = witness.stack;
+            return ExecuteWitnessScript(stack, scriptPubKey, flags, SigVersion::WITNESS_V0, checker, serror);
         } else {
             return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_WRONG_LENGTH);
         }
-    } else if (flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM) {
-        return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM);
     } else {
+        if (flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM) {
+            return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM);
+        }
         // Higher version witness scripts return true for future softfork compatibility
-        return set_success(serror);
+        return true;
     }
-
-    // Disallow stack item size > MAX_SCRIPT_ELEMENT_SIZE in witness stack
-    for (unsigned int i = 0; i < stack.size(); i++) {
-        if (stack.at(i).size() > MAX_SCRIPT_ELEMENT_SIZE)
-            return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
-    }
-
-    if (!EvalScript(stack, scriptPubKey, flags, checker, SigVersion::WITNESS_V0, serror)) {
-        return false;
-    }
-
-    // Scripts inside witness implicitly require cleanstack behaviour
-    if (stack.size() != 1)
-        return set_error(serror, SCRIPT_ERR_CLEANSTACK);
-    if (!CastToBool(stack.back()))
-        return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
-    return true;
+    // There is intentionally no return statement here, to be able to use "control reaches end of non-void function" warnings to detect gaps in the logic above.
 }
 
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror)

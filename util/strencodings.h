@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2009-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,9 +10,11 @@
 #define BITCOIN_UTIL_STRENCODINGS_H
 
 #include <attributes.h>
+#include <span.h>
 
 #include <cstdint>
 #include <iterator>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -56,9 +58,7 @@ std::string DecodeBase32(const std::string& str, bool* pf_invalid = nullptr);
 std::string EncodeBase32(const unsigned char* pch, size_t len);
 std::string EncodeBase32(const std::string& str);
 
-void SplitHostPort(std::string in, int &portOut, std::string &hostOut);
-std::string i64tostr(int64_t n);
-std::string itostr(int n);
+void SplitHostPort(std::string in, int& portOut, std::string& hostOut);
 int64_t atoi64(const char* psz);
 int64_t atoi64(const std::string& str);
 int atoi(const std::string& str);
@@ -123,27 +123,11 @@ NODISCARD bool ParseUInt64(const std::string& str, uint64_t *out);
  */
 NODISCARD bool ParseDouble(const std::string& str, double *out);
 
-template<typename T>
-std::string HexStr(const T itbegin, const T itend)
-{
-    std::string rv;
-    static const char hexmap[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
-                                     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-    rv.reserve(std::distance(itbegin, itend) * 2);
-    for(T it = itbegin; it < itend; ++it)
-    {
-        unsigned char val = (unsigned char)(*it);
-        rv.push_back(hexmap[val>>4]);
-        rv.push_back(hexmap[val&15]);
-    }
-    return rv;
-}
-
-template<typename T>
-inline std::string HexStr(const T& vch)
-{
-    return HexStr(vch.begin(), vch.end());
-}
+/**
+ * Convert a span of bytes to a lower-case hexadecimal string.
+ */
+std::string HexStr(const Span<const uint8_t> s);
+inline std::string HexStr(const Span<const char> s) { return HexStr(MakeUCharSpan(s)); }
 
 /**
  * Format a paragraph of text to a fixed width, adding spaces for
@@ -271,5 +255,13 @@ std::string ToUpper(const std::string& str);
  * @returns         string with the first letter capitalized.
  */
 std::string Capitalize(std::string str);
+
+/**
+ * Check if a string does not contain any embedded NUL (\0) characters
+ */
+NODISCARD inline bool ValidAsCString(const std::string& str) noexcept
+{
+    return str.size() == strlen(str.c_str());
+}
 
 #endif // BITCOIN_UTIL_STRENCODINGS_H
