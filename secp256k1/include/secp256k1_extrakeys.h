@@ -165,6 +165,12 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_keypair_create(
     const unsigned char *seckey
 ) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
 
+SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int secp256k1_keypair_seckey(
+    const secp256k1_context* ctx,
+    unsigned char *seckey,
+    const secp256k1_keypair *keypair
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3);
+
 /** Get the public key from a keypair.
  *
  *  Returns: 0 if the arguments are invalid. 1 otherwise.

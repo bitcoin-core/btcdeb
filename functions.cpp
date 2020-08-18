@@ -32,11 +32,23 @@ int fn_rewind(const char* arg) {
     return 0;
 }
 
-inline void svprintscripts(std::vector<std::string>& l, int& lmax, std::vector<CScript*>& scripts, std::vector<std::string>& headers, CScript::const_iterator it) {
+inline void svprintscripts(std::vector<std::string>& l, int& lmax, std::vector<CScript*>& scripts, std::vector<std::string>& headers, CScript::const_iterator it, TaprootCommitmentEnv* tce) {
     char buf[1024];
     opcodetype opcode;
     valtype vchPushValue;
     bool begun = false;
+    if (tce) {
+        auto desc = tce->Description();
+        std::string header = "<<< taproot commitment >>>";
+        if (header.length() > lmax) lmax = header.length();
+        l.push_back(header);
+        for (const auto& s : desc) {
+            if (s.length() > lmax) lmax = s.length();
+            l.push_back(s);
+        }
+        header = "<<< committed script >>>";
+        l.push_back(header);
+    }
     for (size_t siter = 0; siter < scripts.size(); ++siter) {
         CScript* script = scripts[siter];
 
@@ -100,13 +112,25 @@ void print_dualstack() {
         scripts.push_back(&p2sh_script);
         headers.push_back("<<< P2SH script >>>");
     }
-    svprintscripts(l, lmax, scripts, headers, it);
+    svprintscripts(l, lmax, scripts, headers, it, env->tce);
 
-    for (int j = env->stack.size() - 1; j >= 0; j--) {
-        auto& it = env->stack[j];
-        auto s = it.begin() == it.end() ? "0x" : HexStr(std::vector<uint8_t>(it.begin(), it.end()));
-        if (s.length() > rmax) rmax = s.length();
-        r.push_back(s);
+    std::string right_name = "stack ";
+    if (env->tce) {
+        right_name = "tapscript commitment state ";
+        std::vector<std::string> tces;
+        tces.push_back(strprintf("i: %d", env->tce->m_i));
+        tces.push_back(strprintf("k: %s", HexStr(env->tce->m_k)));
+        for (const auto& s : tces) {
+            if (s.length() > rmax) rmax = s.length();
+            r.push_back(s);
+        }
+    } else {
+        for (int j = env->stack.size() - 1; j >= 0; j--) {
+            auto& it = env->stack[j];
+            auto s = it.begin() == it.end() ? "0x" : HexStr(std::vector<uint8_t>(it.begin(), it.end()));
+            if (s.length() > rmax) rmax = s.length();
+            r.push_back(s);
+        }
     }
 
     // if (r.size() > 0 && instance.msenv) r.push_back(""); // spacing between stack and miniscript
@@ -219,16 +243,23 @@ static const char* tfs[] = {
     "compact-verify-sig",
     "combine-pubkeys",
     "tweak-pubkey",
+    "pubkey-to-xpubkey",
     "addr-to-scriptpubkey",
     "scriptpubkey-to-addr",
     "add",
     "sub",
+    "jacobi-symbol",
+    "tagged-hash",
+    "taproot-tweak-pubkey",
+    "prefix-compact-size",
 #ifdef ENABLE_DANGEROUS
+    "taproot-tweak-seckey",
     "encode-wif",
     "decode-wif",
     "sign",
     "compact-sign",
     "get-pubkey",
+    "get-xpubkey",
     "combine-privkeys",
     "multiply-privkeys",
 #endif // ENABLE_DANGEROUS
@@ -252,16 +283,23 @@ static const char* tfsh[] = {
     "[sighash] [pubkey] [signature] verify the given signature for the given sighash and pubkey (compact)",
     "[pubkey1] [pubkey2] combine the two pubkeys into one pubkey",
     "[value] [pubkey] multiply the pubkey with the given 32 byte value",
+    "[pubkey] convert the given pubkey into an x-only pubkey, as those used in taproot/tapscript",
     "[address] convert a base58 encoded address into its corresponding scriptPubKey",
     "[script]  convert a scriptPubKey into its corresponding base58 encoded address",
     "[value1] [value2] add two values together",
     "[value1] [value2] subtract value2 from value1",
+    "[n] ([k]) calculate the Jacobi symbol for n modulo k, where k defaults to the secp256k1 field size",
+    "[tag] [message] generate the [tag]ged hash of [message]",
+    "[pubkey] [tweak] tweak the pubkey with the tweak",
+    "[value] prefix [value] with its compact size encoded byte length",
 #ifdef ENABLE_DANGEROUS
+    "[privkey] [tweak] tweak the given private key with the tweak",
     "[privkey] encode [privkey] using the Wallet Import Format",
     "[string]  decode [string] into a private key using the Wallet Import Format",
     "[sighash] [privkey] generate a signature for the given message (sighash) using the given private key (der)",
     "[sighash] [privkey] generate a signature for the given message (sighash) using the given private key (compact)",
     "[privkey] get the public key corresponding to the given private key",
+    "[privkey] get the x-only public key corresponding to the given private key",
     "[privkey1] [privkey2] combine the two private keys into one private key",
     "[privkey1] [privkey2] multiply a privkey with another",
 #endif // ENABLE_DANGEROUS
@@ -284,16 +322,23 @@ int _e_verify_sig(Value&& pv) { pv.do_verify_sig(); pv.println(); return 0; }
 int _e_verify_sig_compact(Value&& pv) { pv.do_verify_sig_compact(); pv.println(); return 0; }
 int _e_combine_pubkeys(Value&& pv) { pv.do_combine_pubkeys(); pv.println(); return 0; }
 int _e_tweak_pubkey(Value&& pv) { pv.do_tweak_pubkey(); pv.println(); return 0; }
+int _e_pubkey_to_xpubkey(Value&& pv) { pv.do_pubkey_to_xpubkey(); pv.println(); return 0; }
 int _e_addr_to_spk(Value&& pv) { pv.do_addr_to_spk(); pv.println(); return 0; }
 int _e_spk_to_addr(Value&& pv) { pv.do_spk_to_addr(); pv.println(); return 0; }
 int _e_add(Value&& pv)         { pv.do_add(); pv.println(); return 0; }
 int _e_sub(Value&& pv)         { pv.do_sub(); pv.println(); return 0; }
+int _e_jacobi_sym(Value&& pv)  { pv.do_jacobi_symbol(); pv.println(); return 0; }
+int _e_tagged_hash(Value&& pv) { pv.do_tagged_hash(); pv.println(); return 0; }
+int _e_taproot_tweak_pubkey(Value&& pv) { pv.do_taproot_tweak_pubkey(); pv.println(); return 0; }
+int _e_prefix_compact_size(Value&& pv) { pv.do_prefix_compact_size(); pv.println(); return 0; }
 #ifdef ENABLE_DANGEROUS
+int _e_taproot_tweak_seckey(Value&& pv) { pv.do_taproot_tweak_seckey(); pv.println(); return 0; }
 int _e_encode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_encode_wif(); pv.println(); return 0; }
 int _e_decode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_decode_wif(); pv.println(); return 0; }
 int _e_sign(Value&& pv)          { kerl_set_sensitive(true); pv.do_sign(); pv.println(); return 0; }
 int _e_sign_compact(Value&& pv)  { kerl_set_sensitive(true); pv.do_sign_compact(); pv.println(); return 0; }
 int _e_get_pubkey(Value&& pv)    { kerl_set_sensitive(true); pv.do_get_pubkey(); pv.println(); return 0; }
+int _e_get_xpubkey(Value&& pv)   { kerl_set_sensitive(true); pv.do_get_xpubkey(); pv.println(); return 0; }
 int _e_combine_privkeys(Value&& pv) { kerl_set_sensitive(true); pv.do_combine_privkeys(); pv.println(); return 0; }
 int _e_mul_privkeys(Value&& pv)  { kerl_set_sensitive(true); pv.do_multiply_privkeys(); pv.println(); return 0; }
 #endif // ENABLE_DANGEROUS
@@ -316,16 +361,23 @@ static const btcdeb_tfun tffp[] = {
     _e_verify_sig_compact,
     _e_combine_pubkeys,
     _e_tweak_pubkey,
+    _e_pubkey_to_xpubkey,
     _e_addr_to_spk,
     _e_spk_to_addr,
     _e_add,
     _e_sub,
+    _e_jacobi_sym,
+    _e_tagged_hash,
+    _e_taproot_tweak_pubkey,
+    _e_prefix_compact_size,
 #ifdef ENABLE_DANGEROUS
+    _e_taproot_tweak_seckey,
     _e_encode_wif,
     _e_decode_wif,
     _e_sign,
     _e_sign_compact,
     _e_get_pubkey,
+    _e_get_xpubkey,
     _e_combine_privkeys,
     _e_mul_privkeys,
 #endif // ENABLE_DANGEROUS
@@ -356,9 +408,9 @@ int fn_tf(const char* arg) {
         printf(
             "\nThe inline operators have slightly different names; they are called: echo, hex, int, reverse, sha256"
             ", ripemd160, hash256, hash160, base58chkenc, base58chkdec, bech32enc, bech32dec, verify_sig"
-            ", combine_pubkeys, tweak_pubkey, addr_to_spk, spk_to_addr, add, sub"
+            ", combine_pubkeys, tweak_pubkey, pubkey_to_xpubkey, addr_to_spk, spk_to_addr, add, sub, jacobi, tagged_hash, taproot_tweak_pubkey, prefix_compact_size"
 #ifdef ENABLE_DANGEROUS
-            ", combine_privkeys, multiply_privkeys, nnegate_privkey, encode_wif, decode_wif, sign, get_pubkey"
+            ", taproot_tweak_seckey, combine_privkeys, multiply_privkeys, nnegate_privkey, encode_wif, decode_wif, sign, get_pubkey, get_xpubkey"
 #endif // ENABLE_DANGEROUS
             "\n"
         );
@@ -374,7 +426,13 @@ int fn_tf(const char* arg) {
         puts(tfsh[i]);
         return 0;
     }
-    int rv = tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1), true));
+    int rv;
+    try {
+        rv = tffp[i](Value(Value::parse_args(argc, (const char**)argv, 1), true));
+    } catch (std::exception const& ex) {
+        fprintf(stderr, "exception: %s\n", ex.what());
+        rv = -1;
+    }
     kerl_free_argcv(argc, argv);
     return rv;
 }

@@ -24,7 +24,7 @@ EXTRA_LIBRARIES += \
   $(LIBBITCOIN) \
   $(LIBKERL)
 
-bin_PROGRAMS = btcdeb btcc test-btcdeb
+bin_PROGRAMS = btcdeb btcc test-btcdeb tap
 noinst_PROGRAMS =
 
 # debugger #
@@ -135,6 +135,24 @@ btcdeb_LDADD = \
 	$(LIBBITCOIN) \
 	$(LIBSECP256K1) \
 	$(LIBKERL)
+
+# tap binary #
+tap_SOURCES = \
+  instance.h \
+  instance.cpp \
+  functions.h \
+  functions.cpp \
+  tap.cpp \
+  cliargs.h
+tap_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+tap_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+tap_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_AP_LDFLAGS)
+
+tap_LDADD = \
+  $(LIBBITCOIN_DEB) \
+  $(LIBBITCOIN) \
+  $(LIBSECP256K1) \
+  $(LIBKERL)
 
 # btcc binary #
 btcc_SOURCES = \

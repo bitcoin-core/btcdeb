@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2019 The Bitcoin Core developers
+// Copyright (c) 2009-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -80,7 +80,5 @@ template std::string base_blob<256>::ToString() const;
 template void base_blob<256>::SetHex(const char*);
 template void base_blob<256>::SetHex(const std::string&);
 
-uint256& UINT256_ONE() {
-    static uint256* one = new uint256(uint256S("0000000000000000000000000000000000000000000000000000000000000001"));
-    return *one;
-}
+const uint256 uint256::ZERO(0);
+const uint256 uint256::ONE(1);

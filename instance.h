@@ -15,6 +15,9 @@ typedef std::vector<unsigned char> valtype;
 class Instance {
 public:
     InterpreterEnv* env;
+    TaprootCommitmentEnv* tce;
+    ScriptExecutionData execdata;
+    PrecomputedTransactionData txdata;
     int count;
     ECCVerifyHandle evh;
     CTransactionRef tx;
@@ -42,6 +45,7 @@ public:
 
     Instance()
     : env(nullptr)
+    , tce(nullptr)
     , count(0)
     , txin_index(-1)
     , txin_vout_index(-1)
@@ -79,6 +83,8 @@ public:
     bool rewind();
 
     bool eval(const size_t argc, char* const* argv);
+
+    uint256 calc_sighash();
 };
 
 #endif // included_btcdeb_instance_h_

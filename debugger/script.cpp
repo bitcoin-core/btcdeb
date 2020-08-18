@@ -19,6 +19,7 @@ btc_logf_t btc_logf = btc_logf_stderr;
 btc_logf_t btc_sighash_logf = btc_logf_dummy;
 btc_logf_t btc_sign_logf = btc_logf_dummy;
 btc_logf_t btc_segwit_logf = btc_logf_dummy;
+btc_logf_t btc_taproot_logf = btc_logf_dummy;
 
 opcodetype GetOpCode(const char* name)
 {
@@ -271,6 +272,7 @@ void GetStackFeatures(opcodetype opcode, size_t& spawns, size_t& slays)
     case OP_CHECKSIGVERIFY         : _(0, 2);
     case OP_CHECKMULTISIG          : _(1, 3); // this depends on k-of-n's k and n
     case OP_CHECKMULTISIGVERIFY    : _(0, 3); // -'-
+    case OP_CHECKSIGADD            : _(1, 3);
 
     // expansion
     case OP_NOP1                   : _(0, 0);

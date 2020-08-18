@@ -1,0 +1,136 @@
+### Global defaults
+
+env:
+  PACKAGE_MANAGER_INSTALL: "apt-get update && apt-get install -y"
+  MAKEJOBS: "-j4"
+  DANGER_RUN_CI_ON_HOST: "1"  # Containers will be discarded after the run, so there is no risk that the ci scripts modify the system
+  TEST_RUNNER_PORT_MIN: "14000"  # Must be larger than 12321, which is used for the http cache. See https://cirrus-ci.org/guide/writing-tasks/#http-cache
+  CCACHE_SIZE: "200M"
+  CCACHE_DIR: "/tmp/ccache_dir"
+
+# https://cirrus-ci.org/guide/tips-and-tricks/#sharing-configuration-between-tasks
+base_template: &BASE_TEMPLATE
+  merge_base_script:
+    - if [ "$CIRRUS_PR" = "" ]; then exit 0; fi
+    - bash -c "$PACKAGE_MANAGER_INSTALL git"
+    - git fetch $CIRRUS_REPO_CLONE_URL $CIRRUS_BASE_BRANCH
+    - git config --global user.email "ci@ci.ci"
+    - git config --global user.name "ci"
+    - git merge FETCH_HEAD  # Merge base to detect silent merge conflicts
+  stateful: false  # https://cirrus-ci.org/guide/writing-tasks/#stateful-tasks
+
+global_task_template: &GLOBAL_TASK_TEMPLATE
+  << : *BASE_TEMPLATE
+  timeout_in: 60m  # https://cirrus-ci.org/faq/#instance-timed-out (btcdeb: down from 120m)
+  container:
+    # https://cirrus-ci.org/faq/#are-there-any-limits
+    # Each project has 16 CPU in total, assign 2 to each container, so that 8 tasks run in parallel
+    cpu: 2
+    memory: 8G  # Set to 8GB to avoid OOM. https://cirrus-ci.org/guide/linux/#linux-containers
+    kvm: true  # Use kvm to avoid spurious CI failures in the default virtualization cluster, see https://github.com/bitcoin/bitcoin/issues/20093
+  ccache_cache:
+    folder: "/tmp/ccache_dir"
+  depends_built_cache:
+    folder: "/tmp/cirrus-ci-build/depends/built"
+  depends_sdk_cache:
+    folder: "/tmp/cirrus-ci-build/depends/sdk-sources"
+  depends_releases_cache:
+    folder: "/tmp/cirrus-ci-build/releases"
+  ci_script:
+    - ./ci/test_run_all.sh
+
+compute_credits_template: &CREDITS_TEMPLATE
+  # https://cirrus-ci.org/pricing/#compute-credits
+  # Only use credits for pull requests to the main repo
+  use_compute_credits: $CIRRUS_REPO_FULL_NAME == 'bitcoin-core/btcdeb' && $CIRRUS_PR != ""
+
+# task:
+#   name: 'ARM [buster]'
+#   << : *GLOBAL_TASK_TEMPLATE
+#   container:
+#     image: debian:buster
+#   env:
+#     matrix:
+#       - ENABLE_DANGEROUS: 1
+#       - ENABLE_DANGEROUS: ""
+#     FILE_ENV: "./ci/test/00_setup_env_arm.sh"
+# TODO: ARM is giving "/tmp/cirrus-ci-build/ci/scratch/out/arm-linux-gnueabihf/bin/test-btcdeb_orig: Invalid ELF image for this architecture"
+
+# task:
+#   name: 'Win64 [bionic]'
+#   << : *GLOBAL_TASK_TEMPLATE
+#   container:
+#     image: ubuntu:bionic
+#   env:
+#     matrix:
+#       - ENABLE_DANGEROUS: 1
+#       - ENABLE_DANGEROUS: ""
+#     FILE_ENV: "./ci/test/00_setup_env_win64.sh"
+# TODO: win64 requires an installer?
+
+task:
+  name: '32-bit + dash [CentOS 8]'
+  << : *GLOBAL_TASK_TEMPLATE
+  container:
+    image: centos:8
+  env:
+    matrix:
+      - ENABLE_DANGEROUS: 1
+      - ENABLE_DANGEROUS: ""
+    PACKAGE_MANAGER_INSTALL: "yum install -y"
+    FILE_ENV: "./ci/test/00_setup_env_i686_centos.sh"
+
+task:
+  name: '[sanitizers: thread (TSan)] [focal]'
+  << : *GLOBAL_TASK_TEMPLATE
+  container:
+    image: ubuntu:focal
+    cpu: 4  # Double CPU and increase Memory to avoid timeout
+    memory: 24G
+  env:
+    matrix:
+      - ENABLE_DANGEROUS: 1
+      - ENABLE_DANGEROUS: ""
+    MAKEJOBS: "-j8"
+    FILE_ENV: "./ci/test/00_setup_env_native_tsan.sh"
+
+task:
+  name: '[no sanitizers: address/leak (ASan + LSan) + undefined (UBSan) + integer] [focal]'
+  << : *GLOBAL_TASK_TEMPLATE
+  container:
+    image: ubuntu:focal
+  env:
+    matrix:
+      - ENABLE_DANGEROUS: 1
+      - ENABLE_DANGEROUS: ""
+    FILE_ENV: "./ci/test/00_setup_env_native_asan.sh"
+
+# task:
+#   name: 'macOS 10.14 [no tests] [bionic]'
+#   << : *GLOBAL_TASK_TEMPLATE
+#   container:
+#     image: ubuntu:bionic
+#   env:
+#     matrix:
+#       - ENABLE_DANGEROUS: 1
+#       - ENABLE_DANGEROUS: ""
+#     FILE_ENV: "./ci/test/00_setup_env_mac.sh"
+# TODO: requires deploy script
+
+# task:
+#   name: 'macOS 10.15 native [no dangerous]'
+#   macos_brew_addon_script:
+#     - brew install boost ccache libtool automake pkg-config gnu-getopt
+#   << : *GLOBAL_TASK_TEMPLATE
+#   osx_instance:
+#     # Use latest image, but hardcode version to avoid silent upgrades (and breaks)
+#     image: catalina-xcode-12.1  # https://cirrus-ci.org/guide/macOS
+#   env:
+#     matrix:
+#       - ENABLE_DANGEROUS: 1
+#       - ENABLE_DANGEROUS: ""
+#     DANGER_RUN_CI_ON_HOST: "true"
+#     CI_USE_APT_INSTALL: "no"
+#     PACKAGE_MANAGER_INSTALL: "echo"  # Nothing to do
+#     FILE_ENV: "./ci/test/00_setup_env_mac_host.sh"
+# TODO: requires deploy script
