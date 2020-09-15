@@ -8,7 +8,7 @@ define(_CLIENT_VERSION_IS_RELEASE, false)
 define(_COPYRIGHT_YEAR, 2020)
 define(_COPYRIGHT_HOLDERS,[The %s developers])
 define(_COPYRIGHT_HOLDERS_SUBSTITUTION,[[Bitcoin Core]])
-AC_INIT([Bitcoin Debugger],[_CLIENT_VERSION_MAJOR._CLIENT_VERSION_MINOR._CLIENT_VERSION_REVISION],[https://github.com/kallewoof/btcdeb/issues],[btcdeb],[https://twitter.com/kallewoof])
+AC_INIT([Bitcoin Debugger],[_CLIENT_VERSION_MAJOR._CLIENT_VERSION_MINOR._CLIENT_VERSION_REVISION],[https://github.com/bitcoin-core/btcdeb/issues],[btcdeb],[https://twitter.com/kallewoof])
 AC_CONFIG_SRCDIR([btcdeb.cpp])
 AC_CONFIG_HEADERS([config/bitcoin-config.h])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -496,7 +496,7 @@ echo "  dangerous     = $enable_dangerous"
 if test x$enable_dangerous != xno; then
   echo "    *NOTE:* If someone gave you a modified version of this code, and you passed in a private key"
   echo "            with bitcoin in it, they could easily send that key to themselves and steal from you."
-  echo "            Make sure you got this from https://github.com/kallewoof/btcdeb or from some other"
+  echo "            Make sure you got this from https://github.com/bitcoin-core/btcdeb or from some other"
   echo "            source that you trust. You should preferably also verify the source code."
 fi
 echo "  target os     = $TARGET_OS"

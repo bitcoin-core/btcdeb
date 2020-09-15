@@ -14,7 +14,7 @@ Multiple mock values can be written using comma separation (`sig1:pub1,sig2:pub2
 
 ### A real world example
 
-An [issue](https://github.com/kallewoof/btcdeb/issues/30) was posted that serves as a good example so we will take that. As you can see, the user had to provide the transaction details. We can instead use mock values to "pretend" that the provided signature check succeeds (which it does, in reality; btcdeb just can't verify it on its own).
+An [issue](https://github.com/bitcoin-core/btcdeb/issues/30) was posted that serves as a good example so we will take that. As you can see, the user had to provide the transaction details. We can instead use mock values to "pretend" that the provided signature check succeeds (which it does, in reality; btcdeb just can't verify it on its own).
 
 The signature and pubkey are the two values before the `OP_DUP`. We get:
 

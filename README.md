@@ -4,7 +4,7 @@ Bitcoin Script debugging utilities.
 
 This is a set of tools used to debug or construct scripts for use in Bitcoin.
 
-[![Build Status](https://travis-ci.org/kallewoof/btcdeb.svg?branch=master)](https://travis-ci.org/kallewoof/btcdeb)
+[![Build Status](https://travis-ci.org/bitcoin-core/btcdeb.svg?branch=master)](https://travis-ci.org/bitcoin-core/btcdeb)
 
 ## Preparation
 
