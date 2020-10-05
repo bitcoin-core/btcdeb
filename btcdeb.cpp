@@ -15,6 +15,7 @@
 bool quiet = false;
 bool pipe_in = false;  // xxx | btcdeb
 bool pipe_out = false; // btcdeb xxx > file
+bool verbose = false;
 
 struct script_verify_flag {
     std::string str;
@@ -86,6 +87,18 @@ static unsigned int svf_parse_flags(unsigned int in_flags, const char* mod) {
     return in_flags;
 }
 
+void setup_debug_set(const std::string& debug_params, std::set<std::string>& debug_set)
+{
+    if (debug_set.empty() && !debug_params.empty()) delimiter_set(debug_params, debug_set);
+}
+
+bool get_debug_flag(const std::string& name, const std::set<std::string>& debug_set)
+{
+    // variant 1: debug parameter, lowercase, without prefix, contained in debug_set
+    // variant 2: environment var, all caps, prefixed with 'DEBUG_'
+    return debug_set.count(name) || std::getenv(("DEBUG_" + ToUpper(name)).c_str());
+}
+
 int main(int argc, char* const* argv)
 {
     pipe_in = !isatty(fileno(stdin)) || std::getenv("DEBUG_SET_PIPE_IN");
@@ -101,13 +114,21 @@ int main(int argc, char* const* argv)
     ca.add_option("select", 's', req_arg);
     ca.add_option("pretend-valid", 'P', req_arg);
     ca.add_option("default-flags", 'd', no_arg);
-    ca.add_option("version", 'v', no_arg);
+    ca.add_option("version", 'V', no_arg);
     ca.add_option("dataset", 'X', opt_arg);
+    ca.add_option("verbose", 'v', no_arg);
+    ca.add_option("debug", 'D', req_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q') || pipe_in || pipe_out;
 
+    btcdeb_verbose = verbose = ca.m.count('v');
+    if (quiet && verbose) {
+        fprintf(stderr, "You cannot both require silence and verbosity.\n");
+        exit(1);
+    }
+
     if (ca.m.count('h')) {
-        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--dataset=<name>|-X<name>] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [--pretend-valid=<sig>:<pubkey>[,<sig2>:<pubkey2>[,...]]|-P<sig>:<pubkey>[,...]] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
+        fprintf(stderr, "Syntax: %s [-V|--version] [-v|--verbose] [-q|--quiet] [--debug=[sighash|signing|segwit[,...]]|-D[sighash|...]]] [--dataset=<name>|-X<name>] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [--pretend-valid=<sig>:<pubkey>[,<sig2>:<pubkey2>[,...]]|-P<sig>:<pubkey>[,...]] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
         fprintf(stderr, "If executed with no arguments, an empty script and empty stack is provided\n");
         fprintf(stderr, "If executed with a --dataset, the --txin and --tx values are prepopulated with values from the given dataset; though this may be overridden using subsequent --tx/--txin= statements. To see available datasets, type %s --dataset or %s -X\n", argv[0], argv[0]);
         fprintf(stderr, "To debug transaction signatures, you need to either provide the transaction hex (the WHOLE hex, not just the txid) "
@@ -117,12 +138,13 @@ int main(int argc, char* const* argv)
         fprintf(stderr, "By providing a txin as well as a tx and no script or stack, btcdeb will attempt to set up a debug session for the verification of the given input by pulling the appropriate values out of the respective transactions. you do not need amounts for --tx in this case\n");
         fprintf(stderr, "You can modify verification flags using the --modify-flags command. separate flags using comma (,). prefix with + to enable, - to disable. e.g. --modify-flags=\"-NULLDUMMY,-MINIMALIF\"\n");
         fprintf(stderr, "You can set the environment variables DEBUG_SIGHASH, DEBUG_SIGNING, and DEBUG_SEGWIT to increase verbosity for the respective areas.\n");
-        printf("The standard (enabled by default) flags can be reviewed by typing %s --default-flags or %s -d", argv[0], argv[0]);
+        fprintf(stderr, "The standard (enabled by default) flags can be reviewed by typing %s --default-flags or %s -d", argv[0], argv[0]);
+        fprintf(stderr, "The --verbose flag will turn btcdeb into a helpful hintful chatter-box in various situations.\n");
         return 0;
     } else if (ca.m.count('d')) {
         printf("The standard (enabled by default) flags are:\n・ %s\n", svf_string(STANDARD_SCRIPT_VERIFY_FLAGS, "\n・ ").c_str());
         return 0;
-    } else if (ca.m.count('v')) {
+    } else if (ca.m.count('V')) {
         printf("btcdeb (\"The Bitcoin Script Debugger\") version %d.%d.%d\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION);
         return 0;
     } else if (ca.m.count('X')) {
@@ -137,32 +159,35 @@ int main(int argc, char* const* argv)
                 // populate --tx from dataset
                 std::string data = string_from_file(std::string("doc/txs/") + dataset + "-tx");
                 ca.m['x'] = data;
-                btc_logf("loaded spending transaction from dataset %s\n", dataset.c_str());
+                if (verbose) printf("loaded spending (output) transaction from dataset %s\n", dataset.c_str());
             }
             if (!ca.m.count('i')) {
                 // populate --txin from dataset
                 std::string data = string_from_file(std::string("doc/txs/") + dataset + "-in");
                 ca.m['i'] = data;
-                btc_logf("loaded spending transaction from dataset %s\n", dataset.c_str());
+                if (verbose) printf("loaded funding (input) transaction from dataset %s\n", dataset.c_str());
             }
         } catch (const std::runtime_error& err) {
             fprintf(stderr, "error loading from dataset \"%s\": %s\n", dataset.c_str(), err.what());
             return 1;
         }
     } else if (!quiet) {
-        btc_logf("btcdeb %d.%d.%d -- type `%s -h` for start up options\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, argv[0]);
+        printf("btcdeb %d.%d.%d -- type `%s -h` for start up options\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, argv[0]);
     }
 
     if (!pipe_in) {
-        if (std::getenv("DEBUG_SIGHASH")) btc_sighash_logf = btc_logf_stderr;
-        if (std::getenv("DEBUG_SIGNING")) btc_sign_logf = btc_logf_stderr;
-        if (std::getenv("DEBUG_SEGWIT"))  btc_segwit_logf = btc_logf_stderr;
+        std::set<std::string> debug_set;
+        setup_debug_set(ca.m['D'], debug_set);
+        if (get_debug_flag("sighash", debug_set)) btc_sighash_logf = btc_logf_stderr;
+        if (get_debug_flag("signing", debug_set)) btc_sign_logf = btc_logf_stderr;
+        if (get_debug_flag("segwit", debug_set)) btc_segwit_logf = btc_logf_stderr;
+        btc_logf("notice: btcdeb has gotten quieter; use --verbose if necessary (this message is temporary)\n");
     }
 
     unsigned int flags = STANDARD_SCRIPT_VERIFY_FLAGS;
     if (ca.m.count('f')) {
         flags = svf_parse_flags(flags, ca.m['f'].c_str());
-        if (!quiet) fprintf(stderr, "resulting flags:\n・ %s\n", svf_string(flags, "\n・ ").c_str());
+        if (verbose) fprintf(stderr, "resulting flags:\n・ %s\n", svf_string(flags, "\n・ ").c_str());
     }
 
     int selected = -1;
@@ -181,13 +206,13 @@ int main(int argc, char* const* argv)
         if (!instance.parse_transaction(ca.m['x'].c_str(), true)) {
             return 1;
         }
-        if (!quiet) fprintf(stderr, "got %stransaction %s:\n%s\n", instance.sigver == SigVersion::WITNESS_V0 ? "segwit " : "", instance.tx->GetHash().ToString().c_str(), instance.tx->ToString().c_str());
+        if (verbose) fprintf(stderr, "got %stransaction %s:\n%s\n", instance.sigver == SigVersion::WITNESS_V0 ? "segwit " : "", instance.tx->GetHash().ToString().c_str(), instance.tx->ToString().c_str());
     }
     if (ca.m.count('i')) {
         if (!instance.parse_input_transaction(ca.m['i'].c_str(), selected)) {
             return 1;
         }
-        if (!quiet) fprintf(stderr, "got input tx #%" PRId64 " %s:\n%s\n", instance.txin_index, instance.txin->GetHash().ToString().c_str(), instance.txin->ToString().c_str());
+        if (verbose) fprintf(stderr, "got input tx #%" PRId64 " %s:\n%s\n", instance.txin_index, instance.txin->GetHash().ToString().c_str(), instance.txin->ToString().c_str());
     }
     char* script_str = nullptr;
     if (pipe_in) {
@@ -212,7 +237,7 @@ int main(int argc, char* const* argv)
     CScript script;
     if (script_str) {
         if (instance.parse_script(script_str)) {
-            if (!quiet) btc_logf("valid script\n");
+            if (verbose) btc_logf("valid script\n");
         } else {
             fprintf(stderr, "invalid script\n");
             return 1;
@@ -287,6 +312,14 @@ int main(int argc, char* const* argv)
             }
             script_lines[i++] = strdup(buf);
         }
+    }
+
+    if (instance.has_preamble) {
+        if (verbose) btc_logf(
+            "*** note: there is a for-clarity preamble\n\n"
+            
+            "This is a virtual script that btcdeb generates and presents to you so you can step through the validation process one step at a time. The input is simply the redeem script hash, whereas btcdeb presents it as a OP_DUP, OP_HASH160, <that hash>, OP_EQUALVERIFY script.\n"
+        ); else if (!quiet) btc_logf("note: there is a for-clarity preamble (use --verbose for details)\n");
     }
 
     if (pipe_in || pipe_out) {

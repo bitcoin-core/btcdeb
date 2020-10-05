@@ -38,6 +38,7 @@ public:
      */
     std::map<valtype,valtype> pretend_valid_map;
     std::set<valtype> pretend_valid_pubkeys;
+    bool has_preamble;
 
     Instance()
     : env(nullptr)
@@ -46,6 +47,7 @@ public:
     , txin_vout_index(-1)
     , sigver(SigVersion::BASE)
     , checker(nullptr)
+    , has_preamble(false)
     {}
 
     ~Instance() {

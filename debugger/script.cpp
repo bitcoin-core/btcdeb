@@ -7,6 +7,7 @@
 #include <util/strencodings.h>
 #include <cstdarg>
 
+bool btcdeb_verbose{false};
 void btc_logf_dummy(const char* fmt...) {}
 void btc_logf_stderr(const char* fmt...) {
     va_list args;
