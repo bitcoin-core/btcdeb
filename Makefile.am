@@ -155,6 +155,7 @@ test_btcdeb_SOURCES = \
 	test/catch.hpp \
 	test/signing.cpp \
 	test/test-btcdeb.cpp \
+	test/utils.cpp \
 	test/value.cpp
 test_btcdeb_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 test_btcdeb_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)

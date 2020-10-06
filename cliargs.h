@@ -1,3 +1,10 @@
+// Copyright (c) 2017-2020 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#ifndef BITCOIN_CLIARGS_H
+#define BITCOIN_CLIARGS_H
+
 #include <map>
 #include <vector>
 
@@ -66,3 +73,25 @@ struct cliargs {
         }
     }
 };
+
+std::string string_from_file(const std::string& path) {
+    FILE* fp = fopen(path.c_str(), "r");
+    if (!fp) throw std::runtime_error("unable to open path " + path);
+    char* buf = (char*)malloc(128);
+    size_t cap = 128;
+    size_t idx = 0;
+    long count;
+    while (0 < (count = fread(&buf[idx], 1, cap - idx, fp))) {
+        idx += count;
+        if (idx < cap) break;
+        cap <<= 1;
+        buf = (char*)realloc(buf, cap);
+    }
+    buf[idx] = 0;
+    std::string r = buf;
+    free(buf);
+    fclose(fp);
+    return r;
+}
+
+#endif // BITCOIN_CLIARGS_H
