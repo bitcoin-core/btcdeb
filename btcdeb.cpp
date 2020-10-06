@@ -102,12 +102,14 @@ int main(int argc, char* const* argv)
     ca.add_option("pretend-valid", 'P', req_arg);
     ca.add_option("default-flags", 'd', no_arg);
     ca.add_option("version", 'v', no_arg);
+    ca.add_option("dataset", 'X', opt_arg);
     ca.parse(argc, argv);
     quiet = ca.m.count('q') || pipe_in || pipe_out;
 
     if (ca.m.count('h')) {
-        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [--pretend-valid=<sig>:<pubkey>[,<sig2>:<pubkey2>[,...]]|-P<sig>:<pubkey>[,...]] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
+        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--dataset=<name>|-X<name>] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [--pretend-valid=<sig>:<pubkey>[,<sig2>:<pubkey2>[,...]]|-P<sig>:<pubkey>[,...]] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
         fprintf(stderr, "If executed with no arguments, an empty script and empty stack is provided\n");
+        fprintf(stderr, "If executed with a --dataset, the --txin and --tx values are prepopulated with values from the given dataset; though this may be overridden using subsequent --tx/--txin= statements. To see available datasets, type %s --dataset or %s -X\n", argv[0], argv[0]);
         fprintf(stderr, "To debug transaction signatures, you need to either provide the transaction hex (the WHOLE hex, not just the txid) "
             "as well as (SegWit only) every amount for the inputs, or provide (one or more) signature:pubkey pairs using --pretend-valid\n");
         fprintf(stderr, "E.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
@@ -123,6 +125,30 @@ int main(int argc, char* const* argv)
     } else if (ca.m.count('v')) {
         printf("btcdeb (\"The Bitcoin Script Debugger\") version %d.%d.%d\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION);
         return 0;
+    } else if (ca.m.count('X')) {
+        std::string dataset = ca.m['X'];
+        if (dataset == "1") {
+            printf("Available datasets:\n");
+            printf("  p2sh-p2wpkh   A non-native Segwit pubkey-hash spend from Aug 24, 2017\n");
+            return 0;
+        }
+        try {
+            if (!ca.m.count('x')) {
+                // populate --tx from dataset
+                std::string data = string_from_file(std::string("doc/txs/") + dataset + "-tx");
+                ca.m['x'] = data;
+                btc_logf("loaded spending transaction from dataset %s\n", dataset.c_str());
+            }
+            if (!ca.m.count('i')) {
+                // populate --txin from dataset
+                std::string data = string_from_file(std::string("doc/txs/") + dataset + "-in");
+                ca.m['i'] = data;
+                btc_logf("loaded spending transaction from dataset %s\n", dataset.c_str());
+            }
+        } catch (const std::runtime_error& err) {
+            fprintf(stderr, "error loading from dataset \"%s\": %s\n", dataset.c_str(), err.what());
+            return 1;
+        }
     } else if (!quiet) {
         btc_logf("btcdeb %d.%d.%d -- type `%s -h` for start up options\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, argv[0]);
     }
