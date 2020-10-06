@@ -317,7 +317,7 @@ int main(int argc, char* const* argv)
     if (instance.has_preamble) {
         if (verbose) btc_logf(
             "*** note: there is a for-clarity preamble\n\n"
-            
+
             "This is a virtual script that btcdeb generates and presents to you so you can step through the validation process one step at a time. The input is simply the redeem script hash, whereas btcdeb presents it as a OP_DUP, OP_HASH160, <that hash>, OP_EQUALVERIFY script.\n"
         ); else if (!quiet) btc_logf("note: there is a for-clarity preamble (use --verbose for details)\n");
     }
