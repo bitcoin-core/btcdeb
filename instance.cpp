@@ -454,6 +454,8 @@ bool Instance::configure_tx_txin() {
         size_t wstack_to_stack = wstack.size();
         if (!wsh) {
             validation = CScript() << OP_DUP << OP_HASH160 << program << OP_EQUALVERIFY << OP_CHECKSIG;
+            // this is the preamble; it is btcdeb pretending that a script exists which doesn't
+            has_preamble = true;
         } else {
             wstack_to_stack--; // do not include the script on the stack
             validation = CScript(wstack.back().begin(), wstack.back().end());

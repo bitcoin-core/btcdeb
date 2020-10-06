@@ -7,7 +7,9 @@
 
 #include <map>
 #include <vector>
+#include <set>
 
+#include <cstring>
 #include <getopt.h>
 
 #include <tinyformat.h>
@@ -92,6 +94,22 @@ std::string string_from_file(const std::string& path) {
     free(buf);
     fclose(fp);
     return r;
+}
+
+/**
+ * Parse a comma and/or space separated list of inputs into an existing set.
+ */
+inline void delimiter_set(const std::string& input, std::set<std::string>& output)
+{
+    size_t len = input.size();
+    std::string s;
+    for (size_t j = 0; j <= len; ++j) {
+        if (j == len || input[j] == ',' || input[j] == ' ') {
+            if (s.empty()) continue;
+            output.insert(s);
+            s.clear();
+        } else s += tolower(input[j]);
+    }
 }
 
 #endif // BITCOIN_CLIARGS_H
