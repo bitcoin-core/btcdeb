@@ -1,6 +1,6 @@
 #include <test/catch.hpp>
 
-#include <cliargs.h>
+#include <datasets.h>
 
 TEST_CASE("Loading strings from files", "[load-strings]") {
     SECTION("Loading from p2sh-p2wpkh") {

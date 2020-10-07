@@ -8,6 +8,8 @@
 
 #include <cliargs.h>
 
+#include <datasets.h>
+
 #include <functions.h>
 
 #include <config/bitcoin-config.h>
@@ -150,43 +152,7 @@ int main(int argc, char* const* argv)
         printf("btcdeb (\"The Bitcoin Script Debugger\") " VERSION() "\n");
         return 0;
     } else if (ca.m.count('X')) {
-        std::string dataset = ca.m['X'];
-        if (dataset == "1") {
-            printf("Available datasets:\n");
-            printf("  p2pkh         A legacy pay-to-pubkey-hash spend from Oct 7, 2020\n");
-            if (verbose) printf(
-                   "                funding txid  = cdc44e86eececa6d726cc93cea4e176fe6191b695444467a3b2bcdfbe64aac02\n"
-                   "                spending txid = ad7941ba6a7f8f395638233a3dd20a2779c66da516c5b9c9ff4f3d65f2057e3c\n"
-            );
-            printf("  p2sh-p2wpkh   A non-native Segwit pubkey-hash spend from Aug 24, 2017\n");
-            if (verbose) printf(
-                   "                funding txid  = 42f7d0545ef45bd3b9cfee6b170cf6314a3bd8b3f09b610eeb436d92993ad440\n"
-                   "                spending txid = c586389e5e4b3acb9d6c8be1c19ae8ab2795397633176f5a6442a261bbdefc3a\n"
-            );
-            printf("  p2sh-multisig-2-of-2  A 2-of-2 legacy multisig spend from Oct 6, 2020\n");
-            if (verbose) printf(
-                   "                funding txid  = c55c9e0afa43f06e6e9c9277c7fe9768acf3b7b85d61b35770fc38f5f612f76d\n"
-                   "                spending txid = 245ddb8e1bf5784ceb9d981ffbaae02fb8a73c552dfe23bce50b613b3acbdd62\n"
-            );
-            return 0;
-        }
-        try {
-            if (!ca.m.count('x')) {
-                // populate --tx from dataset
-                std::string data = string_from_file(std::string("doc/txs/") + dataset + "-tx");
-                ca.m['x'] = data;
-                if (verbose) printf("loaded spending (output) transaction from dataset %s\n", dataset.c_str());
-            }
-            if (!ca.m.count('i')) {
-                // populate --txin from dataset
-                std::string data = string_from_file(std::string("doc/txs/") + dataset + "-in");
-                ca.m['i'] = data;
-                if (verbose) printf("loaded funding (input) transaction from dataset %s\n", dataset.c_str());
-            }
-        } catch (const std::runtime_error& err) {
-            fprintf(stderr, "error loading from dataset \"%s\": %s\n", dataset.c_str(), err.what());
-            return 1;
-        }
+        process_datasets(ca.m, verbose);
     } else if (!quiet) {
         printf("btcdeb " VERSION() " -- type `%s -h` for start up options\n", argv[0]);
     }
