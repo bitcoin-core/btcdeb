@@ -72,7 +72,8 @@ BITCOIN_CORE_H = \
 	util/spanparsing.h \
 	util/strencodings.h \
 	util/vector.h \
-	value.h
+	value.h \
+	version.h
 
 # debugger #
 
