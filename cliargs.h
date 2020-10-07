@@ -76,26 +76,6 @@ struct cliargs {
     }
 };
 
-std::string string_from_file(const std::string& path) {
-    FILE* fp = fopen(path.c_str(), "r");
-    if (!fp) throw std::runtime_error("unable to open path " + path);
-    char* buf = (char*)malloc(128);
-    size_t cap = 128;
-    size_t idx = 0;
-    long count;
-    while (0 < (count = fread(&buf[idx], 1, cap - idx, fp))) {
-        idx += count;
-        if (idx < cap) break;
-        cap <<= 1;
-        buf = (char*)realloc(buf, cap);
-    }
-    buf[idx] = 0;
-    std::string r = buf;
-    free(buf);
-    fclose(fp);
-    return r;
-}
-
 /**
  * Parse a comma and/or space separated list of inputs into an existing set.
  */
