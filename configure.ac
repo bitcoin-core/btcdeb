@@ -60,8 +60,6 @@ case $host in
 esac
 dnl Require C++11 compiler (no GNU extensions)
 AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory], [nodefault])
-dnl Check if -latomic is required for <std::atomic>
-CHECK_ATOMIC
 
 dnl Unless the user specified OBJCXX, force it to be the same as CXX. This ensures
 dnl that we get the same -std flags for both.
@@ -153,8 +151,7 @@ case $host in
        AC_MSG_ERROR("windres not found")
      fi
 
-     CPPFLAGS="$CPPFLAGS -D_MT -DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB"
-     LEVELDB_TARGET_FLAGS="-DOS_WINDOWS"
+     CPPFLAGS="$CPPFLAGS -D_MT -DWIN32 -D_WINDOWS"
      if test "x$CXXFLAGS_overridden" = "xno"; then
        CXXFLAGS="$CXXFLAGS -w"
      fi
@@ -176,7 +173,6 @@ case $host in
      ;;
   *darwin*)
      TARGET_OS=darwin
-     LEVELDB_TARGET_FLAGS="-DOS_MACOSX"
      if  test x$cross_compiling != xyes; then
        BUILD_OS=darwin
        AC_CHECK_PROG([PORT],port, port)
@@ -190,7 +186,6 @@ case $host in
          fi
        fi
 
-       AC_PATH_PROGS([RSVG_CONVERT], [rsvg-convert rsvg],rsvg-convert)
        AC_CHECK_PROG([BREW],brew, brew)
        if test x$BREW = xbrew; then
          dnl These Homebrew packages may be keg-only, meaning that they won't be found
@@ -226,18 +221,12 @@ case $host in
      ;;
    *linux*)
      TARGET_OS=linux
-     LEVELDB_TARGET_FLAGS="-DOS_LINUX"
      ;;
    *freebsd*)
-     LEVELDB_TARGET_FLAGS="-DOS_FREEBSD"
      ;;
    *openbsd*)
-     LEVELDB_TARGET_FLAGS="-DOS_OPENBSD"
      ;;
    *)
-     OTHER_OS=`echo ${host_os} | awk '{print toupper($0)}'`
-     AC_MSG_WARN([Guessing LevelDB OS as OS_${OTHER_OS}, please check whether this is correct, if not add an entry to configure.ac.])
-     LEVELDB_TARGET_FLAGS="-DOS_${OTHER_OS}"
      ;;
 esac
 
@@ -253,9 +242,6 @@ fi
 
 dnl Check for endianness
 AC_C_BIGENDIAN
-
-dnl Check for pthread compile/link requirements
-AX_PTHREAD
 
 dnl Check for readline
 AX_LIB_READLINE
@@ -333,50 +319,6 @@ AC_LINK_IFELSE([AC_LANG_SOURCE([
   ]
 )
 
-if test "x$use_thread_local" = xyes || { test "x$use_thread_local" = xauto && test "x$use_glibc_compat" = xno; }; then
-  TEMP_LDFLAGS="$LDFLAGS"
-  LDFLAGS="$TEMP_LDFLAGS $PTHREAD_CFLAGS"
-  AC_MSG_CHECKING([for thread_local support])
-  AC_LINK_IFELSE([AC_LANG_SOURCE([
-    #include <thread>
-    static thread_local int foo = 0;
-    static void run_thread() { foo++;}
-    int main(){
-    for(int i = 0; i < 10; i++) { std::thread(run_thread).detach();}
-    return foo;
-    }
-    ])],
-    [
-     case $host in
-       *mingw*)
-          dnl mingw32's implementation of thread_local has also been shown to behave
-          dnl erroneously under concurrent usage; see:
-          dnl https://gist.github.com/jamesob/fe9a872051a88b2025b1aa37bfa98605
-          AC_MSG_RESULT(no)
-          ;;
-        *darwin*)
-          dnl TODO enable thread_local on later versions of Darwin where it is
-          dnl supported (per https://stackoverflow.com/a/29929949)
-          AC_MSG_RESULT(no)
-          ;;
-        *freebsd*)
-          dnl FreeBSD's implementation of thread_local is also buggy (per
-          dnl https://groups.google.com/d/msg/bsdmailinglist/22ncTZAbDp4/Dii_pII5AwAJ)
-          AC_MSG_RESULT(no)
-          ;;
-        *)
-          AC_DEFINE(HAVE_THREAD_LOCAL,1,[Define if thread_local is supported.])
-          AC_MSG_RESULT(yes)
-          ;;
-      esac
-    ],
-    [
-      AC_MSG_RESULT(no)
-    ]
-  )
-  LDFLAGS="$TEMP_LDFLAGS"
-fi
-
 # Check for different ways of gathering OS randomness
 AC_MSG_CHECKING(for Linux getrandom syscall)
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <unistd.h>
@@ -431,7 +373,6 @@ fi
 AM_CONDITIONAL([TARGET_DARWIN], [test x$TARGET_OS = xdarwin])
 AM_CONDITIONAL([BUILD_DARWIN], [test x$BUILD_OS = xdarwin])
 AM_CONDITIONAL([TARGET_WINDOWS], [test x$TARGET_OS = xwindows])
-AM_CONDITIONAL([ENABLE_WALLET],[test x$enable_wallet = xyes])
 AM_CONDITIONAL([GLIBC_BACK_COMPAT],[test x$use_glibc_compat = xyes])
 AM_CONDITIONAL([ENABLE_DANGEROUS], [test x$enable_dangerous != xno])
 
@@ -507,6 +448,6 @@ echo "  CFLAGS        = $CFLAGS"
 echo "  CPPFLAGS      = $CPPFLAGS"
 echo "  CXX           = $CXX"
 echo "  CXXFLAGS      = $CXXFLAGS"
-echo "  LDFLAGS       = $PTHREAD_CFLAGS $LDFLAGS"
+echo "  LDFLAGS       = $LDFLAGS"
 echo "  ARFLAGS       = $ARFLAGS"
 echo 
