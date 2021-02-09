@@ -130,7 +130,7 @@ int main(int argc, char* const* argv)
         printf("tap (\"The Bitcoin Debugger Taproot Utility\") version %d.%d.%d\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION);
         return 0;
     } else if (ca.m.count('h') || ca.l.size() < 3) {
-        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--addrprefix=sb|-psb] [--tx=<hex>|-x<hex>] [--txin=<hex>|-i<hex>] [--privkey=<key>|-k<key>] [--sig=<hex>|-s<hex>] <internal_pubkey> <script_count> <script1> <script2> ... [<spend index or sig> [<spend arg1> [<spend arg2> [...]]]]\n", argv[0]);
+        fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--addrprefix=tb|-ptb] [--tx=<hex>|-x<hex>] [--txin=<hex>|-i<hex>] [--privkey=<key>|-k<key>] [--sig=<hex>|-s<hex>] <internal_pubkey> <script_count> <script1> <script2> ... [<spend index or sig> [<spend arg1> [<spend arg2> [...]]]]\n", argv[0]);
         fprintf(stderr, "If spend index and args are omitted, and no transaction data is provided, this generates a tweaked pubkey for funding.\n");
         fprintf(stderr, "If spend index and args are omitted, but transaction data is provided, this generates witness data for a Taproot spend and inserts this into the spending transaction.\n");
         fprintf(stderr, "If spend index and args are included, this generates the spending witness based on the given input.\n");
