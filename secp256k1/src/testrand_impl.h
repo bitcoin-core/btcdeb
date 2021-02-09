@@ -13,7 +13,7 @@
 #include "testrand.h"
 #include "hash.h"
 
-static secp256k1_rfc6979_hmac_sha256_t secp256k1_test_rng;
+static secp256k1_rfc6979_hmac_sha256 secp256k1_test_rng;
 static uint32_t secp256k1_test_rng_precomputed[8];
 static int secp256k1_test_rng_precomputed_used = 8;
 static uint64_t secp256k1_test_rng_integer;
@@ -105,6 +105,10 @@ static void secp256k1_rand_bytes_test(unsigned char *bytes, size_t len) {
 
 static void secp256k1_rand256_test(unsigned char *b32) {
     secp256k1_rand_bytes_test(b32, 32);
+}
+
+static void secp256k1_rand_flip(unsigned char *b, size_t len) {
+    b[secp256k1_rand_int(len)] ^= (1 << secp256k1_rand_int(8));
 }
 
 #endif /* SECP256K1_TESTRAND_IMPL_H */

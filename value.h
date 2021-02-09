@@ -15,6 +15,9 @@
 static bool VALUE_WARN = true;
 static bool VALUE_EXTENDED = false; // 0bNNNN, etc
 
+extern std::string bech32_hrp;
+extern uint8_t bech32_witness_version;
+
 template<typename T1, typename T2>
 inline void insert(T1& a, T2&& b) {
     a.insert(a.end(), b.begin(), b.end());
@@ -35,9 +38,23 @@ struct Value {
     std::string str;
     static std::vector<Value> parse_args(const std::vector<const char*> args) {
         std::vector<Value> result;
+        std::string accum = "";
         for (auto& v : args) {
             size_t vlen = strlen(v);
+            if (accum != "") {
+                accum += std::string(" ") + v;
+                if (vlen > 0 && v[vlen-1] == ']') {
+                    result.emplace_back(accum.c_str(), accum.length() - 1);
+                    accum = "";
+                    continue;
+                }
+            }
             if (vlen > 0) {
+                // brackets embed
+                if (v[0] == '[' && v[vlen-1] != ']') {
+                    accum = &v[1];
+                    continue;
+                }
                 result.emplace_back(v, vlen);
             }
         }
@@ -152,9 +169,9 @@ struct Value {
             return;
         }
         if (vlen > 3 && v[vlen-1] == ')') {
-            char fun[10];
+            char fun[30];
             size_t i;
-            for (i = 0; i < 9 && v[i] && v[i] != '('; ++i) {
+            for (i = 0; i < 29 && v[i] && v[i] != '('; ++i) {
                 fun[i] = v[i];
             }
             if (v[i] == '(') {
@@ -178,8 +195,8 @@ struct Value {
             if (!strcmp(buf, v)) {
                 // verified; can it be a hexstring too?
                 if (!(vlen & 1)) {
-                    std::vector<unsigned char> pushData(ParseHex(v));
-                    if (pushData.size() == (vlen >> 1)) {
+                    std::vector<unsigned char> pushData;
+                    if (TryHex(v, pushData)) {
                         // it can; warn about using 0x for hex
                         if (VALUE_WARN) btc_logf("warning: ambiguous input %s is interpreted as a numeric value; use 0x%s to force into hexadecimal interpretation\n", v, v);
                     }
@@ -203,8 +220,7 @@ struct Value {
                 vlen -= 2;
                 v = &v[2];
             }
-            data = ParseHex(v);
-            if (data.size() == (vlen >> 1)) {
+            if (TryHex(v, data)) {
                 type = T_DATA;
                 return;
             }
@@ -433,9 +449,9 @@ struct Value {
     }
     void do_bech32enc() {
         data_value();
-        std::vector<unsigned char> tmp = {0};
+        std::vector<unsigned char> tmp = {1 /* temporary; this should be configurable (wit ver) */};
         ConvertBits<8, 5, true>([&](unsigned char c) { tmp.push_back(c); }, data.begin(), data.end());
-        str = bech32::Encode("bc", tmp);
+        str = bech32::Encode(bech32_hrp, tmp);
         type = T_STRING;
     }
     void do_bech32dec() {
@@ -493,12 +509,18 @@ struct Value {
     void do_verify_sig_compact() { verify_sig(true); }
     void do_combine_pubkeys();
     void do_tweak_pubkey();
+    void do_pubkey_to_xpubkey();
     void do_add();
     void do_sub();
     void do_negate_pubkey();
     void do_not_op();
     void do_boolify();
+    void do_tagged_hash();
+    void do_taproot_tweak_pubkey();
+    void do_jacobi_symbol();
+    void do_prefix_compact_size();
 #ifdef ENABLE_DANGEROUS
+    void do_taproot_tweak_seckey();
     void do_combine_privkeys();
     void do_multiply_privkeys();
     void do_negate_privkey();
@@ -542,6 +564,7 @@ struct Value {
     void do_sign() { sign(false); }
     void do_sign_compact() { sign(true); }
     void do_get_pubkey();
+    void do_get_xpubkey();
 #endif // ENABLE_DANGEROUS
 
     bool do_exec(const std::string& fun) {
@@ -561,11 +584,17 @@ struct Value {
         DO(verify_sig);
         DO(combine_pubkeys);
         DO(tweak_pubkey);
+        DO(pubkey_to_xpubkey);
         DO(addr_to_spk);
         DO(spk_to_addr);
         DO(add);
         DO(sub);
+        if (fun == "jacobi") { do_jacobi_symbol(); return true; }
+        DO(tagged_hash);
+        DO(taproot_tweak_pubkey);
+        DO(prefix_compact_size);
 #ifdef ENABLE_DANGEROUS
+        // DO(taproot_tweak_seckey);
         DO(combine_privkeys);
         DO(multiply_privkeys);
         DO(negate_privkey);
@@ -573,6 +602,7 @@ struct Value {
         DO(decode_wif);
         DO(sign);
         DO(get_pubkey);
+        DO(get_xpubkey);
 #endif // ENABLE_DANGEROUS
         #undef DO
         return false;

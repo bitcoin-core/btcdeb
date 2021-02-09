@@ -46,6 +46,10 @@ static const std::vector<script_verify_flag> svf {
     _(NULLFAIL),
     _(WITNESS_PUBKEYTYPE),
     _(CONST_SCRIPTCODE),
+    _(TAPROOT),
+    _(DISCOURAGE_UPGRADABLE_TAPROOT_VERSION),
+    _(DISCOURAGE_OP_SUCCESS),
+    _(DISCOURAGE_UPGRADABLE_PUBKEYTYPE),
     #undef _
 };
 
@@ -96,11 +100,12 @@ void setup_debug_set(const std::string& debug_params, std::set<std::string>& deb
     if (debug_set.empty() && !debug_params.empty()) delimiter_set(debug_params, debug_set);
 }
 
-bool get_debug_flag(const std::string& name, const std::set<std::string>& debug_set)
+bool get_debug_flag(const std::string& name, const std::set<std::string>& debug_set, bool fallback = false)
 {
     // variant 1: debug parameter, lowercase, without prefix, contained in debug_set
     // variant 2: environment var, all caps, prefixed with 'DEBUG_'
-    return debug_set.count(name) || std::getenv(("DEBUG_" + ToUpper(name)).c_str());
+    const auto& v = std::getenv(("DEBUG_" + ToUpper(name)).c_str());
+    return debug_set.count(name) || (v ? strcmp("0", v) : fallback);
 }
 
 int main(int argc, char* const* argv)
@@ -160,9 +165,17 @@ int main(int argc, char* const* argv)
     if (!pipe_in) {
         std::set<std::string> debug_set;
         setup_debug_set(ca.m['D'], debug_set);
+        // temporarily defaulting most to ON
         if (get_debug_flag("sighash", debug_set)) btc_sighash_logf = btc_logf_stderr;
-        if (get_debug_flag("signing", debug_set)) btc_sign_logf = btc_logf_stderr;
-        if (get_debug_flag("segwit", debug_set)) btc_segwit_logf = btc_logf_stderr;
+        if (get_debug_flag("signing", debug_set, true)) btc_sign_logf = btc_logf_stderr;
+        if (get_debug_flag("segwit", debug_set, true)) btc_segwit_logf = btc_logf_stderr;
+        if (get_debug_flag("taproot", debug_set, true)) btc_taproot_logf = btc_logf_stderr;
+        btc_logf("LOG:");
+        if (btc_enabled(btc_sighash_logf)) btc_logf(" sighash");
+        if (btc_enabled(btc_sign_logf)) btc_logf(" sign");
+        if (btc_enabled(btc_segwit_logf)) btc_logf(" segwit");
+        if (btc_enabled(btc_taproot_logf)) btc_logf(" taproot");
+        btc_logf("\n");
         btc_logf("notice: btcdeb has gotten quieter; use --verbose if necessary (this message is temporary)\n");
     }
 
@@ -185,13 +198,23 @@ int main(int argc, char* const* argv)
 
     // crude check for tx=
     if (ca.m.count('x')) {
-        if (!instance.parse_transaction(ca.m['x'].c_str(), true)) {
+        try {
+            if (!instance.parse_transaction(ca.m['x'].c_str(), true)) {
+                return 1;
+            }
+        } catch (std::exception const& ex) {
+            fprintf(stderr, "error parsing spending (--tx) transaction: %s\n", ex.what());
             return 1;
         }
         if (verbose) fprintf(stderr, "got %stransaction %s:\n%s\n", instance.sigver == SigVersion::WITNESS_V0 ? "segwit " : "", instance.tx->GetHash().ToString().c_str(), instance.tx->ToString().c_str());
     }
     if (ca.m.count('i')) {
-        if (!instance.parse_input_transaction(ca.m['i'].c_str(), selected)) {
+        try {
+            if (!instance.parse_input_transaction(ca.m['i'].c_str(), selected)) {
+                return 1;
+            }
+        } catch (std::exception const& ex) {
+            fprintf(stderr, "error parsing input (--txin) transaction: %s\n", ex.what());
             return 1;
         }
         if (verbose) fprintf(stderr, "got input tx #%" PRId64 " %s:\n%s\n", instance.txin_index, instance.txin->GetHash().ToString().c_str(), instance.txin->ToString().c_str());
@@ -250,12 +273,17 @@ int main(int argc, char* const* argv)
     valtype vchPushValue, p2sh_script_payload;
     while (env->script.GetOp(it, opcode, vchPushValue)) { p2sh_script_payload = vchPushValue; ++count; }
 
+    std::vector<std::string> tc_desc;
     CScript p2sh_script;
     bool has_p2sh = false;
     if (env->is_p2sh && env->p2shstack.size() > 0) {
         has_p2sh = true;
         const valtype& p2sh_script_val = env->p2shstack.back();
         p2sh_script = CScript(p2sh_script_val.begin(), p2sh_script_val.end());
+    } else if (env->sigversion == SigVersion::TAPSCRIPT) {
+        // add commitment phase
+        tc_desc = env->tce->Description();
+        count += tc_desc.size();
     }
     if (instance.successor_script.size()) {
         script_ptrs.push_back(&instance.successor_script);
@@ -279,6 +307,11 @@ int main(int argc, char* const* argv)
 
     int i = 0;
     char buf[1024];
+    if (env->sigversion == SigVersion::TAPSCRIPT) {
+        for (const auto& s : tc_desc) {
+            script_lines[i++] = strdup(strprintf("#%04d %s", i, s).c_str());
+        }
+    }
     for (size_t siter = 0; siter < script_ptrs.size(); ++siter) {
         CScript* script = script_ptrs[siter];
         const std::string& header = script_headers[siter];
@@ -458,6 +491,7 @@ static const char* opnames[] = {
     "OP_CHECKSIGVERIFY",
     "OP_CHECKMULTISIG",
     "OP_CHECKMULTISIGVERIFY",
+    "OP_CHECKSIGADD",
 
     // expansion
     "OP_NOP1",

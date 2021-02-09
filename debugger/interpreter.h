@@ -7,6 +7,9 @@
 
 #include <script/interpreter.h>
 #include <util/strencodings.h> // HexStr
+#include <pubkey.h> // XOnlyPubKey
+#include <vector>
+#include <string>
 
 template <typename T, typename T2> static inline void print_vec(const T& v, T2 fun) {
     for (unsigned char c : v) fun("%02x", c);
@@ -49,6 +52,29 @@ static inline void _popstack(std::vector<valtype>& stack)
 #define popstack(stack) do { btc_logf("\t\t<> POP  " #stack "\n"); _popstack(stack); } while (0)
 #define pushstack(stack, v) do { stack.push_back(v); btc_logf("\t\t<> PUSH " #stack " %s\n", HexStr(stack.at(stack.size()-1)).c_str()); } while (0)
 
+struct TaprootCommitmentEnv {
+    enum class State : uint8_t {
+        Processing,
+        Failed,
+        Tweaked,
+        Done,
+    };
+    const std::vector<unsigned char> m_control;
+    const std::vector<unsigned char> m_program;
+    const CScript m_script;
+    uint256* m_tapleaf_hash;
+    int m_path_len;
+    XOnlyPubKey m_p;
+    XOnlyPubKey m_q;
+    uint256 m_k;
+    std::string m_k_desc;
+    int m_i;
+    TaprootCommitmentEnv(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script, uint256* tapleaf_hash);
+    State Iterate();
+    std::vector<std::string> Description();
+    bool m_applied_tweak;
+};
+
 struct InterpreterEnv : public ScriptExecutionEnvironment {
     CScript::const_iterator pc;
     std::vector<stack_type> stack_history;
@@ -69,6 +95,9 @@ struct InterpreterEnv : public ScriptExecutionEnvironment {
 
     // Executed sigScript support (archaeology)
     CScript successor_script;
+
+    // Taproot/tapscript support
+    TaprootCommitmentEnv* tce;
 };
 
 bool StepScript(InterpreterEnv& env);
