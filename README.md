@@ -22,12 +22,12 @@ btcdeb depends on the following:
 
 * libtool
 * libssl
-* autoconf
+* automake/autoconf
 * pkg-config
 
 Ubuntu/debian users can do: `apt-get install libtool libssl-dev autoconf` (with `sudo` prepended if necessary)
 
-Mac users can do: `brew install libtool autoconf pkg-config`
+Mac users can do: `brew install libtool automake pkg-config`
 
 ## Installation
 
