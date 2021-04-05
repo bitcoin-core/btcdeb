@@ -384,6 +384,152 @@ static bool EvalChecksig(ScriptExecutionEnvironment& env, const valtype& sig, co
     assert(false);
 }
 
+bool StepExtended(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script)
+{
+    auto& stack = env.stack;
+    auto& serror = env.serror;
+
+    valtype vch1, vch2, vch3;
+    switch (env.opcode) {
+    case OP_CAT:
+        // (x1 x2 -- out)
+        if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-2);
+        vch2 = stacktop(-1);
+        vch1.insert(vch1.end(), vch2.begin(), vch2.end());
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_SUBSTR:
+        // (in begin size -- out)
+        if (stack.size() < 3) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-3);
+        vch2 = stacktop(-2);
+        vch3 = stacktop(-1);
+
+        {
+            // begin
+            const CScriptNum begin(vch2, env.fRequireMinimal, 2);
+            if (begin < 0) return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+            // size
+            const CScriptNum size(vch3, env.fRequireMinimal, 2);
+            if (size < 0 || begin + size > vch1.size()) return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+            if (begin > 0) {
+                vch1.erase(vch1.begin(), vch1.begin() + begin.getint());
+            }
+            if (size < vch1.size()) {
+                vch1.erase(vch1.begin() + size.getint(), vch1.end());
+            }
+        }
+        popstack(stack);
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_LEFT:
+    case OP_RIGHT:
+        // (in size -- out)
+        if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-2);
+        vch2 = stacktop(-1);
+        {
+            // size
+            const CScriptNum size(vch2, env.fRequireMinimal, 2);
+            if (size < 0 || size > vch1.size()) return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+            if (size < vch1.size()) {
+                if (env.opcode == OP_LEFT) {
+                    vch1.erase(vch1.begin() + size.getint(), vch1.end());
+                } else {
+                    vch1.erase(vch1.begin(), vch1.end() - size.getint());
+                }
+            }
+        }
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_INVERT:
+        // (in -- out)
+        if (stack.size() < 1) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-1);
+        for (size_t i = 0; i < vch1.size(); ++i) vch1[i] = ~vch1[i];
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_AND:
+    case OP_OR:
+    case OP_XOR:
+        // (x1 x2 -- out)
+        if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-2);
+        vch2 = stacktop(-1);
+        if (vch1.size() != vch2.size()) return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+        if (env.opcode == OP_AND) {
+            for (size_t i = 0; i < vch1.size(); ++i) vch1[i] &= vch2[i];
+        } else if (env.opcode == OP_OR) {
+            for (size_t i = 0; i < vch1.size(); ++i) vch1[i] |= vch2[i];
+        } else if (env.opcode == OP_XOR) {
+            for (size_t i = 0; i < vch1.size(); ++i) vch1[i] ^= vch2[i];
+        }
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_2MUL:
+        // (in -- out)
+        if (stack.size() < 1) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-1);
+        {
+            // multiply by 2 = left-shift one bit
+            uint16_t carry = 0;
+            for (size_t i = 0; i < vch1.size(); ++i) {
+                uint16_t v = vch1[i];
+                v = (v << 1) | carry;
+                carry = v >> 8;
+                vch1[i] = v & 0xff;
+            }
+            if (carry) vch1.push_back(carry);
+        }
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_MUL:
+    case OP_DIV:
+    case OP_MOD:
+    case OP_LSHIFT:
+    case OP_RSHIFT:
+        // (a b -- out)
+        if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-2);
+        vch2 = stacktop(-1);
+        {
+            CScriptNum num1(vch1, env.fRequireMinimal, 5);
+            CScriptNum num2(vch2, env.fRequireMinimal, 5);
+            switch (env.opcode) {
+            case OP_MUL: num1 = num1 * num2; break;
+            case OP_DIV: num1 = num1 / num2; break;
+            case OP_MOD: num1 = num1 % num2; break;
+            case OP_LSHIFT: num1 = num1 << num2; break;
+            case OP_RSHIFT: num1 = num1 >> num2; break;
+            default: assert(0);
+            }
+            vch1 = num1.getvch();
+        }
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+    default: assert(0);
+    }
+}
+
 bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script)
 {
     static const CScriptNum bnZero(0);
@@ -447,7 +593,9 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                 opcode == OP_MOD ||
                 opcode == OP_LSHIFT ||
                 opcode == OP_RSHIFT)
-                return set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
+                return env.allow_disabled_opcodes
+                    ? StepExtended(env, pc, local_script)
+                    : set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
 
             // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR in non-segwit script is rejected even in an unexecuted branch
             if (opcode == OP_CODESEPARATOR && sigversion == SigVersion::BASE && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
@@ -1271,6 +1419,7 @@ ScriptExecutionEnvironment::ScriptExecutionEnvironment(std::vector<std::vector<u
 , checker(checker_in)
 , opcode_pos(0)
 , execdata{}
+, allow_disabled_opcodes{false}
 {
     execdata.m_codeseparator_pos = 0xFFFFFFFFUL;
     execdata.m_codeseparator_pos_init = true;

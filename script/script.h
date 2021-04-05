@@ -288,6 +288,13 @@ public:
 
     inline CScriptNum& operator&=( const CScriptNum& rhs)       { return operator&=(rhs.m_value);  }
 
+    inline CScriptNum operator*(const CScriptNum& rhs) const { return CScriptNum(m_value * rhs.m_value); }
+    inline CScriptNum operator/(const CScriptNum& rhs) const { return CScriptNum(m_value / rhs.m_value); }
+    inline CScriptNum operator%(const CScriptNum& rhs) const { return CScriptNum(m_value % rhs.m_value); }
+    // TODO: below two should preserve signedness
+    inline CScriptNum operator<<(const CScriptNum& rhs) const { return CScriptNum(m_value << rhs.m_value); }
+    inline CScriptNum operator>>(const CScriptNum& rhs) const { return CScriptNum(m_value >> rhs.m_value); }
+
     inline CScriptNum operator-()                         const
     {
         assert(m_value != std::numeric_limits<int64_t>::min());
