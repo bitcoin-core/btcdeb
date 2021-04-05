@@ -170,6 +170,9 @@ opcodetype GetOpCode(const char* name)
     c(NOP9);
     c(NOP10);
 
+    // Opcode added by BIP 342 (Tapscript)
+    c(CHECKSIGADD);
+
     if (expected_opcode) {
         btc_logf("warning: opcode-like string was not an opcode: %s\n", name);
     }
