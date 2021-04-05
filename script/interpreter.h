@@ -360,6 +360,8 @@ struct ScriptExecutionEnvironment {
 
     uint32_t opcode_pos;
     ScriptExecutionData execdata;
+
+    bool allow_disabled_opcodes;
 };
 
 bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script = nullptr);
