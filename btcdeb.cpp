@@ -123,6 +123,7 @@ int main(int argc, char* const* argv)
     ca.add_option("select", 's', req_arg);
     ca.add_option("pretend-valid", 'P', req_arg);
     ca.add_option("default-flags", 'd', no_arg);
+    ca.add_option("allow-disabled-opcodes", 'z', no_arg);
     ca.add_option("version", 'V', no_arg);
     ca.add_option("dataset", 'X', opt_arg);
     ca.add_option("verbose", 'v', no_arg);
@@ -137,7 +138,7 @@ int main(int argc, char* const* argv)
     }
 
     if (ca.m.count('h')) {
-        fprintf(stderr, "Syntax: %s [-V|--version] [-v|--verbose] [-q|--quiet] [--debug=[sighash|signing|segwit[,...]]|-D[sighash|...]]] [--dataset=<name>|-X<name>] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [--pretend-valid=<sig>:<pubkey>[,<sig2>:<pubkey2>[,...]]|-P<sig>:<pubkey>[,...]] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
+        fprintf(stderr, "Syntax: %s [-V|--version] [-v|--verbose] [-q|--quiet] [--allow-disabled-opcodes|-z] [--debug=[sighash|signing|segwit[,...]]|-D[sighash|...]]] [--dataset=<name>|-X<name>] [--tx=[amount1,amount2,..:]<hex> [--txin=<hex>] [--modify-flags=<flags>|-f<flags>] [--select=<index>|-s<index>] [--pretend-valid=<sig>:<pubkey>[,<sig2>:<pubkey2>[,...]]|-P<sig>:<pubkey>[,...]] [<script> [<stack bottom item> [... [<stack top item>]]]]]\n", argv[0]);
         fprintf(stderr, "If executed with no arguments, an empty script and empty stack is provided\n");
         fprintf(stderr, "If executed with a --dataset, the --txin and --tx values are prepopulated with values from the given dataset; though this may be overridden using subsequent --tx/--txin= statements. To see available datasets, type %s --dataset or %s -X\n", argv[0], argv[0]);
         fprintf(stderr, "To debug transaction signatures, you need to either provide the transaction hex (the WHOLE hex, not just the txid) "
@@ -145,6 +146,7 @@ int main(int argc, char* const* argv)
         fprintf(stderr, "E.g. if a SegWit transaction abc123... has 2 inputs of 0.1 btc and 0.002 btc, you would do tx=0.1,0.002:abc123...\n");
         fprintf(stderr, "You do not need the amounts for non-SegWit transactions\n");
         fprintf(stderr, "By providing a txin as well as a tx and no script or stack, btcdeb will attempt to set up a debug session for the verification of the given input by pulling the appropriate values out of the respective transactions. you do not need amounts for --tx in this case\n");
+        fprintf(stderr, "The --allow-disabled-opcodes flag enables experimental support for OP_CAT, OP_2MUL, etc (disabled in Bitcoin)\n");
         fprintf(stderr, "You can modify verification flags using the --modify-flags command. separate flags using comma (,). prefix with + to enable, - to disable. e.g. --modify-flags=\"-NULLDUMMY,-MINIMALIF\"\n");
         fprintf(stderr, "You can set the environment variables DEBUG_SIGHASH, DEBUG_SIGNING, and DEBUG_SEGWIT to increase verbosity for the respective areas.\n");
         fprintf(stderr, "The standard (enabled by default) flags can be reviewed by typing %s --default-flags or %s -d", argv[0], argv[0]);
@@ -184,6 +186,7 @@ int main(int argc, char* const* argv)
         flags = svf_parse_flags(flags, ca.m['f'].c_str());
         if (verbose) fprintf(stderr, "resulting flags:\n・ %s\n", svf_string(flags, "\n・ ").c_str());
     }
+    bool allow_disabled_opcodes = ca.m.count('z') > 0;
 
     int selected = -1;
     if (ca.m.count('s')) {
@@ -262,6 +265,7 @@ int main(int argc, char* const* argv)
     }
 
     env = instance.env;
+    env->allow_disabled_opcodes = allow_disabled_opcodes;
 
     std::vector<CScript*> script_ptrs;
     std::vector<std::string> script_headers;
