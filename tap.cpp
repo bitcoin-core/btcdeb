@@ -27,8 +27,8 @@
 
 static secp256k1_context* secp256k1_context_sign = nullptr;
 
-static void ECC_Start();
-static void ECC_Stop();
+void ECC_Start();
+void ECC_Stop();
 
 static const CHashWriter HasherTapSighash = TaggedHash("TapSighash");
 static const CHashWriter HasherTapLeaf = TaggedHash("TapLeaf");
@@ -505,30 +505,4 @@ static void GetRandBytes(unsigned char* buf, int num)
         exit(1);
     }
     fclose(f);
-}
-
-static void ECC_Start() {
-    assert(secp256k1_context_sign == nullptr);
-
-    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
-    assert(ctx != nullptr);
-
-    {
-        // Pass in a random blinding seed to the secp256k1 context.
-        std::vector<unsigned char, secure_allocator<unsigned char>> vseed(32);
-        GetRandBytes(vseed.data(), 32);
-        bool ret = secp256k1_context_randomize(ctx, vseed.data());
-        assert(ret);
-    }
-
-    secp256k1_context_sign = ctx;
-}
-
-static void ECC_Stop() {
-    secp256k1_context *ctx = secp256k1_context_sign;
-    secp256k1_context_sign = nullptr;
-
-    if (ctx) {
-        secp256k1_context_destroy(ctx);
-    }
 }
