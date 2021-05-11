@@ -578,7 +578,8 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                 }
             }
 
-            if (opcode == OP_CAT ||
+            if (!env.allow_disabled_opcodes && (
+                opcode == OP_CAT ||
                 opcode == OP_SUBSTR ||
                 opcode == OP_LEFT ||
                 opcode == OP_RIGHT ||
@@ -592,10 +593,9 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                 opcode == OP_DIV ||
                 opcode == OP_MOD ||
                 opcode == OP_LSHIFT ||
-                opcode == OP_RSHIFT)
-                return env.allow_disabled_opcodes
-                    ? StepExtended(env, pc, local_script)
-                    : set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
+                opcode == OP_RSHIFT))
+                return set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
+                
 
             // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR in non-segwit script is rejected even in an unexecuted branch
             if (opcode == OP_CODESEPARATOR && sigversion == SigVersion::BASE && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
@@ -609,6 +609,25 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
             } else if (fExec || (OP_IF <= opcode && opcode <= OP_ENDIF))
             switch (opcode)
             {
+                //
+                // Extended opcodes
+                //
+                case OP_CAT:
+                case OP_SUBSTR:
+                case OP_LEFT:
+                case OP_RIGHT:
+                case OP_INVERT:
+                case OP_AND:
+                case OP_OR:
+                case OP_XOR:
+                case OP_2MUL:
+                case OP_2DIV:
+                case OP_MUL:
+                case OP_DIV:
+                case OP_MOD:
+                case OP_LSHIFT:
+                case OP_RSHIFT:
+                    return StepExtended(env, pc, local_script);
                 //
                 // Push value
                 //
