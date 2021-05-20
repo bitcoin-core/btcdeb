@@ -25,7 +25,7 @@
 #define abort(msg...) do { fprintf(stderr, msg); fputc('\n', stderr); exit(1); } while(0)
 #define HEXC(v) HexStr(v).c_str()
 
-static secp256k1_context* secp256k1_context_sign = nullptr;
+extern secp256k1_context* secp256k1_context_sign;
 
 void ECC_Start();
 void ECC_Stop();
