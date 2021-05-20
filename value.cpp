@@ -12,7 +12,7 @@
 
 const uint256 SECP256K1_FIELD_SIZE = uint256S("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
 
-static secp256k1_context* secp256k1_context_sign = nullptr;
+secp256k1_context* secp256k1_context_sign = nullptr;
 
 void ECC_Start();
 
