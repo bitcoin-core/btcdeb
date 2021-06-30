@@ -368,11 +368,11 @@ int main(int argc, char* const* argv)
     if (have_txs) {
         auto spk = instance.txin->vout[instance.txin_vout_index].scriptPubKey;
         if (spk.size() < serialized_pk.size()) {
-            abort("pubkey mismatch: input transaction's vout[%lld].scriptPubKey = %s, but our pubkey = %s\n", instance.txin_vout_index, HEXC(spk), HEXC(serialized_pk));
+            abort("pubkey mismatch: input transaction's vout[%" PRId64 "].scriptPubKey = %s, but our pubkey = %s\n", instance.txin_vout_index, HEXC(spk), HEXC(serialized_pk));
         }
         auto cmp = Item(spk.end() - serialized_pk.size(), spk.end());
         if (cmp != serialized_pk) {
-            abort("pubkey mismatch: input transaction's vout[%lld].scriptPubKey %s does not end (%s) with our pubkey %s\n", instance.txin_vout_index, HEXC(spk), HEXC(cmp), HEXC(serialized_pk));
+            abort("pubkey mismatch: input transaction's vout[%" PRId64 "].scriptPubKey %s does not end (%s) with our pubkey %s\n", instance.txin_vout_index, HEXC(spk), HEXC(cmp), HEXC(serialized_pk));
         }
         btc_logf("Pubkey matches the scriptPubKey of the input transaction's output #%lld\n", instance.txin_vout_index);
     }
