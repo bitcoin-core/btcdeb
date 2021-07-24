@@ -172,6 +172,7 @@ test_btcdeb_SOURCES = \
 	functions.h \
 	functions.cpp \
 	test/catch.hpp \
+	test/catch.cpp \
 	test/signing.cpp \
 	test/test-btcdeb.cpp \
 	test/utils.cpp \
