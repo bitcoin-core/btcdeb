@@ -51,7 +51,6 @@ void Value::verify_sig(bool compact) {
 
     if (args[1].size() == 32) {
         // new style pubkey, so use schnorr validation
-        if (!compact) fprintf(stderr, "warning: non-compact schnorr signature validation does not exist\n");
         XOnlyPubKey pubkey((uint256(args[1])));
         if (!pubkey.IsValid()) abort("invalid x only pubkey");
         int64 = pubkey.VerifySchnorr(sighash, args[2]);

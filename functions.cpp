@@ -300,7 +300,7 @@ static const tf_t tfs[] = {
     TFN("[pubkey] [tweak] tweak the pubkey with the tweak", "taproot-tweak-pubkey", taproot_tweak_pubkey),
     TFN("[value] [pubkey] multiply the pubkey with the given 32 byte value", "tweak-pubkey", tweak_pubkey),
     TFN("[sighash] [pubkey] [signature] verify the given signature for the given sighash and pubkey (der)", "verify-sig", verify_sig),
-    TFN("[sighash] [pubkey] [signature] verify the given signature for the given sighash and pubkey (compact)", "compact-verify-sig", verify_sig_compact),
+    TFN("[sighash] [pubkey] [signature] verify the given signature for the given sighash and pubkey (compact)", "verify-sig-compact", verify_sig_compact),
 #ifdef ENABLE_DANGEROUS
     TFN("[privkey1] [privkey2] combine the two private keys into one private key", "combine-privkeys", combine_privkeys),
     TFN("[string]  decode [string] into a private key using the Wallet Import Format", "decode-wif", decode_wif),
@@ -309,7 +309,7 @@ static const tf_t tfs[] = {
     TFN("[privkey] get the x-only public key corresponding to the given private key", "get-xpubkey", get_xpubkey),
     TFN("[privkey1] [privkey2] multiply a privkey with another", "multiply-privkeys", mul_privkeys),
     TF ("[sighash] [privkey] generate an ECDSA signature for the given message (sighash) using the given private key (der)", sign),
-    TFN("[sighash] [privkey] generate an ECSDA signature for the given message (sighash) using the given private key (compact)", "compact-sign", sign_compact),
+    TFN("[sighash] [privkey] generate an ECSDA signature for the given message (sighash) using the given private key (compact)", "sign-compact", sign_compact),
     TF ("[sighash] [privkey] generate a Schnorr signature for the given message (sighash) using the given private key (der)", sign_schnorr),
     TFN("[privkey] [tweak] tweak the given private key with the tweak", "taproot-tweak-seckey", taproot_tweak_seckey),
 #endif // ENABLE_DANGEROUS
