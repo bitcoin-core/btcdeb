@@ -561,8 +561,10 @@ struct Value {
         data = std::vector<uint8_t>(data.begin() + 1, data.end());
     }
     void sign(bool compact);
+    void sign_schnorr();
     void do_sign() { sign(false); }
     void do_sign_compact() { sign(true); }
+    void do_sign_schnorr() { sign_schnorr(); }
     void do_get_pubkey();
     void do_get_xpubkey();
 #endif // ENABLE_DANGEROUS
@@ -601,6 +603,7 @@ struct Value {
         DO(encode_wif);
         DO(decode_wif);
         DO(sign);
+        DO(sign_schnorr);
         DO(get_pubkey);
         DO(get_xpubkey);
 #endif // ENABLE_DANGEROUS

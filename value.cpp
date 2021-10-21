@@ -574,7 +574,43 @@ void Value::sign(bool compact) {
     if (sighash_arg.size() != 32) abort("invalid input (sighash must be 32 bytes)");
     const uint256 sighash(sighash_arg);
 
-    // use schnorr! TODO: make this selectable
+    std::vector<uint8_t> sigdata;
+    size_t siglen = compact ? 64 : CPubKey::SIGNATURE_SIZE;
+    sigdata.resize(siglen);
+    uint8_t extra_entropy[32] = {0};
+    secp256k1_ecdsa_signature sig;
+    int ret = secp256k1_ecdsa_sign(secp256k1_context_sign, &sig, sighash.begin(), privkey_arg.data(), secp256k1_nonce_function_rfc6979, nullptr);
+    assert(ret);
+    if (compact) {
+        secp256k1_ecdsa_signature_serialize_compact(secp256k1_context_sign, (unsigned char*)sigdata.data(), &sig);
+    } else {
+        secp256k1_ecdsa_signature_serialize_der(secp256k1_context_sign, (unsigned char*)sigdata.data(), &siglen, &sig);
+    }
+    sigdata.resize(siglen);
+    data = sigdata;
+}
+
+void Value::sign_schnorr() {
+    if (!secp256k1_context_sign) ECC_Start();
+
+    // the value is a script-style push of the sighash followed by the private key
+    if (type != T_DATA) abort("invalid type (must be data)");
+    std::vector<std::vector<uint8_t>> args;
+    if (!extract_values(args) || args.size() != 2) abort("invalid input (needs a sighash and a private key)");
+    auto& sighash_arg = args[0];
+    auto& privkey_arg = args[1];
+    if (privkey_arg.size() != 32) {
+        // it is probably a WIF encoded key
+        Value wif(privkey_arg);
+        wif.str_value();
+        if (wif.str.length() != privkey_arg.size()) abort("invalid input (private key must be 32 byte data or a WIF encoded privkey)");
+        wif.do_decode_wif();
+        privkey_arg = wif.data;
+    }
+    if (privkey_arg.size() != 32) abort("invalid input (private key must be 32 bytes)");
+    if (sighash_arg.size() != 32) abort("invalid input (sighash must be 32 bytes)");
+    const uint256 sighash(sighash_arg);
+
     data.resize(64);
     secp256k1_keypair keypair; // a private key and its public key equivalent
     if (!secp256k1_keypair_create(secp256k1_context_sign, &keypair, privkey_arg.data())) {
@@ -592,23 +628,6 @@ void Value::sign(bool compact) {
     if (!secp256k1_schnorrsig_verify(secp256k1_context_sign, data.data(), sighash.begin(), &xpubkey)) {
         abort("failed to veriy signature");
     }
-    // uint256 pk;
-    // if (!secp256k1_xonly_pubkey_serialize(secp256k1_context_sign, pk.begin(), &xpubkey)) assert(0);
-
-    // std::vector<uint8_t> sigdata;
-    // size_t siglen = compact ? 64 : CPubKey::SIGNATURE_SIZE;
-    // sigdata.resize(siglen);
-    // uint8_t extra_entropy[32] = {0};
-    // secp256k1_ecdsa_signature sig;
-    // int ret = secp256k1_ecdsa_sign(secp256k1_context_sign, &sig, sighash.begin(), data.data(), secp256k1_nonce_function_rfc6979, nullptr);
-    // assert(ret);
-    // if (compact) {
-    //     secp256k1_ecdsa_signature_serialize_compact(secp256k1_context_sign, (unsigned char*)sigdata.data(), &sig);
-    // } else {
-    //     secp256k1_ecdsa_signature_serialize_der(secp256k1_context_sign, (unsigned char*)sigdata.data(), &siglen, &sig);
-    // }
-    // sigdata.resize(siglen);
-    // data = sigdata;
 }
 
 #endif // ENABLE_DANGEROUS
