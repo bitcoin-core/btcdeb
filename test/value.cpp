@@ -251,3 +251,24 @@ TEST_CASE("Addresses and scriptpubkeys (legacy)", "[addr-spk]") {
         REQUIRE(x.str == address);
     }
 }
+
+#ifdef ENABLE_DANGEROUS
+TEST_CASE("Signing", "[signing]") {
+    Value privkey("hello"), message("message");
+    privkey.do_sha256(); message.do_sha256();
+    REQUIRE(privkey.hex_str() == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    REQUIRE(message.hex_str() == "ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d");
+
+    Value pubkey = privkey;
+    pubkey.do_get_pubkey();
+    REQUIRE(pubkey.hex_str() == "0387d82042d93447008dfe2af762068a1e53ff394a5bf8f68a045fa642b99ea5d1");
+
+    Value sig = Value::parse_args("ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    sig.do_sign();
+    REQUIRE(sig.hex_str() == "3045022100d9a181eec58ed38289fa3bd10c65daa80a90ad9b607041848cc12ce35dcc8cfd02206e0b7f8b77bfa8e49d3c23e6b3de39bde684e5eba391782738768b01902f84aa");
+
+    Value ver = Value::parse_args("ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d 0387d82042d93447008dfe2af762068a1e53ff394a5bf8f68a045fa642b99ea5d1 3045022100d9a181eec58ed38289fa3bd10c65daa80a90ad9b607041848cc12ce35dcc8cfd02206e0b7f8b77bfa8e49d3c23e6b3de39bde684e5eba391782738768b01902f84aa");
+    ver.do_verify_sig();
+    REQUIRE(ver.int_value() == 1);
+}
+#endif
