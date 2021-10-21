@@ -259,6 +259,7 @@ int _e_encode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_encode_wif();
 int _e_decode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_decode_wif(); pv.println(); return 0; }
 int _e_sign(Value&& pv)          { kerl_set_sensitive(true); pv.do_sign(); pv.println(); return 0; }
 int _e_sign_compact(Value&& pv)  { kerl_set_sensitive(true); pv.do_sign_compact(); pv.println(); return 0; }
+int _e_sign_schnorr(Value&& pv)  { kerl_set_sensitive(true); pv.do_sign_schnorr(); pv.println(); return 0; }
 int _e_get_pubkey(Value&& pv)    { kerl_set_sensitive(true); pv.do_get_pubkey(); pv.println(); return 0; }
 int _e_get_xpubkey(Value&& pv)   { kerl_set_sensitive(true); pv.do_get_xpubkey(); pv.println(); return 0; }
 int _e_combine_privkeys(Value&& pv) { kerl_set_sensitive(true); pv.do_combine_privkeys(); pv.println(); return 0; }
@@ -307,8 +308,9 @@ static const tf_t tfs[] = {
     TFN("[privkey] get the public key corresponding to the given private key", "get-pubkey", get_pubkey),
     TFN("[privkey] get the x-only public key corresponding to the given private key", "get-xpubkey", get_xpubkey),
     TFN("[privkey1] [privkey2] multiply a privkey with another", "multiply-privkeys", mul_privkeys),
-    TF ("[sighash] [privkey] generate a signature for the given message (sighash) using the given private key (der)", sign),
-    TFN("[sighash] [privkey] generate a signature for the given message (sighash) using the given private key (compact)", "compact-sign", sign_compact),
+    TF ("[sighash] [privkey] generate an ECDSA signature for the given message (sighash) using the given private key (der)", sign),
+    TFN("[sighash] [privkey] generate an ECSDA signature for the given message (sighash) using the given private key (compact)", "compact-sign", sign_compact),
+    TF ("[sighash] [privkey] generate a Schnorr signature for the given message (sighash) using the given private key (der)", sign_schnorr),
     TFN("[privkey] [tweak] tweak the given private key with the tweak", "taproot-tweak-seckey", taproot_tweak_seckey),
 #endif // ENABLE_DANGEROUS
     { "", "", nullptr }
