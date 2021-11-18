@@ -138,7 +138,7 @@ int main(int argc, char* const* argv)
         fprintf(stderr, "If spend index and args are included, this generates the spending witness based on the given input.\n");
         fprintf(stderr, "If spend index, args, and transaction data are all included, the spending witness is inserted into the transaction.\n");
         fprintf(stderr, "A signature is generated if --privkey is given. If a signature is provided via the --sig argument, it is used as is.\n");
-        fprintf(stderr, "The address prefix refers to the bech32 human readable part; this defaults to '%s'\n", DEFAULT_ADDR_PREFIX);
+        fprintf(stderr, "The address prefix refers to the bech32m human readable part; this defaults to '%s'\n", DEFAULT_ADDR_PREFIX);
         return 0;
     }
     btc_logf("tap " VERSION() " -- type `%s -h` for help\n", argv[0]);
@@ -380,9 +380,9 @@ int main(int argc, char* const* argv)
     }
 
     Value v(serialized_pk);
-    v.do_bech32enc();
+    v.do_bech32menc();
 
-    printf("Resulting Bech32 address: %s\n", v.str_value().c_str());
+    printf("Resulting Bech32m address: %s\n", v.str_value().c_str());
 
 #if ENABLE_DANGEROUS
     if (is_taproot && privkey.size() != 0) {
