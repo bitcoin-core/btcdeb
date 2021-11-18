@@ -53,14 +53,14 @@ TaprootCommitmentEnv::State TaprootCommitmentEnv::Iterate() {
         ++m_i;
         return State::Processing;
     }
-    if (!m_applied_tweak) {
-        m_k_desc = strprintf("TapTweak(internal_pubkey=%s || %s)", HexStr(MakeSpan(m_p)).c_str(), m_k_desc.c_str());
-        m_k = (CHashWriter(HASHER_TAPTWEAK) << MakeSpan(m_p) << m_k).GetSHA256();
-        btc_taproot_logf("- final k  = %s\n", m_k.ToString().c_str());
-        btc_taproot_logf("  (%s)\n", m_k_desc.c_str());
-        m_applied_tweak = true;
-        return State::Tweaked;
-    }
+    // if (!m_applied_tweak) {
+    //     m_k_desc = strprintf("TapTweak(internal_pubkey=%s || %s)", HexStr(MakeSpan(m_p)).c_str(), m_k_desc.c_str());
+    //     m_k = (CHashWriter(HASHER_TAPTWEAK) << MakeSpan(m_p) << m_k).GetSHA256();
+    //     btc_taproot_logf("- final k  = %s\n", m_k.ToString().c_str());
+    //     btc_taproot_logf("  (%s)\n", m_k_desc.c_str());
+    //     m_applied_tweak = true;
+    //     return State::Tweaked;
+    // }
     bool res = m_q.CheckTapTweak(m_p, m_k, m_control[0] & 1); // TODO: verify that CheckPayToContract -> CheckTapTweak
     btc_taproot_logf("- q.CheckTapTweak(p, k, %d) == %s\n", m_control[0] & 1, res ? "success" : "failure");
     return res ? State::Done : State::Failed;
