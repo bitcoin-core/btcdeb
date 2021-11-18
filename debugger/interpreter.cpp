@@ -7,9 +7,7 @@
 
 #include <tinyformat.h>
 
-static const CHashWriter HASHER_TAPSIGHASH = TaggedHash("TapSighash");
-static const CHashWriter HASHER_TAPLEAF = TaggedHash("TapLeaf");
-static const CHashWriter HASHER_TAPBRANCH = TaggedHash("TapBranch");
+extern const CHashWriter HASHER_TAPSIGHASH;
 static const CHashWriter HASHER_TAPTWEAK = TaggedHash("TapTweak");
 
 TaprootCommitmentEnv::TaprootCommitmentEnv(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script, uint256* tapleaf_hash)
@@ -63,8 +61,8 @@ TaprootCommitmentEnv::State TaprootCommitmentEnv::Iterate() {
         m_applied_tweak = true;
         return State::Tweaked;
     }
-    bool res = m_q.CheckPayToContract(m_p, m_k, m_control[0] & 1);
-    btc_taproot_logf("- q.CheckPayToContract(p, k, %d) == %s\n", m_control[0] & 1, res ? "success" : "failure");
+    bool res = m_q.CheckTapTweak(m_p, m_k, m_control[0] & 1); // TODO: verify that CheckPayToContract -> CheckTapTweak
+    btc_taproot_logf("- q.CheckTapTweak(p, k, %d) == %s\n", m_control[0] & 1, res ? "success" : "failure");
     return res ? State::Done : State::Failed;
 }
 
@@ -75,7 +73,7 @@ std::vector<std::string> TaprootCommitmentEnv::Description() {
         rv.push_back(strprintf("Branch: %s", HexStr(Span<const unsigned char>(node_begin, TAPROOT_CONTROL_NODE_SIZE)).c_str()));
     }
     rv.push_back(strprintf("Tweak: %s", m_p.ToString().c_str()));
-    rv.push_back(strprintf("CheckPayToContract"));
+    rv.push_back(strprintf("CheckTapTweak"));
     return rv;
 }
 
@@ -261,4 +259,151 @@ bool ContinueScript(InterpreterEnv& env)
         if (!StepScript(env)) return false;
     }
     return true;
+}
+
+#define stacktop(i)  (stack.at(stack.size()+(i)))
+#define altstacktop(i)  (altstack.at(altstack.size()+(i)))
+
+bool StepExtended(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script)
+{
+    auto& stack = env.stack;
+    auto& serror = env.serror;
+
+    valtype vch1, vch2, vch3;
+    switch (env.opcode) {
+    case OP_CAT:
+        // (x1 x2 -- out)
+        if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-2);
+        vch2 = stacktop(-1);
+        vch1.insert(vch1.end(), vch2.begin(), vch2.end());
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_SUBSTR:
+        // (in begin size -- out)
+        if (stack.size() < 3) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-3);
+        vch2 = stacktop(-2);
+        vch3 = stacktop(-1);
+
+        {
+            // begin
+            const CScriptNum begin(vch2, env.fRequireMinimal, 2);
+            if (begin < 0) return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+            // size
+            const CScriptNum size(vch3, env.fRequireMinimal, 2);
+            if (size < 0 || begin + size > vch1.size()) return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+            if (begin > 0) {
+                vch1.erase(vch1.begin(), vch1.begin() + begin.getint());
+            }
+            if (size < vch1.size()) {
+                vch1.erase(vch1.begin() + size.getint(), vch1.end());
+            }
+        }
+        popstack(stack);
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_LEFT:
+    case OP_RIGHT:
+        // (in size -- out)
+        if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-2);
+        vch2 = stacktop(-1);
+        {
+            // size
+            const CScriptNum size(vch2, env.fRequireMinimal, 2);
+            if (size < 0 || size > vch1.size()) return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+            if (size < vch1.size()) {
+                if (env.opcode == OP_LEFT) {
+                    vch1.erase(vch1.begin() + size.getint(), vch1.end());
+                } else {
+                    vch1.erase(vch1.begin(), vch1.end() - size.getint());
+                }
+            }
+        }
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_INVERT:
+        // (in -- out)
+        if (stack.size() < 1) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-1);
+        for (size_t i = 0; i < vch1.size(); ++i) vch1[i] = ~vch1[i];
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_AND:
+    case OP_OR:
+    case OP_XOR:
+        // (x1 x2 -- out)
+        if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-2);
+        vch2 = stacktop(-1);
+        if (vch1.size() != vch2.size()) return set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
+        if (env.opcode == OP_AND) {
+            for (size_t i = 0; i < vch1.size(); ++i) vch1[i] &= vch2[i];
+        } else if (env.opcode == OP_OR) {
+            for (size_t i = 0; i < vch1.size(); ++i) vch1[i] |= vch2[i];
+        }
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_2MUL:
+        // (in -- out)
+        if (stack.size() < 1) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-1);
+        {
+            // multiply by 2 = left-shift one bit
+            uint16_t carry = 0;
+            for (size_t i = 0; i < vch1.size(); ++i) {
+                uint16_t v = vch1[i];
+                v = (v << 1) | carry;
+                carry = v >> 8;
+                vch1[i] = v & 0xff;
+            }
+            if (carry) vch1.push_back(carry);
+        }
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+
+    case OP_MUL:
+    case OP_DIV:
+    case OP_MOD:
+    case OP_LSHIFT:
+    case OP_RSHIFT:
+        // (a b -- out)
+        if (stack.size() < 2) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+        vch1 = stacktop(-2);
+        vch2 = stacktop(-1);
+        {
+            CScriptNum num1(vch1, env.fRequireMinimal, 5);
+            CScriptNum num2(vch2, env.fRequireMinimal, 5);
+            switch (env.opcode) {
+            case OP_MUL: num1 = num1 * num2; break;
+            case OP_DIV: num1 = num1 / num2; break;
+            case OP_MOD: num1 = num1 % num2; break;
+            case OP_LSHIFT: num1 = num1 << num2; break;
+            case OP_RSHIFT: num1 = num1 >> num2; break;
+            default: assert(0);
+            }
+            vch1 = num1.getvch();
+        }
+        popstack(stack);
+        popstack(stack);
+        pushstack(stack, vch1);
+        return true;
+    default: assert(0);
+    }
 }

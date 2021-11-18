@@ -193,7 +193,7 @@ bool Instance::setup_environment(unsigned int flags) {
                 txdata.Init(*tx.get(), std::move(spent_outputs));
             }
         }
-        checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[txin_index > -1 ? txin_index : 0], txdata);
+        checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[txin_index > -1 ? txin_index : 0], txdata, MissingDataBehavior::FAIL);
     } else {
         checker = new BaseSignatureChecker();
     }
@@ -596,7 +596,7 @@ uint256 Instance::calc_sighash() {
     txdata.Init(*tx.get(), std::move(spent_outputs));
     if (sigver == SigVersion::BASE) sigver = SigVersion::TAPROOT;
     // bool ret = SignatureHashSchnorr(sighash, execdata, *txTo, nIn, hashtype, sigversion, this->txdata);
-    if (!SignatureHashSchnorr(hash, execdata, *tx, txin_index, 0x00, sigver, txdata)) {
+    if (!SignatureHashSchnorr(hash, execdata, *tx, txin_index, 0x00, sigver, txdata, MissingDataBehavior::FAIL)) {
         fprintf(stderr, "Failed to generate schnorr signature hash!\n");
         exit(1);
     }

@@ -18,7 +18,9 @@
 
 #include <functions.h>
 
-#include <config/bitcoin-config.h>
+// #include <config/bitcoin-config.h>
+
+#include <debugger/version.h>
 
 #include <hash.h>
 
@@ -127,7 +129,7 @@ int main(int argc, char* const* argv)
     if (quiet) btc_logf = btc_logf_dummy;
 
     if (ca.m.count('v')) {
-        printf("tap (\"The Bitcoin Debugger Taproot Utility\") version %d.%d.%d\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION);
+        printf("tap (\"The Bitcoin Debugger Taproot Utility\") " VERSION() "\n");
         return 0;
     } else if (ca.m.count('h') || ca.l.size() < 3) {
         fprintf(stderr, "Syntax: %s [-v|--version] [-q|--quiet] [--addrprefix=tb|-ptb] [--tx=<hex>|-x<hex>] [--txin=<hex>|-i<hex>] [--privkey=<key>|-k<key>] [--sig=<hex>|-s<hex>] <internal_pubkey> <script_count> <script1> <script2> ... [<spend index or sig> [<spend arg1> [<spend arg2> [...]]]]\n", argv[0]);
@@ -139,7 +141,7 @@ int main(int argc, char* const* argv)
         fprintf(stderr, "The address prefix refers to the bech32 human readable part; this defaults to '%s'\n", DEFAULT_ADDR_PREFIX);
         return 0;
     }
-    btc_logf("tap %d.%d.%d -- type `%s -h` for help\n", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, argv[0]);
+    btc_logf("tap " VERSION() " -- type `%s -h` for help\n", argv[0]);
     fprintf(stderr, "WARNING: This is experimental software. Do not use this with real bitcoin, or you will most likely lose them all. You have been w a r n e d.\n");
 
     if (!pipe_in) {

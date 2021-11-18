@@ -52,7 +52,7 @@ void Value::verify_sig(bool compact) {
     if (args[1].size() == 32) {
         // new style pubkey, so use schnorr validation
         XOnlyPubKey pubkey((uint256(args[1])));
-        if (!pubkey.IsValid()) abort("invalid x only pubkey");
+        if (!pubkey.IsFullyValid()) abort("invalid x only pubkey");
         int64 = pubkey.VerifySchnorr(sighash, args[2]);
         if (int64 == 0) {
             uint256 sh2;
@@ -63,9 +63,9 @@ void Value::verify_sig(bool compact) {
                 uint256 pk2;
                 for (int i = 0; i < 32; ++i) pk2.begin()[i] = args[1].data()[31-i];
                 XOnlyPubKey pubkey2(pk2);
-                if (pubkey2.IsValid() && pubkey2.VerifySchnorr(sighash, args[2])) {
+                if (pubkey2.IsFullyValid() && pubkey2.VerifySchnorr(sighash, args[2])) {
                     fprintf(stderr, "NOTE: your pubkey is probably in reverse order (validation succeeds for flipped pubkey)\n");
-                } else if (pubkey2.IsValid() && pubkey2.VerifySchnorr(sh2, args[2])) {
+                } else if (pubkey2.IsFullyValid() && pubkey2.VerifySchnorr(sh2, args[2])) {
                     fprintf(stderr, "NOTE: your pubkey and sighash are probably both in reverse order (validation succeeds for flipped pubkey and sighash)\n");
                 }
             }
@@ -73,7 +73,7 @@ void Value::verify_sig(bool compact) {
     } else {
         CPubKey pubkey(args[1]);
         if (!pubkey.IsValid()) abort("invalid pubkey");
-        int64 = pubkey.Verify(sighash, args[2], compact);
+        int64 = compact ? pubkey.VerifyCompact(sighash, args[2]) :  pubkey.Verify(sighash, args[2]);
     }
     type = T_INT;
 }
