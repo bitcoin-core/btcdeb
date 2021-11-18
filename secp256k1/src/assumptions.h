@@ -1,11 +1,13 @@
-/**********************************************************************
- * Copyright (c) 2020 Pieter Wuille                                   *
- * Distributed under the MIT software license, see the accompanying   *
- * file COPYING or http://www.opensource.org/licenses/mit-license.php.*
- **********************************************************************/
+/***********************************************************************
+ * Copyright (c) 2020 Pieter Wuille                                    *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
 
 #ifndef SECP256K1_ASSUMPTIONS_H
 #define SECP256K1_ASSUMPTIONS_H
+
+#include <limits.h>
 
 #include "util.h"
 
@@ -19,7 +21,11 @@ struct secp256k1_assumption_checker {
        allowed. */
     int dummy_array[(
         /* Bytes are 8 bits. */
-        CHAR_BIT == 8 &&
+        (CHAR_BIT == 8) &&
+
+        /* No integer promotion for uint32_t. This ensures that we can multiply uintXX_t values where XX >= 32
+           without signed overflow, which would be undefined behaviour. */
+        (UINT_MAX <= UINT32_MAX) &&
 
         /* Conversions from unsigned to signed outside of the bounds of the signed type are
            implementation-defined. Verify that they function as reinterpreting the lower
