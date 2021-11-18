@@ -14,7 +14,7 @@
 
 #include <config/bitcoin-config.h>
 
-#include <version.h>
+#include <debugger/version.h>
 
 bool quiet = false;
 bool pipe_in = false;  // xxx | btcdeb

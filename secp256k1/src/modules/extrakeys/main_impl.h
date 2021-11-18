@@ -1,11 +1,11 @@
-/**********************************************************************
- * Copyright (c) 2020 Jonas Nick                                      *
- * Distributed under the MIT software license, see the accompanying   *
- * file COPYING or http://www.opensource.org/licenses/mit-license.php.*
- **********************************************************************/
+/***********************************************************************
+ * Copyright (c) 2020 Jonas Nick                                       *
+ * Distributed under the MIT software license, see the accompanying    *
+ * file COPYING or https://www.opensource.org/licenses/mit-license.php.*
+ ***********************************************************************/
 
-#ifndef _SECP256K1_MODULE_EXTRAKEYS_MAIN_
-#define _SECP256K1_MODULE_EXTRAKEYS_MAIN_
+#ifndef SECP256K1_MODULE_EXTRAKEYS_MAIN_H
+#define SECP256K1_MODULE_EXTRAKEYS_MAIN_H
 
 #include "include/secp256k1.h"
 #include "include/secp256k1_extrakeys.h"
@@ -31,6 +31,9 @@ int secp256k1_xonly_pubkey_parse(const secp256k1_context* ctx, secp256k1_xonly_p
         return 0;
     }
     if (!secp256k1_ge_set_xo_var(&pk, &x, 0)) {
+        return 0;
+    }
+    if (!secp256k1_ge_is_in_correct_subgroup(&pk)) {
         return 0;
     }
     secp256k1_xonly_pubkey_save(pubkey, &pk);
@@ -121,7 +124,7 @@ int secp256k1_xonly_pubkey_tweak_add_check(const secp256k1_context* ctx, const u
     secp256k1_fe_normalize_var(&pk.y);
     secp256k1_fe_get_b32(pk_expected32, &pk.x);
 
-    return memcmp(&pk_expected32, tweaked_pubkey32, 32) == 0
+    return secp256k1_memcmp_var(&pk_expected32, tweaked_pubkey32, 32) == 0
             && secp256k1_fe_is_odd(&pk.y) == tweaked_pk_parity;
 }
 
@@ -177,10 +180,20 @@ int secp256k1_keypair_create(const secp256k1_context* ctx, secp256k1_keypair *ke
 
     ret = secp256k1_ec_pubkey_create_helper(&ctx->ecmult_gen_ctx, &sk, &pk, seckey32);
     secp256k1_keypair_save(keypair, &sk, &pk);
-    memczero(keypair, sizeof(*keypair), !ret);
+    secp256k1_memczero(keypair, sizeof(*keypair), !ret);
 
     secp256k1_scalar_clear(&sk);
     return ret;
+}
+
+int secp256k1_keypair_sec(const secp256k1_context* ctx, unsigned char *seckey, const secp256k1_keypair *keypair) {
+    VERIFY_CHECK(ctx != NULL);
+    ARG_CHECK(seckey != NULL);
+    memset(seckey, 0, 32);
+    ARG_CHECK(keypair != NULL);
+
+    memcpy(seckey, &keypair->data[0], 32);
+    return 1;
 }
 
 int secp256k1_keypair_pub(const secp256k1_context* ctx, secp256k1_pubkey *pubkey, const secp256k1_keypair *keypair) {

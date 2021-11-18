@@ -451,7 +451,14 @@ struct Value {
         data_value();
         std::vector<unsigned char> tmp = {1 /* temporary; this should be configurable (wit ver) */};
         ConvertBits<8, 5, true>([&](unsigned char c) { tmp.push_back(c); }, data.begin(), data.end());
-        str = bech32::Encode(bech32_hrp, tmp);
+        str = bech32::Encode(bech32::Encoding::BECH32, bech32_hrp, tmp);
+        type = T_STRING;
+    }
+    void do_bech32menc() {
+        data_value();
+        std::vector<unsigned char> tmp = {1 /* temporary; this should be configurable (wit ver) */};
+        ConvertBits<8, 5, true>([&](unsigned char c) { tmp.push_back(c); }, data.begin(), data.end());
+        str = bech32::Encode(bech32::Encoding::BECH32M, bech32_hrp, tmp);
         type = T_STRING;
     }
     void do_bech32dec() {
@@ -459,19 +466,20 @@ struct Value {
             fprintf(stderr, "cannot bech32-decode non-string value\n");
             return;
         }
-        auto bech = bech32::Decode(str);
-        if (bech.first == "") {
-            fprintf(stderr, "failed to bech32-decode string\n");
+        bech32::DecodeResult result = bech32::Decode(str);
+        if (result.encoding == bech32::Encoding::INVALID) {
+            fprintf(stderr, "failed to bech32(m)-decode string\n");
             return;
         }
-        // Bech32 decoding
-        int version = bech.second[0]; // The first 5 bit symbol is the witness version (0-16)
+        auto bech = result.data;
+        // Bech32(m) decoding
+        int version = bech[0]; // The first 5 bit symbol is the witness version (0-16)
         // data = r.second;
-        printf("(bech32 HRP = %s)\n", bech.first.c_str());
+        printf("(bech32%s HRP = %s)\n", result.encoding == bech32::Encoding::BECH32M ? "m" : "", result.hrp.c_str());
         type = T_DATA;
         data.clear();
         // The rest of the symbols are converted witness program bytes.
-        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin() + 1, bech.second.end())) {
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.begin() + 1, bech.end())) {
             if (version == 0) {
                 {
                     if (data.size() == 20) {

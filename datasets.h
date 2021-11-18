@@ -59,13 +59,13 @@ inline void process_datasets(std::map<char, std::string>& m, bool verbose) {
             // populate --tx from dataset
             std::string data = string_from_file(std::string("doc/txs/") + dataset + "-tx");
             m['x'] = data;
-            if (verbose) printf("loaded spending (output) transaction from dataset %s\n", dataset.c_str());
+            if (verbose) printf("loaded spending (output) transaction from dataset %s: %s\n", dataset.c_str(), data.c_str());
         }
         if (!m.count('i')) {
             // populate --txin from dataset
             std::string data = string_from_file(std::string("doc/txs/") + dataset + "-in");
             m['i'] = data;
-            if (verbose) printf("loaded funding (input) transaction from dataset %s\n", dataset.c_str());
+            if (verbose) printf("loaded funding (input) transaction from dataset %s: %s\n", dataset.c_str(), data.c_str());
         }
     } catch (const std::runtime_error& err) {
         fprintf(stderr, "error loading from dataset \"%s\": %s\n", dataset.c_str(), err.what());
