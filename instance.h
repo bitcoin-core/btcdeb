@@ -22,6 +22,12 @@ public:
     ECCVerifyHandle evh;
     CTransactionRef tx;
     CTransactionRef txin;
+    /*
+     * INPUT TX VOUT            TX VIN
+     * [0]                      [0]*    <-- txin_index==0
+     * [1]*                     [1]
+     *    `-- txin_vout_index==1
+     */
     int64_t txin_index;             ///< index of the input txid in tx's inputs
     int64_t txin_vout_index;        ///< index inside txin of the output to tx
     std::vector<CAmount> amounts;

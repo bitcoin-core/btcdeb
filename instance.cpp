@@ -188,7 +188,7 @@ bool Instance::setup_environment(unsigned int flags) {
     if (tx) {
         if (txin && txin_index > -1) {
             std::vector<CTxOut> spent_outputs;
-            spent_outputs.emplace_back(txin->vout[txin_index]);
+            spent_outputs.emplace_back(txin->vout[txin_vout_index]);
             if (tx->vin.size() == 1) {
                 txdata.Init(*tx.get(), std::move(spent_outputs), has_preamble);
             }
