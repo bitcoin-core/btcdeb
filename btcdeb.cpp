@@ -174,7 +174,7 @@ int main(int argc, char* const* argv)
         if (get_debug_flag("taproot", debug_set, true)) btc_taproot_logf = btc_logf_stderr;
         btc_logf("LOG:");
         if (btc_enabled(btc_sighash_logf)) btc_logf(" sighash");
-        if (btc_enabled(btc_sign_logf)) btc_logf(" sign");
+        if (btc_enabled(btc_sign_logf)) btc_logf(" signing");
         if (btc_enabled(btc_segwit_logf)) btc_logf(" segwit");
         if (btc_enabled(btc_taproot_logf)) btc_logf(" taproot");
         btc_logf("\n");

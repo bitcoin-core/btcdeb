@@ -190,7 +190,7 @@ bool Instance::setup_environment(unsigned int flags) {
             std::vector<CTxOut> spent_outputs;
             spent_outputs.emplace_back(txin->vout[txin_index]);
             if (tx->vin.size() == 1) {
-                txdata.Init(*tx.get(), std::move(spent_outputs));
+                txdata.Init(*tx.get(), std::move(spent_outputs), has_preamble);
             }
         }
         checker = new TransactionSignatureChecker(tx.get(), txin_index > -1 ? txin_index : 0, amounts[txin_index > -1 ? txin_index : 0], txdata, MissingDataBehavior::FAIL);
@@ -593,7 +593,7 @@ uint256 Instance::calc_sighash() {
     std::vector<CTxOut> spent_outputs;
     spent_outputs.emplace_back(txin->vout[txin_vout_index]);
     txdata = PrecomputedTransactionData();
-    txdata.Init(*tx.get(), std::move(spent_outputs));
+    txdata.Init(*tx.get(), std::move(spent_outputs), has_preamble);
     if (sigver == SigVersion::BASE) sigver = SigVersion::TAPROOT;
     // bool ret = SignatureHashSchnorr(sighash, execdata, *txTo, nIn, hashtype, sigversion, this->txdata);
     if (!SignatureHashSchnorr(hash, execdata, *tx, txin_index, 0x00, sigver, txdata, MissingDataBehavior::FAIL)) {

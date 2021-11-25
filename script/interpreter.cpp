@@ -1616,7 +1616,6 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
         assert(false);
     }
     assert(in_pos < tx_to.vin.size());
-    assert(cache.m_bip341_taproot_ready && cache.m_spent_outputs_ready);
     if (!(cache.m_bip341_taproot_ready && cache.m_spent_outputs_ready)) {
         if (cache.m_bip341_taproot_ready) {
             btc_sign_logf("- BIP341-taproot ready but spent outputs are not\n");
@@ -1626,28 +1625,40 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
         return HandleMissingData(mdb);
     }
 
+    CHashWriter::debug = btc_enabled(btc_sighash_logf);
     CHashWriter ss = HASHER_TAPSIGHASH;
 
     // Epoch
     static constexpr uint8_t EPOCH = 0;
+    btc_sighash_logf(" << epoch\n");
     ss << EPOCH;
 
     // Hash type
     const uint8_t output_type = (hash_type == SIGHASH_DEFAULT) ? SIGHASH_ALL : (hash_type & SIGHASH_OUTPUT_MASK); // Default (no sighash byte) is equivalent to SIGHASH_ALL
     const uint8_t input_type = hash_type & SIGHASH_INPUT_MASK;
     if (!(hash_type <= 0x03 || (hash_type >= 0x81 && hash_type <= 0x83))) return false;
+    btc_sighash_logf(" << hash type\n");
     ss << hash_type;
 
     // Transaction level data
+    btc_sighash_logf(" << tx_to.nVersion\n");
     ss << tx_to.nVersion;
+    btc_sighash_logf(" << tx_to.nLockTime\n");
     ss << tx_to.nLockTime;
     if (input_type != SIGHASH_ANYONECANPAY) {
+        btc_sighash_logf("input type != anyone can pay:\n");
+        btc_sighash_logf(" << cache prevouts single hash\n");
         ss << cache.m_prevouts_single_hash;
+        btc_sighash_logf(" << cache spent amounts single hash\n");
         ss << cache.m_spent_amounts_single_hash;
+        btc_sighash_logf(" << cache spent scripts single hash\n");
         ss << cache.m_spent_scripts_single_hash;
+        btc_sighash_logf(" << cache sequences single hash\n");
         ss << cache.m_sequences_single_hash;
     }
     if (output_type == SIGHASH_ALL) {
+        btc_sighash_logf("output type == sighash_all\n");
+        btc_sighash_logf(" << cache outputs single hash\n");
         ss << cache.m_outputs_single_hash;
     }
 
@@ -1655,31 +1666,48 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
     assert(execdata.m_annex_init);
     const bool have_annex = execdata.m_annex_present;
     const uint8_t spend_type = (ext_flag << 1) + (have_annex ? 1 : 0); // The low bit indicates whether an annex is present.
+    btc_sighash_logf(" << spend type\n");
     ss << spend_type;
     if (input_type == SIGHASH_ANYONECANPAY) {
+        btc_sighash_logf("anyone can pay\n");
+        btc_sighash_logf(" << tx_to.vin[%u].prevout\n", in_pos);
         ss << tx_to.vin[in_pos].prevout;
+        btc_sighash_logf(" << cache spent outputs[%u]\n", in_pos);
         ss << cache.m_spent_outputs[in_pos];
+        btc_sighash_logf(" << tx_to.vin[%u].sequence\n", in_pos);
         ss << tx_to.vin[in_pos].nSequence;
     } else {
+        btc_sighash_logf(" << in_pos\n");
         ss << in_pos;
     }
     if (have_annex) {
+        btc_sighash_logf(" << annex hash\n");
         ss << execdata.m_annex_hash;
     }
 
     // Data about the output (if only one).
     if (output_type == SIGHASH_SINGLE) {
-        if (in_pos >= tx_to.vout.size()) return false;
+        btc_sighash_logf("sighash single\n");
+        if (in_pos >= tx_to.vout.size()) {
+            btc_sighash_logf(" << in_pos >= tx_to.vout.size()\n");
+            return false;
+        }
+        btc_sighash_logf(" (sha_single_output) << tx_to.vout[in_pos]\n");
         CHashWriter sha_single_output(SER_GETHASH, 0);
         sha_single_output << tx_to.vout[in_pos];
+        btc_sighash_logf(" << sha_single_output\n");
         ss << sha_single_output.GetSHA256();
     }
 
     // Additional data for BIP 342 signatures
     if (sigversion == SigVersion::TAPSCRIPT) {
+        btc_sighash_logf("taproot sigversion:\n");
+        btc_sighash_logf(" << tapleaf hash\n");
         assert(execdata.m_tapleaf_hash_init);
         ss << execdata.m_tapleaf_hash;
+        btc_sighash_logf(" << key version\n");
         ss << key_version;
+        btc_sighash_logf(" << code separator position\n");
         assert(execdata.m_codeseparator_pos_init);
         ss << execdata.m_codeseparator_pos;
     }
@@ -1701,61 +1729,61 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
         uint256 hashOutputs;
         const bool cacheready = cache && cache->m_bip143_segwit_ready;
 
+        CHashWriter::debug = btc_enabled(btc_sighash_logf);
         if (!(nHashType & SIGHASH_ANYONECANPAY)) {
             hashPrevouts = cacheready ? cache->hashPrevouts : SHA256Uint256(GetPrevoutsSHA256(txTo));
-            btc_sign_logf("  hashPrevouts = %s\n", hashPrevouts.ToString().c_str());
+            btc_sighash_logf("  hashPrevouts = %s\n", hashPrevouts.ToString().c_str());
         }
 
         if (!(nHashType & SIGHASH_ANYONECANPAY) && (nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
             hashSequence = cacheready ? cache->hashSequence : SHA256Uint256(GetSequencesSHA256(txTo));
-            btc_sign_logf("  hashSequence = %s\n", hashSequence.ToString().c_str());
+            btc_sighash_logf("  hashSequence = %s\n", hashSequence.ToString().c_str());
         }
 
 
         if ((nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
             hashOutputs = cacheready ? cache->hashOutputs : SHA256Uint256(GetOutputsSHA256(txTo));
-            btc_sign_logf("  hashOutputs [!single] = %s\n", hashOutputs.ToString().c_str());
+            btc_sighash_logf("  hashOutputs [!single] = %s\n", hashOutputs.ToString().c_str());
         } else if ((nHashType & 0x1f) == SIGHASH_SINGLE && nIn < txTo.vout.size()) {
             CHashWriter ss(SER_GETHASH, 0);
             ss << txTo.vout[nIn];
             hashOutputs = ss.GetHash();
-            btc_sign_logf("  hashOutputs [single] = %s\n", hashOutputs.ToString().c_str());
+            btc_sighash_logf("  hashOutputs [single] = %s\n", hashOutputs.ToString().c_str());
         }
 
-        CHashWriter::debug = btc_enabled(btc_sighash_logf);
         CHashWriter ss(SER_GETHASH, 0);
         // Version
-        btc_sign_logf("SERIALIZING:\n");
+        btc_sighash_logf("SERIALIZING:\n");
         ss << txTo.nVersion;
-        btc_sign_logf(" << txTo.nVersion = %d\n", txTo.nVersion);
+        btc_sighash_logf(" << txTo.nVersion = %d\n", txTo.nVersion);
         // Input prevouts/nSequence (none/all, depending on flags)
         ss << hashPrevouts;
-        btc_sign_logf(" << hashPrevouts\n");
+        btc_sighash_logf(" << hashPrevouts\n");
         ss << hashSequence;
-        btc_sign_logf(" << hashSequence\n");
+        btc_sighash_logf(" << hashSequence\n");
         // The input being signed (replacing the scriptSig with scriptCode + amount)
         // The prevout may already be contained in hashPrevout, and the nSequence
         // may already be contain in hashSequence.
         ss << txTo.vin[nIn].prevout;
-        btc_sign_logf(" << txTo.vin[nIn=%d].prevout = %s\n", nIn, txTo.vin[nIn].prevout.ToString().c_str());
+        btc_sighash_logf(" << txTo.vin[nIn=%d].prevout = %s\n", nIn, txTo.vin[nIn].prevout.ToString().c_str());
         ss << scriptCode;
-        btc_sign_logf(" << scriptCode\n");
+        btc_sighash_logf(" << scriptCode\n");
         ss << amount;
-        btc_sign_logf(" << amount = %" PRId64 "\n", amount);
+        btc_sighash_logf(" << amount = %" PRId64 "\n", amount);
         ss << txTo.vin[nIn].nSequence;
-        btc_sign_logf(" << txTo.vin[nIn].nSequence = %u (0x%x)\n", txTo.vin[nIn].nSequence, txTo.vin[nIn].nSequence);
+        btc_sighash_logf(" << txTo.vin[nIn].nSequence = %u (0x%x)\n", txTo.vin[nIn].nSequence, txTo.vin[nIn].nSequence);
         // Outputs (none/one/all, depending on flags)
         ss << hashOutputs;
-        btc_sign_logf(" << hashOutputs\n");
+        btc_sighash_logf(" << hashOutputs\n");
         // Locktime
         ss << txTo.nLockTime;
-        btc_sign_logf(" << txTo.nLockTime = %d\n", txTo.nLockTime);
+        btc_sighash_logf(" << txTo.nLockTime = %d\n", txTo.nLockTime);
         // Sighash type
         ss << nHashType;
-        btc_sign_logf(" << nHashType = %02x\n", nHashType);
-        CHashWriter::debug = false;
+        btc_sighash_logf(" << nHashType = %02x\n", nHashType);
         uint256 sighash = ss.GetHash();
-        btc_sign_logf("RESULTING HASH = %s\n", sighash.ToString().c_str());
+        btc_sighash_logf("RESULTING HASH = %s\n", sighash.ToString().c_str());
+        CHashWriter::debug = false;
         return sighash;
     }
 
