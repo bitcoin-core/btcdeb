@@ -52,6 +52,8 @@ inline void process_datasets(std::map<char, std::string>& m, bool verbose) {
                "    funding txid  = 7e69687c94c57a878cf711a39870383c6fe93b420f26184a21d020d8ace2df83\n"
                "    spending txid = 56ae0d780759b8126a3eb9be605b1a6e48acb326af527547205d6749afab1a61\n"
         );
+        printf("  p2tr A standard taproot spend transaction (see example in documents)\n");
+        printf("  p2ts A standard tapscript spend transaction (see example in documents)\n");
         exit(0);
     }
     try {
