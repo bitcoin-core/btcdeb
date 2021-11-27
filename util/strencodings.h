@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-// #include <cstring>
+#include <cstring>
 #include <functional>
 
 #define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
