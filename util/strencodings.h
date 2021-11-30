@@ -20,8 +20,6 @@
 #include <cstring>
 #include <functional>
 
-#define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
-
 // util/string.h {
 /**
  * Check if a string does not contain any embedded NUL (\0) characters
