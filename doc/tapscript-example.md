@@ -1,8 +1,6 @@
 # Tapscript example
 
-The taproot-new branch of btcdeb contains experimental support for the work-in-progress Taproot proposal by Pieter Wuille and others. (See https://github.com/bitcoin/bitcoin/pull/17977)
-
-This document is an early draft describing one process with which you can create, from scratch, your own Tapscript output, fund it, and then spend one of its paths.
+This document describes one process with which you can create, from scratch, your own Tapscript output, fund it, and then spend one of its paths.
 
 Note: you should start out at [the tap utility version of this document](tapscript-example-with-tap.md) unless you want to know the nitty gritty details.
 
