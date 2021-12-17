@@ -251,17 +251,16 @@ void Value::do_not_op() {
 
 void Value::do_prefix_compact_size() {
     data_value();
-    uint8_t sz8 = 0;
+    std::vector<uint8_t> prefix;
     size_t data_len = data.size();
-    #define DLW(type) \
-        if (sz8) data.insert(data.begin(), &sz8, &sz8 + 1);\
-        type t = (type)data_len;\
-        data.insert(data.begin(), &t, &t + sizeof(type));\
+    #define DLW(sz) \
+        for (size_t i = 0; i < sz; ++i) { prefix.push_back(data_len & 0xff); data_len >>= 8; } \
+        data.insert(data.begin(), prefix.begin(), prefix.end()); \
         return
-    if (data_len < 253) { DLW(uint8_t); }
-    if (data_len <= std::numeric_limits<unsigned short>::max()) { sz8 = 253; DLW(uint16_t); }
-    if (data_len <= std::numeric_limits<unsigned int>::max()) { sz8 = 254; DLW(uint32_t); }
-    sz8 = 255; DLW(uint64_t);
+    if (data_len < 253) { DLW(1); }
+    if (data_len <= std::numeric_limits<unsigned short>::max()) { prefix.push_back(253); DLW(2); }
+    if (data_len <= std::numeric_limits<unsigned int>::max()) { prefix.push_back(254); DLW(4); }
+    prefix.push_back(255); DLW(8);
 }
 
 void Value::do_len() {
