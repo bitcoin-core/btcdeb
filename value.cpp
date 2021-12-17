@@ -264,6 +264,12 @@ void Value::do_prefix_compact_size() {
     sz8 = 255; DLW(uint64_t);
 }
 
+void Value::do_len() {
+    data_value();
+    int64 = (int64_t)data.size();
+    type = T_INT;
+}
+
 std::vector<uint8_t> gen_taproot_tagged_hash(const std::string& tag, const std::vector<uint8_t>& msg) {
     CHashWriter tagged_writer = TaggedHash(tag);
     // we do not use the << operator is the std::vector serializer pushes a compact-size prefix

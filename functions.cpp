@@ -253,6 +253,7 @@ int _e_jacobi_sym(Value&& pv)  { pv.do_jacobi_symbol(); pv.println(); return 0; 
 int _e_tagged_hash(Value&& pv) { pv.do_tagged_hash(); pv.println(); return 0; }
 int _e_taproot_tweak_pubkey(Value&& pv) { pv.do_taproot_tweak_pubkey(); pv.println(); return 0; }
 int _e_prefix_compact_size(Value&& pv) { pv.do_prefix_compact_size(); pv.println(); return 0; }
+int _e_len(Value&& pv) { pv.do_len(); pv.println(); return 0; }
 #ifdef ENABLE_DANGEROUS
 int _e_taproot_tweak_seckey(Value&& pv) { pv.do_taproot_tweak_seckey(); pv.println(); return 0; }
 int _e_encode_wif(Value&& pv)    { kerl_set_sensitive(true); pv.do_encode_wif(); pv.println(); return 0; }
@@ -288,6 +289,7 @@ static const tf_t tfs[] = {
     TF ("[message] perform HASH256 (SHA256(SHA256(message))", hash256),
     TF ("[*]       convert into a hex string", hex),
     TF ("[arg]     convert into an integer", int),
+    TF ("[*]       show length of expression in bytes", len),
     TFN("[n] ([k]) calculate the Jacobi symbol for n modulo k, where k defaults to the secp256k1 field size", "jacobi-symbol", jacobi_sym),
     TFN("[value] prefix [value] with its compact size encoded byte length", "prefix-compact-size", prefix_compact_size),
     TFN("[pubkey] convert the given pubkey into an x-only pubkey, as those used in taproot/tapscript", "pubkey-to-xpubkey", pubkey_to_xpubkey),
