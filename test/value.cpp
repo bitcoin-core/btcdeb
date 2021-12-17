@@ -102,6 +102,56 @@ TEST_CASE("Single entry values are interpreted correctly", "[single-entry-values
     }
 }
 
+TEST_CASE("Compact size encoder", "[compact-size]") {
+    SECTION("Fitting in 1 byte") {
+        std::string s = "0x";
+        for (uint8_t i = 1; i < 253; ++i) {
+            s += strprintf("%02x", i);
+            Value v(s.c_str());
+            v.do_prefix_compact_size();
+            REQUIRE(v.data[0] == i);
+        }
+        s += "fd"; // -> 253 bytes -> 0xfd (16 bit) + LE(253) == 0xfdfd00
+        {
+            Value v(s.c_str());
+            v.do_prefix_compact_size();
+            REQUIRE((uint32_t)v.data[0] == 0xfd); // 2 byte size
+            REQUIRE((uint32_t)v.data[1] == 0xfd); // 253 (lower byte)
+            REQUIRE((uint32_t)v.data[2] == 0x00); // 00 (higher byte)
+        }
+        s += "feff000102"; // -> 258 bytes -> 0xfd + LE(258) == 0xfd0201
+        {
+            Value v(s.c_str());
+            v.do_prefix_compact_size();
+            REQUIRE((uint32_t)v.data[0] == 0xfd); // 2 byte size
+            REQUIRE((uint32_t)v.data[1] == 0x02); // 02 (lower byte)
+            REQUIRE((uint32_t)v.data[2] == 0x01); // 01 (higher byte)
+        }
+        {
+            Value v("0x00");
+            v.data.resize(65537);
+            v.do_prefix_compact_size();
+            // 65537 = 0x010001 = 0xfe (32 bit) + LE(65537) = 0xfc01000100
+            REQUIRE((uint32_t)v.data[0] == 0xfe); // 4 byte size
+            REQUIRE((uint32_t)v.data[1] == 0x01); // 01 (lowest byte)
+            REQUIRE((uint32_t)v.data[2] == 0x00); // 00 (lower byte)
+            REQUIRE((uint32_t)v.data[3] == 0x01); // 01 (higher byte)
+            REQUIRE((uint32_t)v.data[4] == 0x00); // 01 (highest byte)
+        }
+        {
+            Value v("0x00");
+            v.data.resize(65538);
+            v.do_prefix_compact_size();
+            // 65538 = 0x010002 = 0xfe (32 bit) + LE(65538) = 0xfc02000100
+            REQUIRE((uint32_t)v.data[0] == 0xfe); // 4 byte size
+            REQUIRE((uint32_t)v.data[1] == 0x02); // 02 (lowest byte)
+            REQUIRE((uint32_t)v.data[2] == 0x00); // 00 (lower byte)
+            REQUIRE((uint32_t)v.data[3] == 0x01); // 01 (higher byte)
+            REQUIRE((uint32_t)v.data[4] == 0x00); // 01 (highest byte)
+        }
+    }
+}
+
 TEST_CASE("Script or not to script", "[script-notscript]") {
     SECTION("515293 becomes the number, not the script") {
         Value notascript("515293");

@@ -527,6 +527,7 @@ struct Value {
     void do_taproot_tweak_pubkey();
     void do_jacobi_symbol();
     void do_prefix_compact_size();
+    void do_len();
 #ifdef ENABLE_DANGEROUS
     void do_taproot_tweak_seckey();
     void do_combine_privkeys();
