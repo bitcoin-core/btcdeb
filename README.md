@@ -25,7 +25,7 @@ btcdeb depends on the following:
 * automake/autoconf
 * pkg-config
 
-Ubuntu/debian users can do: `apt-get install libtool libssl-dev autoconf` (with `sudo` prepended if necessary)
+Ubuntu/debian users can do: `apt-get install libtool libssl-dev autoconf pkg-config` (with `sudo` prepended if necessary)
 
 Mac users can do: `brew install libtool automake pkg-config`
 
