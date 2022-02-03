@@ -147,18 +147,18 @@ bool Instance::parse_pretend_valid_expr(const char* expr) {
                 return false;
             }
             got_sig = false;
-            v.do_hash160();
-            keyid = uint160(v.data_value());
-            // pretend_valid_map[sig] = s;
+            // v.do_hash160();
+            // keyid = uint160(v.data_value());
+            pretend_valid_map[sig] = s;
             pretend_valid_pubkeys.insert(s);
-            auto key = CPubKey(ParseHex(p));
-            if (!key.IsFullyValid()) {
-                fprintf(stderr, "invalid pubkey %s\n", p);
-                return false;
-            }
-            pretend_valid_pubkeys.insert(valtype(key.begin(), key.end()));
-            // note: we override below; this may lead to issues
-            pretend_valid_map[sig] = valtype(key.begin(), key.end());
+            // auto key = CPubKey(ParseHex(p));
+            // if (!key.IsFullyValid()) {
+            //     fprintf(stderr, "invalid pubkey %s\n", p);
+            //     return false;
+            // }
+            // pretend_valid_pubkeys.insert(valtype(key.begin(), key.end()));
+            // // note: we override below; this may lead to issues
+            // pretend_valid_map[sig] = valtype(key.begin(), key.end());
             break;
         }
         p = c = c + (*c != 0);
