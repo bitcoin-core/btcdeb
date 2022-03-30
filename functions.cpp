@@ -239,6 +239,7 @@ int _e_hash160(Value&& pv)    { pv.do_hash160(); pv.println(); return 0; }
 int _e_b58ce(Value&& pv)      { pv.do_base58chkenc(); pv.println(); return 0; }
 int _e_b58cd(Value&& pv)      { pv.do_base58chkdec(); pv.println(); return 0; }
 int _e_b32e(Value&& pv)       { pv.do_bech32enc(); pv.println(); return 0; }
+int _e_b32me(Value&& pv)       { pv.do_bech32menc(); pv.println(); return 0; }
 int _e_b32d(Value&& pv)       { pv.do_bech32dec(); pv.println(); return 0; }
 int _e_verify_sig(Value&& pv) { pv.do_verify_sig(); pv.println(); return 0; }
 int _e_verify_sig_compact(Value&& pv) { pv.do_verify_sig_compact(); pv.println(); return 0; }
@@ -281,6 +282,7 @@ static const tf_t tfs[] = {
     TF ("[value1] [value2] add two values together", add),
     TFN("[string]  decode [string] into a pubkey using bech32 encoding", "bech32-decode", b32d),
     TFN("[pubkey]  encode [pubkey] using bech32 encoding", "bech32-encode", b32e),
+    TFN("[pubkey]  encode [pubkey] using bech32m encoding", "bech32m-encode", b32me),
     TFN("[string]  decode [string] into a pubkey using base58 encoding (with checksum)", "base58chk-decode", b58cd),
     TFN("[pubkey]  encode [pubkey] using base58 encoding (with checksum)", "base58chk-encode", b58ce),
     TFN("[pubkey1] [pubkey2] combine the two pubkeys into one pubkey", "combine-pubkeys", combine_pubkeys),
