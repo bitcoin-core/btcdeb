@@ -68,17 +68,17 @@ compute_credits_template: &CREDITS_TEMPLATE
 #     FILE_ENV: "./ci/test/00_setup_env_win64.sh"
 # TODO: win64 requires an installer?
 
-task:
-  name: '32-bit + dash [CentOS 8]'
-  << : *GLOBAL_TASK_TEMPLATE
-  container:
-    image: centos:8
-  env:
-    matrix:
-      - ENABLE_DANGEROUS: 1
-      - ENABLE_DANGEROUS: ""
-    PACKAGE_MANAGER_INSTALL: "yum install -y"
-    FILE_ENV: "./ci/test/00_setup_env_i686_centos.sh"
+#task:
+#  name: '32-bit + dash [CentOS 8]'
+#  << : *GLOBAL_TASK_TEMPLATE
+#  container:
+#    image: centos:8
+#  env:
+#    matrix:
+#      - ENABLE_DANGEROUS: 1
+#      - ENABLE_DANGEROUS: ""
+#    PACKAGE_MANAGER_INSTALL: "yum install -y"
+#    FILE_ENV: "./ci/test/00_setup_env_i686_centos.sh"
 
 task:
   name: '[sanitizers: thread (TSan)] [focal]'
