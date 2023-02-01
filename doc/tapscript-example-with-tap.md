@@ -73,7 +73,7 @@ Without going into detail, in order to spend a Taproot output, you either have t
 We will do both, in that order.
 
 ```Bash
-$ tap $pubkey 2 $script_alice $script_bob
+$ tap $pubkey 2 "${script_alice}" "${script_bob}"
 tap 0.4.22 -- type `tap -h` for help
 WARNING: This is experimental software. Do not use this with real bitcoin, or you will most likely lose them all. You have been w a r n e d.
 LOG: sign segwit taproot
@@ -181,7 +181,7 @@ Note that we stored the resulting transaction in `tx`.
 Now we can use the `tap` utility to examine and finish our transaction.
 
 ```Bash
-$ tap --tx=$tx --txin=$txin $pubkey 2 $script_alice $script_bob
+$ tap --tx=$tx --txin=$txin $pubkey 2 "${script_alice}" "${script_bob}"
 tap 0.4.22 -- type `tap -h` for help
 WARNING: This is experimental software. Do not use this with real bitcoin, or you will most likely lose them all. You have been w a r n e d.
 LOG: sign segwit taproot
@@ -229,7 +229,7 @@ There are 3 ways to complete this transaction: (1) manually, (2) by providing a 
 We will do the third alternative here.
 
 ```Bash
-$ tap --privkey=$privkey --tx=$tx --txin=$txin $pubkey 2 $script_alice $script_bob
+$ tap --privkey=$privkey --tx=$tx --txin=$txin $pubkey 2 "${script_alice}" "${script_bob}"
 [...]
 Resulting Bech32m address: bcrt1p5kaqsuted66fldx256lh3en4h9z4uttxuagkwepqlqup6hw639gsm28t6c
 tweaked privkey -> 4fe6b3e5fbd61870577980ad5e4e13080776069f0fb3c1e353572e0c4993abc1
@@ -386,7 +386,7 @@ When doing a tapscript spend, a control object is needed, which proves that the 
 There's a lot of output so I am splitting it into a few sections:
 
 ```Bash
-$ tap --tx=$tx --txin=$txin $pubkey 2 $script_alice $script_bob 1
+$ tap --tx=$tx --txin=$txin $pubkey 2 "${script_alice}" "${script_bob}" 1
 [..]
 Internal pubkey: f30544d6009c8d8d94f5d030b2e844b1a3ca036255161c479db1cca5b374dd1c
 1 spending argument present
@@ -555,7 +555,7 @@ error: Script failed an OP_EQUALVERIFY operation
 Unsurprisingly, our fake signature does *not* sha256-hash to the preimage hash that Bob requires. Luckily we know what the preimage is, because we created it at the very top. Let's put that in as the first script argument to tap (after the selected script index). We also want a signature by Bob in there, so let's also provide *Bob's private key* to tap. Alternatively we could run through to the end and use the sighash to generate a signature elsewhere.
 
 ```Bash
-$ tap -k81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9 --tx=$tx --txin=$txin $pubkey 2 $script_alice $script_bob 1 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f
+$ tap -k81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9 --tx=$tx --txin=$txin $pubkey 2 "${script_alice}" "${script_bob}" 1 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f
 [...]
 Tapscript spending witness: [
  "107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f",
