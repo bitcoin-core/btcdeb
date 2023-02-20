@@ -100,7 +100,7 @@ btcdeb> tf tagged-hash TapLeaf c0 prefix_compact_size(a8206c60f404f8167a38fc70ea
 btcdeb> tf tagged-hash TapBranch 632c8632b4f29c6291416e23135cf78ecb82e525788ea5ed6483e3c6ce943b42 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
 41646f8c1fe2a96ddad7f5471bc4fee7da98794ef8c45a4f4fc6a559d60c9f6b
 # ↑ this is the root of our merkle tree, before we do the tweak
-btcdeb tf tagged-hash TapTweak 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 41646f8c1fe2a96ddad7f5471bc4fee7da98794ef8c45a4f4fc6a559d60c9f6b
+btcdeb> tf tagged-hash TapTweak 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 41646f8c1fe2a96ddad7f5471bc4fee7da98794ef8c45a4f4fc6a559d60c9f6b
 0b0e6981ce6cac74d055d0e4c25e5b4455a083b3217761327867f26460e0a776
 # ↑ this is the tweak; we now need to tweak our pubkey (note: the tweak is actually multiplied by the
 #   generator to generate a point that is added to the pubkey; this is done under the hood by the
@@ -115,8 +115,8 @@ Note: the pubkey we got was uneven (03). Later when we do a Tapscript spend, we 
 We now have our pubkey f128a8...0c. We can bech32-encode it to get an actual address. (Note: bech32-encode is temporarily hard-coded to use regtest version 1 addresses. This will be made configurable.)
 
 ```Bash
-btcdeb> tf bech32-encode f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
-"bcrt1p7y52329xxmse7q9gq9542rldlsntdawaqnvntmz99z224kfcauxqg59zqx"
+btcdeb> tf bech32m-encode f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
+"bcrt1p7y52329xxmse7q9gq9542rldlsntdawaqnvntmz99z224kfcauxqag4w9y"
 ```
 
 Warning: be sure to remove the evenness byte from the above! If you do 03f128a8... you will get something that cannot be spent!
@@ -124,67 +124,57 @@ Warning: be sure to remove the evenness byte from the above! If you do 03f128a8.
 Now send a (small!) amount to this address, and check the transaction. It should say unknown witness for the output.
 
 ```Bash
-$ bitcoin-cli sendtoaddress bcrt1p7y52329xxmse7q9gq9542rldlsntdawaqnvntmz99z224kfcauxqg59zqx 0.0001
-d0940a43af208262dba1868d7accf2bf765da43be3e299e388a1d987eb4598e7
-# (if you get fee estimation failed errors when sending, do `bitcoin-cli settxfee 0.00001` and try again)
-$ bitcoin-cli getrawtransaction d0940a43af208262dba1868d7accf2bf765da43be3e299e388a1d987eb4598e7 1
+$ alias bcli='bitcoin-cli -regtest' # change this to whatever command you use to access bitcoin-cli
+$ bcli sendtoaddress bcrt1p7y52329xxmse7q9gq9542rldlsntdawaqnvntmz99z224kfcauxqag4w9y 0.0001
+303d28a45ad1234fd8092df147ae52464a4b7de0d343a2d79dc28dd7611dd25a
+# (if you get fee estimation failed errors when sending, do `bcli settxfee 0.00001` and try again)
+$ bcli getrawtransaction 303d28a45ad1234fd8092df147ae52464a4b7de0d343a2d79dc28dd7611dd25a 1
 {
-  "in_active_chain": true,
-  "txid": "d0940a43af208262dba1868d7accf2bf765da43be3e299e388a1d987eb4598e7",
-  "hash": "a726cb1e6114d45f385410e24ea286e8cb7c9ce1c40aaf9eb4e2113a336df7e4",
+  "txid": "303d28a45ad1234fd8092df147ae52464a4b7de0d343a2d79dc28dd7611dd25a",
+  "hash": "18cf1e2f860b6e416009531b1e0864157b842e961404ff4d9e5ac0170450a035",
   "version": 2,
   "size": 234,
   "vsize": 153,
   "weight": 609,
-  "locktime": 13,
+  "locktime": 202,
   "vin": [
     {
-      "txid": "e9742c89130e28a559810849937079e36dcba80a49d155057eb399e2e1a43650",
+      "txid": "7cdda95c72df7648cbeac72591f019ea693326f18d9db3d6db683d498e32afbf",
       "vout": 0,
       "scriptSig": {
         "asm": "",
         "hex": ""
       },
       "txinwitness": [
-        "304402206c4c1c9e2fa82d087e5c1a6256f2bcd7cab3b915bf2f6b782a80045f9dc7a9b2022034c720cbbab2e75cbd8a35bc99d148f408b16205592e80200bf2f491bb0fa88b01",
-        "02077c102914911f57b8c1881e207ea09297024803e1c10ce3f20453c2c3f735c6"
+        "30440220472c552bc77523659aad75aac0674c723c058b80484f5186769c03cb0287b52f02200b0e449a51f185017a64c1261c852e51c2cbb4fee949a50d634224dfb27d23f601",
+        "0344de9257311c16349ff0acd2be071433e3a1de0169ed900ae3f2e81f0b3f37fc"
       ],
       "sequence": 4294967294
     }
   ],
   "vout": [
     {
-      "value": 0.10000000,
+      "value": 0.00010000,
       "n": 0,
       "scriptPubKey": {
         "asm": "1 f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c",
         "hex": "5120f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c",
-        "reqSigs": 1,
-        "type": "witness_v1_taproot",
-        "addresses": [
-          "bcrt1p7y52329xxmse7q9gq9542rldlsntdawaqnvntmz99z224kfcauxqg59zqx"
-        ]
+        "address": "bcrt1p7y52329xxmse7q9gq9542rldlsntdawaqnvntmz99z224kfcauxqag4w9y",
+        "type": "witness_v1_taproot"
       }
     },
     {
-      "value": 49.89999847,
+      "value": 49.99918776,
       "n": 1,
       "scriptPubKey": {
-        "asm": "0 cfb604b3feadf3367e96c701abd4912d0c99877f",
-        "hex": "0014cfb604b3feadf3367e96c701abd4912d0c99877f",
-        "reqSigs": 1,
-        "type": "witness_v0_keyhash",
-        "addresses": [
-          "bcrt1qe7mqfvl74henvl5kcuq6h4y395xfnpml96t6lj"
-        ]
+        "asm": "0 801addecfc3d8a646ad95a2d48b2e729ec12e39b",
+        "hex": "0014801addecfc3d8a646ad95a2d48b2e729ec12e39b",
+        "address": "bcrt1qsqddmm8u8k9xg6ketgk53vh898kp9cum8ra3l2",
+        "type": "witness_v0_keyhash"
       }
     }
   ],
-  "hex": "020000000001015036a4e1e299b37e0555d1490aa8cb6de379709349088159a5280e13892c74e90000000000feffffff028096980000000000225120f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0ce75a6d2901000000160014cfb604b3feadf3367e96c701abd4912d0c99877f0247304402206c4c1c9e2fa82d087e5c1a6256f2bcd7cab3b915bf2f6b782a80045f9dc7a9b2022034c720cbbab2e75cbd8a35bc99d148f408b16205592e80200bf2f491bb0fa88b012102077c102914911f57b8c1881e207ea09297024803e1c10ce3f20453c2c3f735c60d000000",
-  "blockhash": "657719912c20e44e7b98c3eda01bd2e493186d16737987800e766ecf704898e6",
-  "confirmations": 1,
-  "time": 1597817267,
-  "blocktime": 1597817267
+  "hex": "02000000000101bfaf328e493d68dbd6b39d8df1263369ea19f09125c7eacb4876df725ca9dd7c0000000000feffffff021027000000000000225120f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0cb8b4042a01000000160014801addecfc3d8a646ad95a2d48b2e729ec12e39b024730440220472c552bc77523659aad75aac0674c723c058b80484f5186769c03cb0287b52f02200b0e449a51f185017a64c1261c852e51c2cbb4fee949a50d634224dfb27d23f601210344de9257311c16349ff0acd2be071433e3a1de0169ed900ae3f2e81f0b3f37fcca000000"
 }
 ```
 
@@ -193,22 +183,20 @@ We find our UTXO at index 0 above (yours may be at a different index, e.g. 1). N
 We will need the hex value from this one later. We refer to it as "txin" and set a shell var to it for now:
 
 ```Bash
-$ txin=020000000001015036a4e1e299b37e0555d1490aa8cb6de379709349088159a5280e13892c74e90000000000feffffff028096980000000000225120f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0ce75a6d2901000000160014cfb604b3feadf3367e96c701abd4912d0c99877f0247304402206c4c1c9e2fa82d087e5c1a6256f2bcd7cab3b915bf2f6b782a80045f9dc7a9b2022034c720cbbab2e75cbd8a35bc99d148f408b16205592e80200bf2f491bb0fa88b012102077c102914911f57b8c1881e207ea09297024803e1c10ce3f20453c2c3f735c60d000000
+$ txin=02000000000101bfaf328e493d68dbd6b39d8df1263369ea19f09125c7eacb4876df725ca9dd7c0000000000feffffff021027000000000000225120f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0cb8b4042a01000000160014801addecfc3d8a646ad95a2d48b2e729ec12e39b024730440220472c552bc77523659aad75aac0674c723c058b80484f5186769c03cb0287b52f02200b0e449a51f185017a64c1261c852e51c2cbb4fee949a50d634224dfb27d23f601210344de9257311c16349ff0acd2be071433e3a1de0169ed900ae3f2e81f0b3f37fcca000000
 ```
 
 ## Taproot spend
-
-(--- unfinished below; the approach should still mostly work ---)
 
 It is now possible to do a direct taproot spend using the internal privkey, and our tweak. We will use testmempoolaccept for this one, as it's too boring to waste an entire UTXO on.
 
 First, we need to create a transaction that spends from these inputs.
 
 ```Bash
-$ bitcoin-cli getnewaddress
-sb1qpkxrw8snhrzx8gkkn4d5w34tr0zeahlk83vnl0
-$ bitcoin-cli createrawtransaction '[{"txid":"d4461a7d5d4120f7c3fd62c2f665b546129e4527a2bc2f1f7e7eedf4f77eba62", "vout":0}]' '[{"sb1qpkxrw8snhrzx8gkkn4d5w34tr0zeahlk83vnl0":0.00009}]'
-020000000162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff600000000
+$ bcli getnewaddress
+bcrt1qja4zf8t0nq2pnqwu2nzndlseajftn96m38eecx
+$ bcli createrawtransaction '[{"txid":"303d28a45ad1234fd8092df147ae52464a4b7de0d343a2d79dc28dd7611dd25a", "vout":0}]' '[{"bcrt1qja4zf8t0nq2pnqwu2nzndlseajftn96m38eecx":0.00009}]'
+02000000015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b00000000
 ```
 
 Now we need to tweak it. This is the messy part, but stay with me. We turn it into a Segwit transaction by adding the dummy vin and 0x01 flag: take the first 8 characters (the 32-bit version):
@@ -221,7 +209,7 @@ add 0001 to it (0 size vin, flags=01)
 
 then add the rest up until but *excluding* the last 8 characters (all zeroes):
 
-> 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6
+> 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b
 
 Before we put those last 8 characters on, we add the witness commitment. This is an array, of arrays, of arrays of bytes. Or an array of arrays of binary blobs. Each outer array corresponds to one input, and this is explicit, i.e. we do *not* put the compact size of the outer array into the serialization; this is implicitly derived from the input array, which must be the same size. The inner array, i.e. the array of binary blobs, or the array containing arrays of bytes, does have a size, however.
 
@@ -231,39 +219,39 @@ In our case, we have 1 input, so there's an array containing binary blobs. The n
 
 Then the locktime (last 8 zeroes), and we have a starting point:
 
-> 020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 01 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 00000000
+> 020000000001 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b 01 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 00000000
 
 Hint: You can *keep* the spacing for easier tweaking/overview, by wrapping the argument in quotes in the call to btcdeb.
 
 We're now ready to do our first attempt at spending our transaction. Our signature is crap, but we'll get to that.
 
 ```Bash
-$ btcdeb --txin=$txin --tx='020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 01 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 00000000'
-got segwit transaction 61d6e879d1c791806283d13d561870f3bcecab877b1b719e207380f611bd4760:
-CTransaction(hash=61d6e879d1, ver=2, vin.size=1, vout.size=1, nLockTime=0)
-    CTxIn(COutPoint(d4461a7d5d, 0), scriptSig=)
+$ btcdeb --verbose --txin=$txin --tx='020000000001 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b 01 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 00000000'
+got segwit transaction 275f90dcfc8b6c81ea54ee6e7648b3f628ee411ef11d1fdaf9c0074b04dbfef9:
+CTransaction(hash=275f90dcfc, ver=2, vin.size=1, vout.size=1, nLockTime=0)
+    CTxIn(COutPoint(303d28a45a, 0), scriptSig=)
     CScriptWitness(000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f)
-    CTxOut(nValue=0.00009000, scriptPubKey=00140d8c371e13b8c463a2d69d5b47)
+    CTxOut(nValue=0.00009000, scriptPubKey=0014976a249d6f98141981dc54c536)
 
-got input tx #0 d4461a7d5d4120f7c3fd62c2f665b546129e4527a2bc2f1f7e7eedf4f77eba62:
-CTransaction(hash=d4461a7d5d, ver=2, vin.size=1, vout.size=2, nLockTime=335)
-    CTxIn(COutPoint(65c22aa264, 1), scriptSig=, nSequence=4294967294)
-    CScriptWitness(304402203562d886132f4b1c2872759874e02eddbebe6334c50c5cf74c7a07d336a51410022040d7961e242d5dcb435bdc05fa2f34b415f8073251e1868ca8ba44f67982cb1c01, 0242eb71f5a65b85e1ebd959008e46e26bd6439ba98a97e4276344bd564eb6921d)
-    CTxOut(nValue=0.00010000, scriptPubKey=512096f4011191d236826a07b98929)
-    CTxOut(nValue=49.99679232, scriptPubKey=00145d056890231a3d66b9360ca320)
+got input tx #0 303d28a45ad1234fd8092df147ae52464a4b7de0d343a2d79dc28dd7611dd25a:
+CTransaction(hash=303d28a45a, ver=2, vin.size=1, vout.size=2, nLockTime=202)
+    CTxIn(COutPoint(7cdda95c72, 0), scriptSig=, nSequence=4294967294)
+    CScriptWitness(30440220472c552bc77523659aad75aac0674c723c058b80484f5186769c03cb0287b52f02200b0e449a51f185017a64c1261c852e51c2cbb4fee949a50d634224dfb27d23f601, 0344de9257311c16349ff0acd2be071433e3a1de0169ed900ae3f2e81f0b3f37fc)
+    CTxOut(nValue=0.00010000, scriptPubKey=5120f128a8a8a636e19f00a8016955)
+    CTxOut(nValue=49.99918776, scriptPubKey=0014801addecfc3d8a646ad95a2d48)
 
 input tx index = 0; tx input vout = 0; value = 10000
 got witness stack of size 1
 34 bytes (v0=P2WSH, v1=taproot/tapscript)
 valid script
 - generating prevout hash from 1 ins
-[+] COutPoint(d4461a7d5d, 0)
+[+] COutPoint(303d28a45a, 0)
 2 op script loaded. type `help` for usage information
 script                                                           |                                                             stack
 -----------------------------------------------------------------+-------------------------------------------------------------------
-96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4 | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
+f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
 OP_CHECKSIG                                                      |
-#0000 96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
+#0000 f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
 ```
 
 OK, btcdeb is able to parse the transaction and gives us the starting point in the very simple program. You should know that in reality, there *is* no program at all; the signature check is done upon recognizing the TAPROOT spend pattern (single object on the stack), but btcdeb bakes it into a `<push> CHECKSIG` quasi script.
@@ -272,79 +260,59 @@ Let's step until the end and see how our "signature" does:
 
 ```
 btcdeb> step
-		<> PUSH stack 96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
+		<> PUSH stack f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
 script                                                           |                                                             stack
 -----------------------------------------------------------------+-------------------------------------------------------------------
-OP_CHECKSIG                                                      |   96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
+OP_CHECKSIG                                                      |   f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
                                                                  | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
 #0001 OP_CHECKSIG
 btcdeb>
-GenericTransactionSignatureChecker::CheckSigSchnorr(64 len sig, 32 len pubkey, sigversion=2)
+GenericTransactionSignatureChecker::CheckSchnorrSignature(64 len sig, 32 len pubkey, sigversion=2)
   sig         = 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f
-  pub key     = 96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
+  pub key     = f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
 SignatureHashSchnorr(in_pos=0, hash_type=00)
 - taproot sighash
-#001 00
-#001 00
-#004 02000000
-#004 00000000
-#032 518c069d99921479cf4ee88f5ae7d439aadb00941ae697dd679fd057601d1b58
-#032 8e965763e6a4bbc1088a94bf6c9cb3cbbdb4955f88355c807362a0fd43de4e3a
-#032 ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e
-#032 78c8d3aa6e969b820788e580db66e5675bd03d08dcfe56c4e3430c56598efe18
-#001 00
-#001 22
-#034 512096f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
-#004 00000000
-- schnorr sighash = 48f47c4aad9ad4d0ea6671d10c34eb34b70255f12bd4c72b77c19805e274765b
-  pubkey.VerifySchnorrSignature(sig=000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f, sighash=48f47c4aad9ad4d0ea6671d10c34eb34b70255f12bd4c72b77c19805e274765b):
+- schnorr sighash = bf775fc048a7693eee19e5f51f2160b7b4f52b640499cd2b9e46a4be17b51f1a
+  pubkey.VerifySchnorrSignature(sig=000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f, sighash=bf775fc048a7693eee19e5f51f2160b7b4f52b640499cd2b9e46a4be17b51f1a):
   result: FAILURE
-		<> POP  stack
-		<> POP  stack
-		<> PUSH stack
-script                                                           |                                                             stack
+- schnorr signature verification ***FAILED***
+error: unknown error
+
+script                                                           |                                                             stack 
 -----------------------------------------------------------------+-------------------------------------------------------------------
-                                                                 |                                                                 0x
+                                                                 |   f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
+                                                                 | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
+#0001 OP_CHECKSIG
 ```
 
-OK yeah that didn't go too well. However, btcdeb has now given us a vital clue. The only one we need, in fact, to complete this transaction: the signature hash (abbreviate "sighash") -- it is `48f47c4aad9ad4d0ea6671d10c34eb34b70255f12bd4c72b77c19805e274765b` (big endian, so we need to *reverse* it), and you can see it above a few lines above the "result: FAILURE" part. With that, and our privkey (which we created at the start) tweaked with that tweak we created, we can now create an *actual* signature!
+OK yeah that didn't go too well. However, btcdeb has now given us a vital clue. The only one we need, in fact, to complete this transaction: the signature hash (abbreviate "sighash") -- it is `bf775fc048a7693eee19e5f51f2160b7b4f52b640499cd2b9e46a4be17b51f1a` (big endian, so we need to *reverse* it), and you can see it above a few lines above the "result: FAILURE" part. With that, and our privkey (which we created at the start) tweaked with that tweak we created, we can now create an *actual* signature!
 
 ```Bash
 btcdeb> tf taproot-tweak-seckey 3bed2cb3a3acf7b6a8ef408420cc682d5520e26976d354254f528c965612054f 0b0e6981ce6cac74d055d0e4c25e5b4455a083b3217761327867f26460e0a776
-46fb96357219a42b79451168e32ac371aac1661c984ab557c7ba7efab6f2acc5
+(pubkey verified: 03f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c)
+cf213cce2abfb4be27669060a191f315bb2e7e3059ecad48e8e7c45adb04e368
 # we can verify that this is correct by using get-xpubkey and comparing this to our pubkey we made before
-btcdeb> tf get-xpubkey 46fb96357219a42b79451168e32ac371aac1661c984ab557c7ba7efab6f2acc5
-96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
-btcdeb> tf sign reverse(48f47c4aad9ad4d0ea6671d10c34eb34b70255f12bd4c72b77c19805e274765b) 46fb96357219a42b79451168e32ac371aac1661c984ab557c7ba7efab6f2acc5
-4cfb9f2255194929156c1dbbc38d9a3c4fc0f209b4b7aee58c5d2b2020a2cea719c9f41ef2b81327c1ee964c7392251039a8c79369bd57c7f9a8e071227822a3
+btcdeb> tf get-xpubkey cf213cce2abfb4be27669060a191f315bb2e7e3059ecad48e8e7c45adb04e368
+(pk_parity = 1)
+f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
+btcdeb> tf sign_schnorr reverse(bf775fc048a7693eee19e5f51f2160b7b4f52b640499cd2b9e46a4be17b51f1a) cf213cce2abfb4be27669060a191f315bb2e7e3059ecad48e8e7c45adb04e368
+b36beb8bf7bac92bd3b457a254476c1cf75059fbabc00eb64ccf4e6b462f41ad1dc24615e699bfa1287b82baffc42263bbefc4e2b6e8fc96e6f1fbe5adafcff1
 ```
 
 We can now replace our `00010203...` thingie with the above and try again.
 
 ```Bash
-$ btcdeb --txin=$txin --tx='020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 01 40 4cfb9f2255194929156c1dbbc38d9a3c4fc0f209b4b7aee58c5d2b2020a2cea719c9f41ef2b81327c1ee964c7392251039a8c79369bd57c7f9a8e071227822a3 00000000'
+$ btcdeb --verbose --txin=$txin --tx='020000000001 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b 01 40 b36beb8bf7bac92bd3b457a254476c1cf75059fbabc00eb64ccf4e6b462f41ad1dc24615e699bfa1287b82baffc42263bbefc4e2b6e8fc96e6f1fbe5adafcff1 00000000'
 [...]
 #0001 OP_CHECKSIG
 btcdeb>
-GenericTransactionSignatureChecker::CheckSigSchnorr(64 len sig, 32 len pubkey, sigversion=2)
-  sig         = 4cfb9f2255194929156c1dbbc38d9a3c4fc0f209b4b7aee58c5d2b2020a2cea719c9f41ef2b81327c1ee964c7392251039a8c79369bd57c7f9a8e071227822a3
-  pub key     = 96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
+GenericTransactionSignatureChecker::CheckSchnorrSignature(64 len sig, 32 len pubkey, sigversion=2)
+  sig         = b36beb8bf7bac92bd3b457a254476c1cf75059fbabc00eb64ccf4e6b462f41ad1dc24615e699bfa1287b82baffc42263bbefc4e2b6e8fc96e6f1fbe5adafcff1
+  pub key     = f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
 SignatureHashSchnorr(in_pos=0, hash_type=00)
 - taproot sighash
-#001 00
-#001 00
-#004 02000000
-#004 00000000
-#032 518c069d99921479cf4ee88f5ae7d439aadb00941ae697dd679fd057601d1b58
-#032 8e965763e6a4bbc1088a94bf6c9cb3cbbdb4955f88355c807362a0fd43de4e3a
-#032 ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e
-#032 78c8d3aa6e969b820788e580db66e5675bd03d08dcfe56c4e3430c56598efe18
-#001 00
-#001 22
-#034 512096f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
-#004 00000000
-- schnorr sighash = 48f47c4aad9ad4d0ea6671d10c34eb34b70255f12bd4c72b77c19805e274765b
-  pubkey.VerifySchnorrSignature(sig=4cfb9f2255194929156c1dbbc38d9a3c4fc0f209b4b7aee58c5d2b2020a2cea719c9f41ef2b81327c1ee964c7392251039a8c79369bd57c7f9a8e071227822a3, sighash=48f47c4aad9ad4d0ea6671d10c34eb34b70255f12bd4c72b77c19805e274765b):
+- schnorr sighash = bf775fc048a7693eee19e5f51f2160b7b4f52b640499cd2b9e46a4be17b51f1a
+  pubkey.VerifySchnorrSignature(sig=b36beb8bf7bac92bd3b457a254476c1cf75059fbabc00eb64ccf4e6b462f41ad1dc24615e699bfa1287b82baffc42263bbefc4e2b6e8fc96e6f1fbe5adafcff1, sighash=bf775fc048a7693eee19e5f51f2160b7b4f52b640499cd2b9e46a4be17b51f1a):
   result: success
 		<> POP  stack
 		<> POP  stack
@@ -357,11 +325,16 @@ script                                                           |              
 And we're good. If we did `sendrawtransaction` now, the transaction would be accepted and be eventually mined into a block like normal. We don't wanna do that though. We have those two scripts after all, let's not waste that effort! We do want to ask Bitcoin Core about the transaction though. The handy `testmempoolaccept` RPC function lets us do exactly that.
 
 ```Bash
-$ bitcoin-cli testmempoolaccept '["0200000000010162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff601404cfb9f2255194929156c1dbbc38d9a3c4fc0f209b4b7aee58c5d2b2020a2cea719c9f41ef2b81327c1ee964c7392251039a8c79369bd57c7f9a8e071227822a300000000"]'
+$ bcli testmempoolaccept '["020000000001015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b0140b36beb8bf7bac92bd3b457a254476c1cf75059fbabc00eb64ccf4e6b462f41ad1dc24615e699bfa1287b82baffc42263bbefc4e2b6e8fc96e6f1fbe5adafcff100000000"]'
 [
   {
-    "txid": "61d6e879d1c791806283d13d561870f3bcecab877b1b719e207380f611bd4760",
-    "allowed": true
+    "txid": "275f90dcfc8b6c81ea54ee6e7648b3f628ee411ef11d1fdaf9c0074b04dbfef9",
+    "wtxid": "29d1864fa0105fac5fe08783b74051482e63007f11ffb21ed8fe9029aa27b9da",
+    "allowed": true,
+    "vsize": 99,
+    "fees": {
+      "base": 0.00001000
+    }
   }
 ]
 ```
@@ -403,59 +376,57 @@ We also need to reveal the script we are executing, as this is required to deter
 
 and our script, when we replace the witness stuff above with the new data (prefixed with a 02 for "2 items on stack"):
 
-> 020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 02 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
+> 020000000001 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b 02 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9 00000000
 
 (Note that you can use the `prefix-compact-size` transform inside btcdeb to generate the size prefixed variants, e.g. `tf prefix-compact-size c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9` inside btcdeb gives `41c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9`.)
 
 ```Bash
-$ btcdeb --txin=$txin --tx='020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 02 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
+$ btcdeb --verbose --txin=$txin --tx='020000000001 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b 02 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9 00000000'
-btcdeb 0.2.19 -- type `./btcdeb -h` for start up options
-got segwit transaction 61d6e879d1c791806283d13d561870f3bcecab877b1b719e207380f611bd4760:
-CTransaction(hash=61d6e879d1, ver=2, vin.size=1, vout.size=1, nLockTime=0)
-    CTxIn(COutPoint(d4461a7d5d, 0), scriptSig=)
+btcdeb 0.4.22 -- type `btcdeb -h` for start up options
+got segwit transaction 275f90dcfc8b6c81ea54ee6e7648b3f628ee411ef11d1fdaf9c0074b04dbfef9:
+CTransaction(hash=275f90dcfc, ver=2, vin.size=1, vout.size=1, nLockTime=0)
+    CTxIn(COutPoint(303d28a45a, 0), scriptSig=)
     CScriptWitness(a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac, c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9)
-    CTxOut(nValue=0.00009000, scriptPubKey=00140d8c371e13b8c463a2d69d5b47)
+    CTxOut(nValue=0.00009000, scriptPubKey=0014976a249d6f98141981dc54c536)
 
-got input tx #0 d4461a7d5d4120f7c3fd62c2f665b546129e4527a2bc2f1f7e7eedf4f77eba62:
-CTransaction(hash=d4461a7d5d, ver=2, vin.size=1, vout.size=2, nLockTime=335)
-    CTxIn(COutPoint(65c22aa264, 1), scriptSig=, nSequence=4294967294)
-    CScriptWitness(304402203562d886132f4b1c2872759874e02eddbebe6334c50c5cf74c7a07d336a51410022040d7961e242d5dcb435bdc05fa2f34b415f8073251e1868ca8ba44f67982cb1c01, 0242eb71f5a65b85e1ebd959008e46e26bd6439ba98a97e4276344bd564eb6921d)
-    CTxOut(nValue=0.00010000, scriptPubKey=512096f4011191d236826a07b98929)
-    CTxOut(nValue=49.99679232, scriptPubKey=00145d056890231a3d66b9360ca320)
+got input tx #0 303d28a45ad1234fd8092df147ae52464a4b7de0d343a2d79dc28dd7611dd25a:
+CTransaction(hash=303d28a45a, ver=2, vin.size=1, vout.size=2, nLockTime=202)
+    CTxIn(COutPoint(7cdda95c72, 0), scriptSig=, nSequence=4294967294)
+    CScriptWitness(30440220472c552bc77523659aad75aac0674c723c058b80484f5186769c03cb0287b52f02200b0e449a51f185017a64c1261c852e51c2cbb4fee949a50d634224dfb27d23f601, 0344de9257311c16349ff0acd2be071433e3a1de0169ed900ae3f2e81f0b3f37fc)
+    CTxOut(nValue=0.00010000, scriptPubKey=5120f128a8a8a636e19f00a8016955)
+    CTxOut(nValue=49.99918776, scriptPubKey=0014801addecfc3d8a646ad95a2d48)
 
 input tx index = 0; tx input vout = 0; value = 10000
 got witness stack of size 2
 34 bytes (v0=P2WSH, v1=taproot/tapscript)
-Verifying taproot commitment:
+Taproot commitment:
 - control  = c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
-- program  = 96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
+- program  = f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
 - script   = a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 - path len = 1
 - p        = 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5
-- q        = 96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
+- q        = f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
 - k        = 423b94cec6e38364eda58e7825e582cb8ef75c13236e4191629cf2b432862c63          (tap leaf hash)
   (TapLeaf(0xc0 || a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac))
-- looping over path (0..0)
-  - 0: node_begin = -1806693135; taproot control node match -> k first
-  (TapBranch(TapLeaf(0xc0 || a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac) || Span<33,32>=c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9))
-  - 0: k -> 6b9f0cd659a5c64f4f5ac4f84e7998dae7fec41b47f5d7da6da9e21f8c6f6441
-- final k  = 76a7e06064f2677832617721b383a055445b5ec2e4d055d074ac6cce81690e0b
-  (TapTweak(internal_pubkey=5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 || TapBranch(TapLeaf(0xc0 || a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac) || Span<33,32>=c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9)))
-- q.CheckPayToContract(p, k, 1) == success
 valid script
 - generating prevout hash from 1 ins
-[+] COutPoint(d4461a7d5d, 0)
-5 op script loaded. type `help` for usage information
-script                                                           |  stack
------------------------------------------------------------------+--------
-OP_SHA256                                                        |
-6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333 |
-OP_EQUALVERIFY                                                   |
-4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10 |
-OP_CHECKSIG                                                      |
-#0000 OP_SHA256
+[+] COutPoint(303d28a45a, 0)
+8 op script loaded. type `help` for usage information
+script                                                             |                                                             stack 
+-------------------------------------------------------------------+-------------------------------------------------------------------
+<<< taproot commitment >>>                                         |                                                               i: 0
+Branch: c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205f... | k: 632c8632b4f29c6291416e23135cf78ecb82e525788ea5ed6483e3c6ce94...
+Tweak: 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662... | 
+CheckTapTweak                                                      | 
+<<< committed script >>>                                           | 
+OP_SHA256                                                          | 
+6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333   | 
+OP_EQUALVERIFY                                                     | 
+4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10   | 
+OP_CHECKSIG                                                        | 
+#0000 Branch: c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
 ```
 
 The tapscript commitment succeeded. Yay! Now as you can see we still need to add the inputs that satisfy the script itself. We will be adding those on the left hand side of the program || control object blob in the witness. Generally speaking, tapscript spending witness stack looks like: `<argN> ... <arg2> <arg1> <script> <control object>`.
@@ -465,191 +436,188 @@ The tapscript commitment succeeded. Yay! Now as you can see we still need to add
 
 Flipped around, since args are opposite order:
 
-> 020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 04 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 20 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
+> 020000000001 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b 04 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 20 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9 00000000
 
 ```Bash
-$ btcdeb --txin=$txin --tx='020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 04 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 20 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
+$ btcdeb --verbose --txin=$txin --tx='020000000001 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b 04 40 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f 20 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9 00000000'
-btcdeb 0.2.19 -- type `./btcdeb -h` for start up options
-LOG: sighash
-LOG: sign
-LOG: segwit
-LOG: taproot
-got segwit transaction 61d6e879d1c791806283d13d561870f3bcecab877b1b719e207380f611bd4760:
-CTransaction(hash=61d6e879d1, ver=2, vin.size=1, vout.size=1, nLockTime=0)
-    CTxIn(COutPoint(d4461a7d5d, 0), scriptSig=)
+btcdeb 0.4.22 -- type `btcdeb -h` for start up options
+LOG: signing segwit taproot
+got segwit transaction 275f90dcfc8b6c81ea54ee6e7648b3f628ee411ef11d1fdaf9c0074b04dbfef9:
+CTransaction(hash=275f90dcfc, ver=2, vin.size=1, vout.size=1, nLockTime=0)
+    CTxIn(COutPoint(303d28a45a, 0), scriptSig=)
     CScriptWitness(000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f, 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f, a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac, c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9)
-    CTxOut(nValue=0.00009000, scriptPubKey=00140d8c371e13b8c463a2d69d5b47)
+    CTxOut(nValue=0.00009000, scriptPubKey=0014976a249d6f98141981dc54c536)
 
-got input tx #0 d4461a7d5d4120f7c3fd62c2f665b546129e4527a2bc2f1f7e7eedf4f77eba62:
-CTransaction(hash=d4461a7d5d, ver=2, vin.size=1, vout.size=2, nLockTime=335)
-    CTxIn(COutPoint(65c22aa264, 1), scriptSig=, nSequence=4294967294)
-    CScriptWitness(304402203562d886132f4b1c2872759874e02eddbebe6334c50c5cf74c7a07d336a51410022040d7961e242d5dcb435bdc05fa2f34b415f8073251e1868ca8ba44f67982cb1c01, 0242eb71f5a65b85e1ebd959008e46e26bd6439ba98a97e4276344bd564eb6921d)
-    CTxOut(nValue=0.00010000, scriptPubKey=512096f4011191d236826a07b98929)
-    CTxOut(nValue=49.99679232, scriptPubKey=00145d056890231a3d66b9360ca320)
+got input tx #0 303d28a45ad1234fd8092df147ae52464a4b7de0d343a2d79dc28dd7611dd25a:
+CTransaction(hash=303d28a45a, ver=2, vin.size=1, vout.size=2, nLockTime=202)
+    CTxIn(COutPoint(7cdda95c72, 0), scriptSig=, nSequence=4294967294)
+    CScriptWitness(30440220472c552bc77523659aad75aac0674c723c058b80484f5186769c03cb0287b52f02200b0e449a51f185017a64c1261c852e51c2cbb4fee949a50d634224dfb27d23f601, 0344de9257311c16349ff0acd2be071433e3a1de0169ed900ae3f2e81f0b3f37fc)
+    CTxOut(nValue=0.00010000, scriptPubKey=5120f128a8a8a636e19f00a8016955)
+    CTxOut(nValue=49.99918776, scriptPubKey=0014801addecfc3d8a646ad95a2d48)
 
 input tx index = 0; tx input vout = 0; value = 10000
 got witness stack of size 4
 34 bytes (v0=P2WSH, v1=taproot/tapscript)
-Verifying taproot commitment:
+Taproot commitment:
 - control  = c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
-- program  = 96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
+- program  = f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
 - script   = a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 - path len = 1
 - p        = 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5
-- q        = 96f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
+- q        = f128a8a8a636e19f00a80169550fedfc26b6f5dd04d935ec452894aad938ef0c
 - k        = 423b94cec6e38364eda58e7825e582cb8ef75c13236e4191629cf2b432862c63          (tap leaf hash)
   (TapLeaf(0xc0 || a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac))
-- looping over path (0..0)
-  - 0: node_begin = 920652897; taproot control node match -> k first
-  (TapBranch(TapLeaf(0xc0 || a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac) || Span<33,32>=c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9))
-  - 0: k -> 6b9f0cd659a5c64f4f5ac4f84e7998dae7fec41b47f5d7da6da9e21f8c6f6441
-- final k  = 76a7e06064f2677832617721b383a055445b5ec2e4d055d074ac6cce81690e0b
-  (TapTweak(internal_pubkey=5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 || TapBranch(TapLeaf(0xc0 || a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac) || Span<33,32>=c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9)))
-- q.CheckPayToContract(p, k, 1) == success
 valid script
 - generating prevout hash from 1 ins
-[+] COutPoint(d4461a7d5d, 0)
-5 op script loaded. type `help` for usage information
-script                                                           |                                                             stack
------------------------------------------------------------------+-------------------------------------------------------------------
-OP_SHA256                                                        |   107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f
-6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333 | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
-OP_EQUALVERIFY                                                   |
-4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10 |
-OP_CHECKSIG                                                      |
-#0000 OP_SHA256
+[+] COutPoint(303d28a45a, 0)
+8 op script loaded. type `help` for usage information
+script                                                             |                                                             stack 
+-------------------------------------------------------------------+-------------------------------------------------------------------
+<<< taproot commitment >>>                                         |                                                               i: 0
+Branch: c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205f... | k: 632c8632b4f29c6291416e23135cf78ecb82e525788ea5ed6483e3c6ce94...
+Tweak: 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662... | 
+CheckTapTweak                                                      | 
+<<< committed script >>>                                           | 
+OP_SHA256                                                          | 
+6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333   | 
+OP_EQUALVERIFY                                                     | 
+4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10   | 
+OP_CHECKSIG                                                        | 
+#0000 Branch: c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9
 btcdeb> step
+- looping over path (0..0)
+  - 0: node = c8...; taproot control node match -> k first
+  (TapBranch(TapLeaf(0xc0 || a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac) || Span<33,32>=c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9))
+  - 0: k -> 6b9f0cd659a5c64f4f5ac4f84e7998dae7fec41b47f5d7da6da9e21f8c6f6441
+script                                                             |                                                             stack 
+-------------------------------------------------------------------+-------------------------------------------------------------------
+<<< taproot commitment >>>                                         |                                                               i: 1
+Branch: c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205f... | k: 41646f8c1fe2a96ddad7f5471bc4fee7da98794ef8c45a4f4fc6a559d60c...
+Tweak: 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662... | 
+CheckTapTweak                                                      | 
+<<< committed script >>>                                           | 
+OP_SHA256                                                          | 
+6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333   | 
+OP_EQUALVERIFY                                                     | 
+4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10   | 
+OP_CHECKSIG                                                        | 
+#0001 Tweak: 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5
+btcdeb> 
+- looping over path (0..0)
+- q.CheckTapTweak(p, k, 1) == success
+script                                                             |                                                             stack 
+-------------------------------------------------------------------+-------------------------------------------------------------------
+OP_SHA256                                                          |   107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f
+6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333   | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
+OP_EQUALVERIFY                                                     | 
+4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10   | 
+OP_CHECKSIG                                                        | 
+#0002 CheckTapTweak
+btcdeb> 
 		<> POP  stack
 		<> PUSH stack 6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
-script                                                           |                                                             stack
------------------------------------------------------------------+-------------------------------------------------------------------
-6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333 |   6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
-OP_EQUALVERIFY                                                   | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
-4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10 |
-OP_CHECKSIG                                                      |
-#0001 6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
-btcdeb>
+script                                                             |                                                             stack 
+-------------------------------------------------------------------+-------------------------------------------------------------------
+6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333   |   6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
+OP_EQUALVERIFY                                                     | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
+4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10   | 
+OP_CHECKSIG                                                        | 
+#0003 OP_SHA256
+btcdeb> 
 		<> PUSH stack 6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
-script                                                           |                                                             stack
------------------------------------------------------------------+-------------------------------------------------------------------
-OP_EQUALVERIFY                                                   |   6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
-4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10 |   6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
-OP_CHECKSIG                                                      | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
-#0002 OP_EQUALVERIFY
-btcdeb>
+script                                                             |                                                             stack 
+-------------------------------------------------------------------+-------------------------------------------------------------------
+OP_EQUALVERIFY                                                     |   6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
+4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10   |   6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
+OP_CHECKSIG                                                        | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
+#0004 6c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd5333
+btcdeb> 
 		<> POP  stack
 		<> POP  stack
 		<> PUSH stack 01
 		<> POP  stack
-script                                                           |                                                             stack
------------------------------------------------------------------+-------------------------------------------------------------------
-4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10 | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
-OP_CHECKSIG                                                      |
-#0003 4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10
-btcdeb>
+script                                                             |                                                             stack 
+-------------------------------------------------------------------+-------------------------------------------------------------------
+4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10   | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
+OP_CHECKSIG                                                        | 
+#0005 OP_EQUALVERIFY
+btcdeb> 
 		<> PUSH stack 4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10
-script                                                           |                                                             stack
------------------------------------------------------------------+-------------------------------------------------------------------
-OP_CHECKSIG                                                      |   4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10
-                                                                 | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
-#0004 OP_CHECKSIG
-btcdeb>
+script                                                             |                                                             stack 
+-------------------------------------------------------------------+-------------------------------------------------------------------
+OP_CHECKSIG                                                        |   4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10
+                                                                   | 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0...
+#0006 4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10
+btcdeb> 
+EvalChecksig() sigversion=3
 Eval Checksig Tapscript
 - sig must not be empty: ok
 - validation weight - 50 -> 235
 - 32 byte pubkey (new type); schnorr sig check
-GenericTransactionSignatureChecker::CheckSigSchnorr(64 len sig, 32 len pubkey, sigversion=3)
+GenericTransactionSignatureChecker::CheckSchnorrSignature(64 len sig, 32 len pubkey, sigversion=3)
   sig         = 000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f
   pub key     = 4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10
 SignatureHashSchnorr(in_pos=0, hash_type=00)
 - tapscript sighash
-#001 00
-#001 00
-#004 02000000
-#004 00000000
-#032 518c069d99921479cf4ee88f5ae7d439aadb00941ae697dd679fd057601d1b58
-#032 8e965763e6a4bbc1088a94bf6c9cb3cbbdb4955f88355c807362a0fd43de4e3a
-#032 ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e
-#032 78c8d3aa6e969b820788e580db66e5675bd03d08dcfe56c4e3430c56598efe18
-#001 02
-#001 22
-#034 512096f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
-#004 00000000
-#032 632c8632b4f29c6291416e23135cf78ecb82e525788ea5ed6483e3c6ce943b42
-#001 00
-#004 ffffffff
-- schnorr sighash = 2358796e44e5c16e678f613dc0550740123a682c17680b7467985d9145d478db
-  pubkey.VerifySchnorrSignature(sig=000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f, sighash=2358796e44e5c16e678f613dc0550740123a682c17680b7467985d9145d478db):
+- schnorr sighash = 91ba37295ca0850de315113a9adac131e34266a02e56f73970c96c60f5db1ca9
+  pubkey.VerifySchnorrSignature(sig=000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f, sighash=91ba37295ca0850de315113a9adac131e34266a02e56f73970c96c60f5db1ca9):
   result: FAILURE
+- schnorr signature verification ***FAILED***
 - schnorr sig check failed
-error: Signature must be zero for failed CHECK(MULTI)SIG operation
+error: Invalid Schnorr signature
 btcdeb>
 ```
 
-OK. The sighash is `2358796e44e5c16e678f613dc0550740123a682c17680b7467985d9145d478db`. We can sign it, since we have Bob's privkey `81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9`. Remember; sighash is a hash. We need to reverse it below.
+OK. The sighash is `91ba37295ca0850de315113a9adac131e34266a02e56f73970c96c60f5db1ca9`. We can sign it, since we have Bob's privkey `81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9`. Remember; sighash is a hash. We need to reverse it below.
 
 ```Bash
-btcdeb> tf sign reverse(2358796e44e5c16e678f613dc0550740123a682c17680b7467985d9145d478db) 81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9
-f82df2168f776da2043a532a2e63404307bd4a6092266216557b51a0152adbbe67ae501bdc754f01eaa3a1d22181e2fd29416c72147cb75d5c63e07b344d3fb9
+btcdeb> tf sign_schnorr reverse(91ba37295ca0850de315113a9adac131e34266a02e56f73970c96c60f5db1ca9) 81b637d8fcd2c6da6359e6963113a1170de795e4b725b84d1e0b4cfd9ec58ce9
+b9e600c70ed8f4b934300077d49f5b6cbd3f4c9981a2a55ce2f7ef92758e1244b1b306d73227fa478012e0986502b729973594bb741915dcec5bae086b89a7cd
 ```
 
 Now let's put the real signature in and try again.
 
-> 020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 04 40 f82df2168f776da2043a532a2e63404307bd4a6092266216557b51a0152adbbe67ae501bdc754f01eaa3a1d22181e2fd29416c72147cb75d5c63e07b344d3fb9 20 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
+> 020000000001 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b 04 40 b9e600c70ed8f4b934300077d49f5b6cbd3f4c9981a2a55ce2f7ef92758e1244b1b306d73227fa478012e0986502b729973594bb741915dcec5bae086b89a7cd 20 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9 00000000
 
 ```Bash
-$ btcdeb --txin=$txin --tx='020000000001 0162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff6 04 40 f82df2168f776da2043a532a2e63404307bd4a6092266216557b51a0152adbbe67ae501bdc754f01eaa3a1d22181e2fd29416c72147cb75d5c63e07b344d3fb9 20 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
+$ btcdeb --txin=$txin --tx='020000000001 015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b 04 40 b9e600c70ed8f4b934300077d49f5b6cbd3f4c9981a2a55ce2f7ef92758e1244b1b306d73227fa478012e0986502b729973594bb741915dcec5bae086b89a7cd 20 107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f 45 a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac
 41 c1 5bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5 c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9 00000000'
 [...]
-#0004 OP_CHECKSIG
-btcdeb>
+#0006 4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10
+btcdeb> 
+EvalChecksig() sigversion=3
 Eval Checksig Tapscript
 - sig must not be empty: ok
 - validation weight - 50 -> 235
 - 32 byte pubkey (new type); schnorr sig check
-GenericTransactionSignatureChecker::CheckSigSchnorr(64 len sig, 32 len pubkey, sigversion=3)
-  sig         = f82df2168f776da2043a532a2e63404307bd4a6092266216557b51a0152adbbe67ae501bdc754f01eaa3a1d22181e2fd29416c72147cb75d5c63e07b344d3fb9
+GenericTransactionSignatureChecker::CheckSchnorrSignature(64 len sig, 32 len pubkey, sigversion=3)
+  sig         = b9e600c70ed8f4b934300077d49f5b6cbd3f4c9981a2a55ce2f7ef92758e1244b1b306d73227fa478012e0986502b729973594bb741915dcec5bae086b89a7cd
   pub key     = 4edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10
 SignatureHashSchnorr(in_pos=0, hash_type=00)
 - tapscript sighash
-#001 00
-#001 00
-#004 02000000
-#004 00000000
-#032 518c069d99921479cf4ee88f5ae7d439aadb00941ae697dd679fd057601d1b58
-#032 8e965763e6a4bbc1088a94bf6c9cb3cbbdb4955f88355c807362a0fd43de4e3a
-#032 ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e
-#032 78c8d3aa6e969b820788e580db66e5675bd03d08dcfe56c4e3430c56598efe18
-#001 02
-#001 22
-#034 512096f4011191d236826a07b98929802aa3b7b7e32cea86aca4f82ce89fa34fdcd4
-#004 00000000
-#032 632c8632b4f29c6291416e23135cf78ecb82e525788ea5ed6483e3c6ce943b42
-#001 00
-#004 ffffffff
-- schnorr sighash = 2358796e44e5c16e678f613dc0550740123a682c17680b7467985d9145d478db
-  pubkey.VerifySchnorrSignature(sig=f82df2168f776da2043a532a2e63404307bd4a6092266216557b51a0152adbbe67ae501bdc754f01eaa3a1d22181e2fd29416c72147cb75d5c63e07b344d3fb9, sighash=2358796e44e5c16e678f613dc0550740123a682c17680b7467985d9145d478db):
+- schnorr sighash = 91ba37295ca0850de315113a9adac131e34266a02e56f73970c96c60f5db1ca9
+  pubkey.VerifySchnorrSignature(sig=b9e600c70ed8f4b934300077d49f5b6cbd3f4c9981a2a55ce2f7ef92758e1244b1b306d73227fa478012e0986502b729973594bb741915dcec5bae086b89a7cd, sighash=91ba37295ca0850de315113a9adac131e34266a02e56f73970c96c60f5db1ca9):
   result: success
 		<> POP  stack
 		<> POP  stack
 		<> PUSH stack 01
-script                                                           |                                                             stack
------------------------------------------------------------------+-------------------------------------------------------------------
-                                                                 |                                                                 01
+script                                                             |                                                             stack 
+-------------------------------------------------------------------+-------------------------------------------------------------------
+                                                                   |                                                                 01
 ```
 
 Success! Let's broadcast this one to the network:
 
 ```Bash
-$ bitcoin-cli sendrawtransaction 0200000000010162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff60440f82df2168f776da2043a532a2e63404307bd4a6092266216557b51a0152adbbe67ae501bdc754f01eaa3a1d22181e2fd29416c72147cb75d5c63e07b344d3fb920107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f45a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac41c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c900000000
-61d6e879d1c791806283d13d561870f3bcecab877b1b719e207380f611bd4760
-$ bitcoin-cli getrawtransaction 61d6e879d1c791806283d13d561870f3bcecab877b1b719e207380f611bd4760 1
+$ bcli sendrawtransaction 020000000001015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b0440b9e600c70ed8f4b934300077d49f5b6cbd3f4c9981a2a55ce2f7ef92758e1244b1b306d73227fa478012e0986502b729973594bb741915dcec5bae086b89a7cd20107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f45a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac41c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c900000000
+275f90dcfc8b6c81ea54ee6e7648b3f628ee411ef11d1fdaf9c0074b04dbfef9
+$ bcli getrawtransaction 275f90dcfc8b6c81ea54ee6e7648b3f628ee411ef11d1fdaf9c0074b04dbfef9 1
 {
-  "txid": "61d6e879d1c791806283d13d561870f3bcecab877b1b719e207380f611bd4760",
-  "hash": "a86607a4f1a1512fca898ceb25ff260d726fbd22b24af5aa11b282da0eadee6e",
+  "txid": "275f90dcfc8b6c81ea54ee6e7648b3f628ee411ef11d1fdaf9c0074b04dbfef9",
+  "hash": "06bd108659b259eb0113430e7014fe88bf081d4c2eb65486d551976a3fb4cb52",
   "version": 2,
   "size": 319,
   "vsize": 142,
@@ -657,14 +625,14 @@ $ bitcoin-cli getrawtransaction 61d6e879d1c791806283d13d561870f3bcecab877b1b719e
   "locktime": 0,
   "vin": [
     {
-      "txid": "d4461a7d5d4120f7c3fd62c2f665b546129e4527a2bc2f1f7e7eedf4f77eba62",
+      "txid": "303d28a45ad1234fd8092df147ae52464a4b7de0d343a2d79dc28dd7611dd25a",
       "vout": 0,
       "scriptSig": {
         "asm": "",
         "hex": ""
       },
       "txinwitness": [
-        "f82df2168f776da2043a532a2e63404307bd4a6092266216557b51a0152adbbe67ae501bdc754f01eaa3a1d22181e2fd29416c72147cb75d5c63e07b344d3fb9",
+        "b9e600c70ed8f4b934300077d49f5b6cbd3f4c9981a2a55ce2f7ef92758e1244b1b306d73227fa478012e0986502b729973594bb741915dcec5bae086b89a7cd",
         "107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f",
         "a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac",
         "c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c9"
@@ -677,21 +645,14 @@ $ bitcoin-cli getrawtransaction 61d6e879d1c791806283d13d561870f3bcecab877b1b719e
       "value": 0.00009000,
       "n": 0,
       "scriptPubKey": {
-        "asm": "0 0d8c371e13b8c463a2d69d5b4746ab1bc59edff6",
-        "hex": "00140d8c371e13b8c463a2d69d5b4746ab1bc59edff6",
-        "reqSigs": 1,
-        "type": "witness_v0_keyhash",
-        "addresses": [
-          "sb1qpkxrw8snhrzx8gkkn4d5w34tr0zeahlk83vnl0"
-        ]
+        "asm": "0 976a249d6f98141981dc54c536fe19ec92b9975b",
+        "hex": "0014976a249d6f98141981dc54c536fe19ec92b9975b",
+        "address": "bcrt1qja4zf8t0nq2pnqwu2nzndlseajftn96m38eecx",
+        "type": "witness_v0_keyhash"
       }
     }
   ],
-  "hex": "0200000000010162ba7ef7f4ed7e7e1f2fbca227459e1246b565f6c262fdc3f720415d7d1a46d40000000000ffffffff0128230000000000001600140d8c371e13b8c463a2d69d5b4746ab1bc59edff60440f82df2168f776da2043a532a2e63404307bd4a6092266216557b51a0152adbbe67ae501bdc754f01eaa3a1d22181e2fd29416c72147cb75d5c63e07b344d3fb920107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f45a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac41c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c900000000",
-  "blockhash": "00000f913152865b1030a8cbd39656abadebbae3a6f1b747c3e638f567997b2a",
-  "confirmations": 1,
-  "time": 1580286167,
-  "blocktime": 1580286167
+  "hex": "020000000001015ad21d61d78dc29dd7a243d3e07d4b4a4652ae47f12d09d84f23d15aa4283d300000000000ffffffff012823000000000000160014976a249d6f98141981dc54c536fe19ec92b9975b0440b9e600c70ed8f4b934300077d49f5b6cbd3f4c9981a2a55ce2f7ef92758e1244b1b306d73227fa478012e0986502b729973594bb741915dcec5bae086b89a7cd20107661134f21fc7c02223d50ab9eb3600bc3ffc3712423a1e47bb1f9a9dbf55f45a8206c60f404f8167a38fc70eaf8aa17ac351023bef86bcb9d1086a19afe95bd533388204edfcf9dfe6c0b5c83d1ab3f78d1b39a46ebac6798e08e19761f5ed89ec83c10ac41c15bf08d58a430f8c222bffaf9127249c5cdff70a2d68b2b45637eb662b6b88eb5c81451874bd9ebd4b6fd4bba1f84cdfb533c532365d22a0a702205ff658b17c900000000"
 }
 ```
 
