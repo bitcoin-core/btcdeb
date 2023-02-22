@@ -20,10 +20,10 @@ And [Homebrew](https://brew.sh/).
 
 btcdeb depends on the following:
 
-* libtool
-* libssl
-* automake/autoconf
-* pkg-config
+- libtool
+- libssl
+- automake/autoconf
+- pkg-config
 
 Ubuntu/debian users can do: `apt-get install libtool libssl-dev autoconf pkg-config` (with `sudo` prepended if necessary)
 
@@ -32,11 +32,21 @@ Mac users can do: `brew install libtool automake pkg-config`
 ## Installation
 
 On linux or mac, grab the source code and do:
+
 ```Bash
 $ ./autogen.sh
 $ ./configure
 $ make
 $ sudo make install
+```
+
+Or use **docker**:
+
+```Bash
+docker build -t btcdeb .
+docker run -d -t --name btc-vm btc-vm btcdeb
+# and for run it in the shell
+docker exec -it btc-vm /bin/sh
 ```
 
 If any of those give an error, please file an issue and I'll take a look. It could
@@ -47,12 +57,14 @@ be a dependency that I forgot about.
 You can compile btcdeb tools into JavaScript using [emscripten](http://kripken.github.io/emscripten-site/).
 
 After installing the SDK, compile btcdeb tools with the following commands:
+
 ```Bash
 $ make clean
 $ emconfigure ./configure
 $ emmake make
 $ for i in btcdeb btcc tap; do mv $i $i.bc && emcc -O2 $i.bc libbitcoin.a -o $i.js; done
 ```
+
 and then instead of doing `./btcdeb` you do `node btcdeb.js` (or `mastify.js`, etc).
 
 The last part is done because emscripten's `emcc` expects the input bytecode file to have the `.bc` extension, whereas the makefile generates files with no extension.
