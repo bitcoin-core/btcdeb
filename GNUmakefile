@@ -189,10 +189,6 @@ login: service
 	# run as a service and attach to it
 	docker exec -it $(PROJECT_NAME)_$(HOST_UID) sh
 
-build: alpine-build
-
-rebuild: alpine-rebuild
-
 .PHONY: docs
 docs:## 	
 	@echo docs

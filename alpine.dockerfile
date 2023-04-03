@@ -13,14 +13,12 @@ RUN apk --no-cache --update add \
     g++ \
     gcc \
     git \
-    libc-dev \
     libevent-dev \
     libqrencode-dev \
     libtool \
     linux-headers \
     make \
     miniupnpc-dev \
-    musl-dev \
     patch \
     perl \
     pkgconfig \
