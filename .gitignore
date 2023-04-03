@@ -101,3 +101,5 @@ share/qt/Info.plist
 test-btcdeb
 tap
 approach
+
+.DS_Store
