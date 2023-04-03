@@ -173,4 +173,12 @@ clean:
 prune:## 	docker system prune -af (very destructive!)
 	$(DOCKER_COMPOSE) -p $(PROJECT_NAME) down
 	docker system prune -af &
+
+
+
+host-install:## 	install on host
+	make -f Makefile install
+host-mostlyclean:## 	rm -f *.lo
+	make -f Makefile mostlyclean-libtool
+
 -include Makefile
