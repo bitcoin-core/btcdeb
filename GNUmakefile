@@ -94,67 +94,32 @@ export DOCKER_COMPOSE
 # Regular Makefile part for buildpypi itself
 default:
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?##/ {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
-help:## print verbose help
+help:## 	print verbose help
 	@echo ''
-	@echo 'Usage: make [TARGET] [EXTRA_ARGUMENTS]'
-	@echo 'Targets:'
-	@echo ''
-	@echo '  shell          user=root'
-	@echo '  alpine         user=root'
-	@echo '  debian         user=root'
-	@echo '  debian-build   user=root'
-	@echo '  debian-build   user=root nocache=true'
-	@echo '  debian-build   user=root nocache=false debian=buster'
-	@echo ''
-	@echo '  make centos    user=root'
-	@echo '  make centos7   user=root'
-	@echo ''
-	@echo ''
-	@echo ''
-	@echo 'Extra arguments:'
-	@echo ''
-	@echo '  cmd            make <service> cmd="whoami"'
-	@echo '  user           make <service> user=root (no need to set uid=0)'
-	@echo '  uid            make <service> user=dummy uid=4000 (defaults to 0 if user= set)'
-	@echo ''
-	@echo '  user=$(HOST_USER)'
-	@echo '  uid=$(HOST_UID)'
-	@echo ''
-	@echo "Command Examples:"
-	@echo ""
-	@echo "make report user=root uid=4004"
-	@echo "make service service=alpine user=root"
-	@echo "make service service=ubuntu user=root"
-	@echo ''
-	@echo 'make service service=alpine cmd="     apk add python3 && python3" user=root'
-	@echo 'make service service=alpine cmd="sudo apk add python3 && python3"'
-	@echo 'make service service=alpine cmd="sudo apk add python3 && python3" uid=4001'
 	@echo ''
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':	' |  sed -e 's/^/ /' ## verbose help ideas
 	@sed -n 's/^## 	//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
 .PHONY: report
-report:## 	
+report:## 	print make args
 	@echo ''
-	@echo '	[ARGUMENTS]	'
-	@echo '      args:'
-	@echo '        - PWD=${PWD}'
-	@echo '        - DOCKER=${DOCKER}'
-	@echo '        - DOCKER_COMPOSE=${DOCKER_COMPOSE}'
-	@echo '        - THIS_FILE=${THIS_FILE}'
-	@echo '        - TIME=${TIME}'
-	@echo '        - HOST_USER=${HOST_USER}'
-	@echo '        - HOST_UID=${HOST_UID}'
-	@echo '        - SERVICE_TARGET=${SERVICE_TARGET}'
-	@echo '        - ALPINE_VERSION=${ALPINE_VERSION}'
-	@echo '        - DIND_VERSION=${DIND_VERSION}'
-	@echo '        - DEBIAN_VERSION=${DEBIAN_VERSION}'
-	@echo '        - PROJECT_NAME=${PROJECT_NAME}'
-	@echo '        - PASSWORD=${PASSWORD}'
-	@echo '        - CMD_ARGUMENTS=${CMD_ARGUMENTS}'
+	@echo 'PWD=${PWD}'
+	@echo 'DOCKER=${DOCKER}'
+	@echo 'DOCKER_COMPOSE=${DOCKER_COMPOSE}'
+	@echo 'THIS_FILE=${THIS_FILE}'
+	@echo 'TIME=${TIME}'
+	@echo 'HOST_USER=${HOST_USER}'
+	@echo 'HOST_UID=${HOST_UID}'
+	@echo 'SERVICE_TARGET=${SERVICE_TARGET}'
+	@echo 'ALPINE_VERSION=${ALPINE_VERSION}'
+	@echo 'DIND_VERSION=${DIND_VERSION}'
+	@echo 'DEBIAN_VERSION=${DEBIAN_VERSION}'
+	@echo 'PROJECT_NAME=${PROJECT_NAME}'
+	@echo 'PASSWORD=${PASSWORD}'
+	@echo 'CMD_ARGUMENTS=${CMD_ARGUMENTS}'
 	@echo ''
 
-all:
+all:## 	docker-compose up
 	$(DOCKER_COMPOSE) up
 
 shell:## 	
@@ -164,15 +129,15 @@ else
 	$(DOCKER_COMPOSE) $(VERBOSE) -p $(PROJECT_NAME)_$(HOST_UID) run --rm $(SERVICE_TARGET) bash -c "$(CMD_ARGUMENTS)"
 endif
 
-build:
+build: 	docker-compose build
 	# only build the container. Note, docker does this also if you apply other targets.
 	$(DOCKER_COMPOSE) build $(NO_CACHE)  $(VERBOSE) ${SERVICE_TARGET}
 
-rebuild:
+rebuild: 	docker-compose build --no-cache
 	# force a rebuild by passing --no-cache
 	$(DOCKER_COMPOSE) build --no-cache $(VERBOSE) ${SERVICE_TARGET}
 
-test:
+test-whatami:## 	run whatami in docker container
 	$(DOCKER_COMPOSE) -p $(PROJECT_NAME)_$(HOST_UID) run --rm ${SERVICE_TARGET} sh -c '\
 		echo "I am `whoami`. My uid is `id -u`." && /bin/bash -c "curl -fsSL https://raw.githubusercontent.com/randymcmillan/docker.shell/master/whatami"' \
 	&& echo success
