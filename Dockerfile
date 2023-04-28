@@ -19,5 +19,3 @@ RUN make clean
 RUN make
 
 RUN make install
-
-ENTRYPOINT ["/bin/sh"]
