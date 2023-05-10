@@ -6,7 +6,7 @@ index 26150e5..d56e688 100644
  #include <crypto/common.h>
  #include <crypto/hmac_sha512.h>
  
-+bool CHashWriter::debug = false;
++bool HashWriter::debug = false;
  
  inline uint32_t ROTL32(uint32_t x, int8_t r)
  {
@@ -778,7 +778,7 @@ index 20fae2e..5bad14d 100644
 +            btc_sign_logf("  hashOutputs [single] = %s\n", hashOutputs.ToString().c_str());
          }
  
-+        CHashWriter::debug = btc_enabled(btc_sighash_logf);
++        HashWriter::debug = btc_enabled(btc_sighash_logf);
          CHashWriter ss(SER_GETHASH, 0);
          // Version
 +        btc_sign_logf("SERIALIZING:\n");
@@ -811,7 +811,7 @@ index 20fae2e..5bad14d 100644
 -
 -        return ss.GetHash();
 +        btc_sign_logf(" << nHashType = %02x\n", nHashType);
-+        CHashWriter::debug = false;
++        HashWriter::debug = false;
 +        uint256 sighash = ss.GetHash();
 +        btc_sign_logf("RESULTING HASH = %s\n", sighash.ToString().c_str());
 +        return sighash;
@@ -832,10 +832,10 @@ index 20fae2e..5bad14d 100644
      CTransactionSignatureSerializer<T> txTmp(txTo, scriptCode, nIn, nHashType);
  
      // Serialize and hash
-+    CHashWriter::debug = btc_enabled(btc_sighash_logf);
++    HashWriter::debug = btc_enabled(btc_sighash_logf);
      CHashWriter ss(SER_GETHASH, 0);
      ss << txTmp << nHashType;
-+    CHashWriter::debug = false;
++    HashWriter::debug = false;
      return ss.GetHash();
  }
  

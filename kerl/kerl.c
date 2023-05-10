@@ -24,8 +24,8 @@ char *cmdline = NULL;
 #define whitespace(c) (((c) == ' ') || ((c) == '\t'))
 #endif
 
-int kerl_com_help();
-char *command_generator ();
+int kerl_com_help(const char *arg);
+char *command_generator (const char *text, int state);
 
 /* A structure which contains information on the commands this program
    can understand. */
@@ -68,8 +68,8 @@ void kerl_set_enable_whitespaced_sensitivity() {
 }
 
 /* Forward declarations. */
-char *stripwhite ();
-COMMAND *find_command ();
+char *stripwhite(char *string);
+COMMAND *find_command(const char *name);
 void initialize_readline ();
 void kerl_add_history(const char *line);
 
@@ -328,7 +328,7 @@ int execute_line(char *line)
 
 /* Look up NAME as the name of a command, and return a pointer to that
    command.  Return a NULL pointer if NAME isn't a command name. */
-COMMAND *find_command(char *name)
+COMMAND *find_command(const char *name)
 {
   register int i;
 
@@ -382,7 +382,7 @@ int kerl_com_help(const char *arg)
   }
   int found = 0;
   char fmt[18];
-  sprintf(fmt, "%%-%ds %%s\n", max_clen);
+  snprintf(fmt, 18, "%%-%ds %%s\n", max_clen);
   for (i = 0; i < command_count; i++) {
     if (!arglen || !strncmp(commands[i].name, arg, arglen)) {
       printf(fmt, commands[i].name, commands[i].doc);
@@ -406,7 +406,7 @@ void _more_final_init(const char* argstring)
     more_final_pos = strlen(argstring) + 1;
     if (more_final == NULL) { more_final_cap = more_final_pos; more_final = (char*)malloc(more_final_cap); }
     else if (more_final_cap < more_final_pos) { more_final_cap = more_final_pos; more_final = (char*)realloc(more_final, more_final_cap); }
-    sprintf(more_final, "%s", argstring);
+    snprintf(more_final, more_final_cap /* not really, but we're managing it above so it's fine */, "%s", argstring);
 }
 
 void _more_final_append(const char* line, int add_newline)
@@ -414,7 +414,7 @@ void _more_final_append(const char* line, int add_newline)
     ++more_final_lines;
     size_t req = more_final_pos + strlen(line) + 1 + add_newline;
     if (more_final_cap < req) { more_final_cap = req; more_final = (char*)realloc(more_final, more_final_cap); }
-    more_final_pos += sprintf(&more_final[more_final_pos], "%s%s", add_newline ? "\n" : "", line);
+    more_final_pos += snprintf(&more_final[more_final_pos], more_final_cap /* see above */, "%s%s", add_newline ? "\n" : "", line);
 }
 
 int kerl_make_argcv_escape(const char *argstring, size_t *argcOut, char ***argvOut, char escape)
@@ -578,7 +578,7 @@ int kerl_more(size_t* capacity, size_t* position, char** argsOut, const char ter
 /*                                                                  */
 /* **************************************************************** */
 
-char **kerl_completion ();
+char **kerl_completion(const char *text, int start, int end);
 
 /* Tell the GNU Readline library how to complete.  We want to try to complete
    on command names if this is the first word in the line, or on filenames
@@ -598,7 +598,7 @@ void initialize_readline ()
    region of TEXT that contains the word to complete.  We can use the
    entire line in case we want to do some simple parsing.  Return the
    array of matches, or NULL if there aren't any. */
-char **kerl_completion(char *text, int start, int end)
+char **kerl_completion(const char *text, int start, int end)
 {
   char **matches;
 

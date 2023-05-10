@@ -7,8 +7,8 @@
 
 #include <tinyformat.h>
 
-extern const CHashWriter HASHER_TAPSIGHASH;
-static const CHashWriter HASHER_TAPTWEAK = TaggedHash("TapTweak");
+extern const HashWriter HASHER_TAPSIGHASH;
+static const HashWriter HASHER_TAPTWEAK = TaggedHash("TapTweak");
 
 TaprootCommitmentEnv::TaprootCommitmentEnv(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script, uint256* tapleaf_hash)
 :   m_control(control)
@@ -26,7 +26,7 @@ TaprootCommitmentEnv::TaprootCommitmentEnv(const std::vector<unsigned char>& con
     btc_taproot_logf("- path len = %d\n", m_path_len);
     btc_taproot_logf("- p        = %s\n", m_p.ToString().c_str());
     btc_taproot_logf("- q        = %s\n", m_q.ToString().c_str());
-    m_k = (CHashWriter(HASHER_TAPLEAF) << uint8_t(control[0] & TAPROOT_LEAF_MASK) << script).GetSHA256();
+    m_k = (HashWriter(HASHER_TAPLEAF) << uint8_t(control[0] & TAPROOT_LEAF_MASK) << script).GetSHA256();
     btc_taproot_logf("- k        = %s          (tap leaf hash)\n", m_k.ToString().c_str());
     m_k_desc = strprintf("TapLeaf(0x%02x || %s)", uint8_t(control[0] & TAPROOT_LEAF_MASK), HexStr(script).c_str());
     btc_taproot_logf("  (%s)\n", m_k_desc.c_str());
@@ -36,7 +36,7 @@ TaprootCommitmentEnv::TaprootCommitmentEnv(const std::vector<unsigned char>& con
 TaprootCommitmentEnv::State TaprootCommitmentEnv::Iterate() {
     btc_taproot_logf("- looping over path (0..%d)\n", m_path_len-1);
     if (m_i < m_path_len) {
-        CHashWriter ss_branch = HASHER_TAPBRANCH;
+        HashWriter ss_branch = HASHER_TAPBRANCH;
         Span<const unsigned char> node(m_control.data() + TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * m_i, TAPROOT_CONTROL_NODE_SIZE);
         if (std::lexicographical_compare(m_k.begin(), m_k.end(), node.begin(), node.end())) {
             btc_taproot_logf("  - %d: node = %02x...; taproot control node match -> k first\n", m_i, node[0]);
@@ -55,7 +55,7 @@ TaprootCommitmentEnv::State TaprootCommitmentEnv::Iterate() {
     }
     // if (!m_applied_tweak) {
     //     m_k_desc = strprintf("TapTweak(internal_pubkey=%s || %s)", HexStr(MakeSpan(m_p)).c_str(), m_k_desc.c_str());
-    //     m_k = (CHashWriter(HASHER_TAPTWEAK) << MakeSpan(m_p) << m_k).GetSHA256();
+    //     m_k = (HashWriter(HASHER_TAPTWEAK) << MakeSpan(m_p) << m_k).GetSHA256();
     //     btc_taproot_logf("- final k  = %s\n", m_k.ToString().c_str());
     //     btc_taproot_logf("  (%s)\n", m_k_desc.c_str());
     //     m_applied_tweak = true;

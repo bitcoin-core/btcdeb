@@ -269,10 +269,10 @@ void Value::do_len() {
     type = T_INT;
 }
 
-std::vector<uint8_t> gen_taproot_tagged_hash(const std::string& tag, const std::vector<uint8_t>& msg) {
-    CHashWriter tagged_writer = TaggedHash(tag);
+std::vector<uint8_t> gen_taproot_tagged_hash(const std::string& tag, const std::vector<std::byte>& msg) {
+    HashWriter tagged_writer = TaggedHash(tag);
     // we do not use the << operator is the std::vector serializer pushes a compact-size prefix
-    tagged_writer.write((const char*)msg.data(), msg.size());
+    tagged_writer.write(Span{msg});
     auto r = tagged_writer.GetSHA256();
     return std::vector<uint8_t>(r.begin(), r.end());
 }
@@ -283,7 +283,7 @@ void Value::do_tagged_hash() {
     std::vector<uint8_t> msg = args[1];
     for (size_t i = 2; i < args.size(); ++i) msg.insert(msg.end(), args[i].begin(), args[i].end());
     if (args.size() > 2) fprintf(stderr, "msg = %s\n", HexStr(msg).c_str());
-    data = gen_taproot_tagged_hash(std::string(args[0].begin(), args[0].end()), msg);
+    data = gen_taproot_tagged_hash(std::string(args[0].begin(), args[0].end()), VecU8ToByte(msg));
 }
 
 void Value::do_taproot_tweak_pubkey() {
@@ -491,7 +491,7 @@ void Value::do_combine_privkeys() {
         }
     }
 
-    if (!secp256k1_ec_privkey_tweak_add(secp256k1_context_sign, args[0].data(), args[1].data())) {
+    if (!secp256k1_ec_seckey_tweak_add(secp256k1_context_sign, args[0].data(), args[1].data())) {
         abort("failed call to secp256k1_ec_privkey_tweak_add");
     }
 
@@ -515,7 +515,7 @@ void Value::do_multiply_privkeys() {
         }
     }
 
-    if (!secp256k1_ec_privkey_tweak_mul(secp256k1_context_sign, args[0].data(), args[1].data())) {
+    if (!secp256k1_ec_seckey_tweak_mul(secp256k1_context_sign, args[0].data(), args[1].data())) {
         abort("failed call to secp256k1_ec_privkey_tweak_add");
     }
 
@@ -527,7 +527,7 @@ void Value::do_negate_privkey() {
 
     if (type != T_DATA) abort("invalid type (must be data)");
 
-    if (!secp256k1_ec_privkey_negate(secp256k1_context_sign, &data[0])) {
+    if (!secp256k1_ec_seckey_negate(secp256k1_context_sign, &data[0])) {
         abort("failed to negate privkey");
     }
 }
@@ -626,10 +626,10 @@ void Value::sign_schnorr() {
         abort("failed to derive pubkey from keypair (what?)");
     }
 
-    if (!secp256k1_schnorrsig_sign(secp256k1_context_sign, data.data(), sighash.begin(), &keypair, NULL, NULL)) {
+    if (!secp256k1_schnorrsig_sign32(secp256k1_context_sign, data.data(), sighash.begin(), &keypair, NULL)) {
         abort("failed to create signature");
     }
-    if (!secp256k1_schnorrsig_verify(secp256k1_context_sign, data.data(), sighash.begin(), &xpubkey)) {
+    if (!secp256k1_schnorrsig_verify(secp256k1_context_sign, data.data(), sighash.begin(), sighash.size(), &xpubkey)) {
         abort("failed to veriy signature");
     }
 }
@@ -703,3 +703,26 @@ void DeserializeBool(const char* bv, std::vector<uint8_t>& output) {
         }
     }
 }
+
+const std::vector<std::byte>& VecU8ToByte(const std::vector<uint8_t>& u8v)
+{
+    static std::vector<std::byte> * bv = nullptr;
+    if (!bv) bv = new std::vector<std::byte>();
+    bv->resize(u8v.size());
+    for (size_t i = 0; i < u8v.size(); ++i) {
+        (*bv)[i] = std::byte(u8v[i]);
+    }
+    return *bv;
+}
+
+const std::vector<std::uint8_t>& VecByteToU8(const std::vector<std::byte>& bv)
+{
+    static std::vector<std::uint8_t> * u8v = nullptr;
+    if (!u8v) u8v = new std::vector<std::uint8_t>();
+    u8v->resize(bv.size());
+    for (size_t i = 0; i < bv.size(); ++i) {
+        (*u8v)[i] = std::to_integer<std::uint8_t>(bv[i]);
+    }
+    return *u8v;
+}
+

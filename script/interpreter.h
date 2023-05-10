@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,6 +11,7 @@
 #include <span.h>
 #include <primitives/transaction.h>
 
+#include <optional>
 #include <vector>
 #include <stdint.h>
 
@@ -39,8 +40,7 @@ enum
  *  All flags are intended to be soft forks: the set of acceptable scripts under
  *  flags (A | B) is a subset of the acceptable scripts under flag (A).
  */
-enum
-{
+enum : uint32_t {
     SCRIPT_VERIFY_NONE      = 0,
 
     // Evaluate P2SH subscripts (BIP16).
@@ -140,6 +140,10 @@ enum
 
     // Making unknown public key versions (in BIP 342 scripts) non-standard
     SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_PUBKEYTYPE = (1U << 20),
+
+    // Constants to point to the highest flag in use. Add new flags above this line.
+    //
+    SCRIPT_VERIFY_END_MARKER
 };
 
 bool CheckSignatureEncoding(const std::vector<unsigned char> &vchSig, unsigned int flags, ScriptError* serror);
@@ -147,7 +151,7 @@ bool CheckSignatureEncoding(const std::vector<unsigned char> &vchSig, unsigned i
 struct PrecomputedTransactionData
 {
     // BIP341 precomputed data.
-    // These are single-SHA256, see https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki#cite_note-15.
+    // These are single-SHA256, see https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki#cite_note-16.
     uint256 m_prevouts_single_hash;
     uint256 m_sequences_single_hash;
     uint256 m_outputs_single_hash;
@@ -167,6 +171,13 @@ struct PrecomputedTransactionData
 
     PrecomputedTransactionData() = default;
 
+    /** Initialize this PrecomputedTransactionData with transaction data.
+     *
+     * @param[in]   tx             The transaction for which data is being precomputed.
+     * @param[in]   spent_outputs  The CTxOuts being spent, one for each tx.vin, in order.
+     * @param[in]   force          Whether to precompute data for all optional features,
+     *                             regardless of what is in the inputs (used at signing
+     *                             time, when the inputs aren't filled in yet). */
     template <class T>
     void Init(const T& tx, std::vector<CTxOut>&& spent_outputs, bool force = false);
 
@@ -205,6 +216,9 @@ struct ScriptExecutionData
     bool m_validation_weight_left_init = false;
     //! How much validation weight is left (decremented for every successful non-empty signature check).
     int64_t m_validation_weight_left;
+
+    //! The hash of the corresponding output
+    std::optional<uint256> m_output_hash;
 };
 
 /** Signature hash sizes */
@@ -219,8 +233,9 @@ static constexpr size_t TAPROOT_CONTROL_NODE_SIZE = 32;
 static constexpr size_t TAPROOT_CONTROL_MAX_NODE_COUNT = 128;
 static constexpr size_t TAPROOT_CONTROL_MAX_SIZE = TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * TAPROOT_CONTROL_MAX_NODE_COUNT;
 
-extern const CHashWriter HASHER_TAPLEAF;    //!< Hasher with tag "TapLeaf" pre-fed to it.
-extern const CHashWriter HASHER_TAPBRANCH;  //!< Hasher with tag "TapBranch" pre-fed to it.
+extern const HashWriter HASHER_TAPSIGHASH; //!< Hasher with tag "TapSighash" pre-fed to it.
+extern const HashWriter HASHER_TAPLEAF;    //!< Hasher with tag "TapLeaf" pre-fed to it.
+extern const HashWriter HASHER_TAPBRANCH;  //!< Hasher with tag "TapBranch" pre-fed to it.
 
 template <class T>
 uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache = nullptr);
@@ -233,7 +248,7 @@ public:
         return false;
     }
 
-    virtual bool CheckSchnorrSignature(Span<const unsigned char> sig, Span<const unsigned char> pubkey, SigVersion sigversion, const ScriptExecutionData& execdata, ScriptError* serror = nullptr) const
+    virtual bool CheckSchnorrSignature(Span<const unsigned char> sig, Span<const unsigned char> pubkey, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror = nullptr) const
     {
         return false;
     }
@@ -261,7 +276,7 @@ enum class MissingDataBehavior
 };
 
 template<typename T>
-bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache, MissingDataBehavior mdb);
+bool SignatureHashSchnorr(uint256& hash_out, ScriptExecutionData& execdata, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache, MissingDataBehavior mdb);
 
 template <class T>
 class GenericTransactionSignatureChecker : public BaseSignatureChecker
@@ -281,7 +296,7 @@ public:
     GenericTransactionSignatureChecker(const T* txToIn, unsigned int nInIn, const CAmount& amountIn, MissingDataBehavior mdb) : txTo(txToIn), m_mdb(mdb), nIn(nInIn), amount(amountIn), txdata(nullptr) {}
     GenericTransactionSignatureChecker(const T* txToIn, unsigned int nInIn, const CAmount& amountIn, const PrecomputedTransactionData& txdataIn, MissingDataBehavior mdb) : txTo(txToIn), m_mdb(mdb), nIn(nInIn), amount(amountIn), txdata(&txdataIn) {}
     bool CheckECDSASignature(const std::vector<unsigned char>& scriptSig, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const override;
-    bool CheckSchnorrSignature(Span<const unsigned char> sig, Span<const unsigned char> pubkey, SigVersion sigversion, const ScriptExecutionData& execdata, ScriptError* serror = nullptr) const override;
+    bool CheckSchnorrSignature(Span<const unsigned char> sig, Span<const unsigned char> pubkey, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror = nullptr) const override;
     bool CheckLockTime(const CScriptNum& nLockTime) const override;
     bool CheckSequence(const CScriptNum& nSequence) const override;
 };
@@ -289,84 +304,20 @@ public:
 using TransactionSignatureChecker = GenericTransactionSignatureChecker<CTransaction>;
 using MutableTransactionSignatureChecker = GenericTransactionSignatureChecker<CMutableTransaction>;
 
-/** A data type to abstract out the condition stack during script execution.
- *
- * Conceptually it acts like a vector of booleans, one for each level of nested
- * IF/THEN/ELSE, indicating whether we're in the active or inactive branch of
- * each.
- *
- * The elements on the stack cannot be observed individually; we only need to
- * expose whether the stack is empty and whether or not any false values are
- * present at all. To implement OP_ELSE, a toggle_top modifier is added, which
- * flips the last value without returning it.
- *
- * This uses an optimized implementation that does not materialize the
- * actual stack. Instead, it just stores the size of the would-be stack,
- * and the position of the first false value in it.
- */
-class ConditionStack {
-private:
-    //! A constant for m_first_false_pos to indicate there are no falses.
-    static constexpr uint32_t NO_FALSE = std::numeric_limits<uint32_t>::max();
-
-    //! The size of the implied stack.
-    uint32_t m_stack_size = 0;
-    //! The position of the first false value on the implied stack, or NO_FALSE if all true.
-    uint32_t m_first_false_pos = NO_FALSE;
-
-public:
-    size_t size() const { return m_stack_size; }
-    bool at(size_t idx) const { return m_first_false_pos > idx; }
-    bool empty() const { return m_stack_size == 0; }
-    bool all_true() const { return m_first_false_pos == NO_FALSE; }
-    void push_back(bool f)
-    {
-        if (m_first_false_pos == NO_FALSE && !f) {
-            // The stack consists of all true values, and a false is added.
-            // The first false value will appear at the current size.
-            m_first_false_pos = m_stack_size;
-        }
-        ++m_stack_size;
-    }
-    void pop_back()
-    {
-        assert(m_stack_size > 0);
-        --m_stack_size;
-        if (m_first_false_pos == m_stack_size) {
-            // When popping off the first false value, everything becomes true.
-            m_first_false_pos = NO_FALSE;
-        }
-    }
-    void toggle_top()
-    {
-        assert(m_stack_size > 0);
-        if (m_first_false_pos == NO_FALSE) {
-            // The current stack is all true values; the first false will be the top.
-            m_first_false_pos = m_stack_size - 1;
-        } else if (m_first_false_pos == m_stack_size - 1) {
-            // The top is the first false value; toggling it will make everything true.
-            m_first_false_pos = NO_FALSE;
-        } else {
-            // There is a false value, but not on top. No action is needed as toggling
-            // anything but the first false value is unobservable.
-        }
-    }
-};
-
 class DeferringSignatureChecker : public BaseSignatureChecker
 {
 protected:
-    BaseSignatureChecker& m_checker;
+    const BaseSignatureChecker& m_checker;
 
 public:
-    DeferringSignatureChecker(BaseSignatureChecker& checker) : m_checker(checker) {}
+    DeferringSignatureChecker(const BaseSignatureChecker& checker) : m_checker(checker) {}
 
     bool CheckECDSASignature(const std::vector<unsigned char>& scriptSig, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const override
     {
         return m_checker.CheckECDSASignature(scriptSig, vchPubKey, scriptCode, sigversion);
     }
 
-    bool CheckSchnorrSignature(Span<const unsigned char> sig, Span<const unsigned char> pubkey, SigVersion sigversion, const ScriptExecutionData& execdata, ScriptError* serror = nullptr) const override
+    bool CheckSchnorrSignature(Span<const unsigned char> sig, Span<const unsigned char> pubkey, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror = nullptr) const override
     {
         return m_checker.CheckSchnorrSignature(sig, pubkey, sigversion, execdata, serror);
     }
@@ -387,43 +338,11 @@ uint256 ComputeTapleafHash(uint8_t leaf_version, const CScript& script);
  *  Requires control block to have valid length (33 + k*32, with k in {0,1,..,128}). */
 uint256 ComputeTaprootMerkleRoot(Span<const unsigned char> control, const uint256& tapleaf_hash);
 
-struct ScriptExecutionEnvironment {
-    CScript script;
-    CScript::const_iterator pend;
-    CScript::const_iterator pbegincodehash;
-    opcodetype opcode;
-    std::vector<uint8_t> vchPushValue;
-    ConditionStack vfExec;
-    std::vector<std::vector<uint8_t>> altstack;
-    int nOpCount;
-    bool fRequireMinimal;
-    std::vector<std::vector<unsigned char> >& stack;
-    unsigned int flags;
-    const BaseSignatureChecker& checker;
-    SigVersion sigversion;
-    ScriptError* serror;
-    std::map<std::vector<unsigned char>,std::vector<unsigned char>> pretend_valid_map;
-    std::set<std::vector<unsigned char>> pretend_valid_pubkeys;
-    ScriptExecutionEnvironment(std::vector<std::vector<unsigned char> >& stack_in, const CScript& script_in, unsigned int flags_in, const BaseSignatureChecker& checker_in);
-
-    uint32_t opcode_pos;
-    ScriptExecutionData execdata;
-
-    bool allow_disabled_opcodes;
-};
-
-bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CScript* local_script = nullptr);
-
-// made public to assist instance.cpp
-bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const CScript& script, uint256* tapleaf_hash);
-
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* error = nullptr);
 bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* error = nullptr);
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror = nullptr);
 
 size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags);
-
-bool CheckMinimalPush(const std::vector<unsigned char>& data, opcodetype opcode);
 
 int FindAndDelete(CScript& script, const CScript& b);
 

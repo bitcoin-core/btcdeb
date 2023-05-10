@@ -323,11 +323,11 @@ int main(int argc, char* const* argv)
         it = script->begin();
         while (script->GetOp(it, opcode, vchPushValue)) {
             char* pbuf = buf;
-            pbuf += sprintf(pbuf, "#%04d ", i);
+            pbuf += snprintf(pbuf, 1024, "#%04d ", i);
             if (vchPushValue.size() > 0) {
-                sprintf(pbuf, "%s", HexStr(std::vector<uint8_t>(vchPushValue.begin(), vchPushValue.end())).c_str());
+                snprintf(pbuf, 1024 + pbuf - buf, "%s", HexStr(std::vector<uint8_t>(vchPushValue.begin(), vchPushValue.end())).c_str());
             } else {
-                sprintf(pbuf, "%s", GetOpName(opcode).c_str());
+                snprintf(pbuf, 1024 + pbuf - buf, "%s", GetOpName(opcode).c_str());
             }
             script_lines[i++] = strdup(buf);
         }

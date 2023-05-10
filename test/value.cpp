@@ -234,7 +234,7 @@ TEST_CASE("Data push not larger than necessary", "[data-push-minimal]") {
     VALUE_WARN = false;
     char buf[30];
     for (int i = 0; i < 256; i++) {
-        sprintf(buf, "[%d OP_EQUAL]", i);
+        snprintf(buf, 30, "[%d OP_EQUAL]", i);
         Value x(buf);
         REQUIRE(x.type == Value::T_DATA);
         CScript s;
@@ -243,7 +243,7 @@ TEST_CASE("Data push not larger than necessary", "[data-push-minimal]") {
         REQUIRE(x.hex_str() == HexStr(s));
     }
     for (int64_t i = 257; i < 0x10000000; i = i * 2 - (i >> 5)) {
-        sprintf(buf, "[0x%s OP_EQUAL]", Value(i).hex_str().c_str());
+        snprintf(buf, 30, "[0x%s OP_EQUAL]", Value(i).hex_str().c_str());
         Value x(buf);
         REQUIRE(x.type == Value::T_DATA);
         CScript s;

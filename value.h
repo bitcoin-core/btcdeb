@@ -191,7 +191,7 @@ struct Value {
         if (int64 != 0 || !strcmp(v, "0")) {
             // verify
             char buf[vlen + 1];
-            sprintf(buf, "%" PRId64, int64);
+            snprintf(buf, vlen + 1, "%" PRId64, int64);
             if (!strcmp(buf, v)) {
                 // verified; can it be a hexstring too?
                 if (!(vlen & 1)) {
@@ -332,7 +332,7 @@ struct Value {
         case T_OPCODE:
             return opcode;
         case T_DATA:
-            return CScriptNum(data, false).getint64();
+            return CScriptNum(data, false).GetInt64();
         default:
             fprintf(stderr, "cannot convert string into integer value: %s\n", str.c_str());
             return -1;
@@ -656,5 +656,8 @@ struct Value {
 private:
     bool extract_values(std::vector<std::vector<uint8_t>>& values);
 };
+
+const std::vector<std::byte>& VecU8ToByte(const std::vector<uint8_t>& u8v);
+const std::vector<std::uint8_t>& VecByteToU8(const std::vector<std::byte>& bv);
 
 #endif // included_value_h_
