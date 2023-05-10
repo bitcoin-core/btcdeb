@@ -36,7 +36,6 @@ LIBBITCOIN_DEB_H = \
 # bitcoin core #
 BITCOIN_CORE_H = \
 	$(LIBBITCOIN_DEB_H) \
-	amount.h \
 	arith_uint256.h \
 	attributes.h \
 	base58.h \
@@ -45,6 +44,8 @@ BITCOIN_CORE_H = \
 	compat/byteswap.h \
 	compat/cpuid.h \
 	compat/endian.h \
+	consensus/amount.h \
+	consensus/merkle.h \
 	crypto/common.h \
 	crypto/hmac_sha512.h \
 	crypto/ripemd160.h \
@@ -52,7 +53,6 @@ BITCOIN_CORE_H = \
 	crypto/sha256.h \
 	crypto/sha512.h \
 	hash.h \
-	merkle.h \
 	policy/policy.h \
 	prevector.h \
 	primitives/transaction.h \
@@ -69,6 +69,7 @@ BITCOIN_CORE_H = \
 	support/lockedpool.h \
 	tinyformat.h \
 	uint256.h \
+	util/overflow.h \
 	util/spanparsing.h \
 	util/strencodings.h \
 	util/vector.h \
@@ -86,20 +87,20 @@ libbitcoin_deb_a_SOURCES = \
 	$(BITCOIN_CORE_H)
 
 # bitcoin: shared between all the tools
-libbitcoin_a_LIBADD = $(LIBSECP256K1)
+# libbitcoin_a_LIBADD = $(LIBSECP256K1)
 libbitcoin_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_a_CXXFLAGS = $(AM_CXXFLAGS)
 libbitcoin_a_SOURCES = \
 	arith_uint256.cpp \
 	base58.cpp \
 	bech32.cpp \
+	consensus/merkle.cpp \
 	crypto/hmac_sha512.cpp \
 	crypto/ripemd160.cpp \
 	crypto/sha1.cpp \
 	crypto/sha256.cpp \
 	crypto/sha512.cpp \
 	hash.cpp \
-	merkle.cpp \
 	primitives/transaction.cpp \
 	pubkey.cpp \
 	script/interpreter.cpp \

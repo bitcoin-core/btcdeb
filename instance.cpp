@@ -254,7 +254,7 @@ bool Instance::eval(const size_t argc, char* const* argv) {
         if (n != 0) {
             // verify
             char buf[vlen + 1];
-            sprintf(buf, "%d", n);
+            snprintf(buf, vlen + 1, "%d", n);
             if (!strcmp(buf, v)) {
                 // verified; is it > 3 chars and can it be a hexstring too?
                 if (vlen > 3 && !(vlen & 1)) {
@@ -502,7 +502,7 @@ bool Instance::configure_tx_txin() {
             if (stack.size() >= 2 && !stack.back().empty() && stack.back()[0] == ANNEX_TAG) {
                 // Drop annex
                 fprintf(stderr, "warning: unknown annex in witness stack\n");
-                execdata.m_annex_hash = (CHashWriter(SER_GETHASH, 0) << stack.back()).GetSHA256();
+                execdata.m_annex_hash = (HashWriter{} << stack.back()).GetSHA256();
                 execdata.m_annex_present = true;
                 stack.pop_back();
             } else {

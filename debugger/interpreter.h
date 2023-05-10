@@ -5,7 +5,7 @@
 #ifndef BITCOIN_BTCDEB_INTERPRETER_H
 #define BITCOIN_BTCDEB_INTERPRETER_H
 
-#include <script/interpreter.h>
+#include <debugger/see.h>
 #include <util/strencodings.h> // HexStr
 #include <pubkey.h> // XOnlyPubKey
 #include <vector>
@@ -18,10 +18,10 @@ template <typename T, typename T2> static inline void print_vec(const T& v, T2 f
 static inline std::string hashtype_str(int h) {
     char buf[100];
     char* pbuf = buf;
-    if ((h & 0x1f) == SIGHASH_ALL) pbuf += sprintf(pbuf, " SIGHASH_ALL");
-    if ((h & 0x1f) == SIGHASH_NONE) pbuf += sprintf(pbuf, " SIGHASH_NONE");
-    if ((h & 0x1f) == SIGHASH_SINGLE) pbuf += sprintf(pbuf, " SIGHASH_SINGLE");
-    if (h & SIGHASH_ANYONECANPAY) pbuf += sprintf(pbuf, " SIGHASH_ANYONECANPAY");
+    if ((h & 0x1f) == SIGHASH_ALL) pbuf += snprintf(pbuf, 100 + buf - pbuf, " SIGHASH_ALL");
+    if ((h & 0x1f) == SIGHASH_NONE) pbuf += snprintf(pbuf, 100 + buf - pbuf, " SIGHASH_NONE");
+    if ((h & 0x1f) == SIGHASH_SINGLE) pbuf += snprintf(pbuf, 100 + buf - pbuf, " SIGHASH_SINGLE");
+    if (h & SIGHASH_ANYONECANPAY) pbuf += snprintf(pbuf, 100 + buf - pbuf, " SIGHASH_ANYONECANPAY");
     return &buf[1];
 }
 

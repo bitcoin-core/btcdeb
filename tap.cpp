@@ -32,10 +32,10 @@ extern secp256k1_context* secp256k1_context_sign;
 void ECC_Start();
 void ECC_Stop();
 
-static const CHashWriter HasherTapSighash = TaggedHash("TapSighash");
-static const CHashWriter HasherTapLeaf = TaggedHash("TapLeaf");
-static const CHashWriter HasherTapBranch = TaggedHash("TapBranch");
-static const CHashWriter HasherTapTweak = TaggedHash("TapTweak");
+static const HashWriter HasherTapSighash = TaggedHash("TapSighash");
+static const HashWriter HasherTapLeaf = TaggedHash("TapLeaf");
+static const HashWriter HasherTapBranch = TaggedHash("TapBranch");
+static const HashWriter HasherTapTweak = TaggedHash("TapTweak");
 
 constexpr const char* DEFAULT_ADDR_PREFIX = "bcrt";
 
@@ -463,10 +463,10 @@ int main(int argc, char* const* argv)
                 abort("failed to derive pubkey");
             }
 
-            if (!secp256k1_schnorrsig_sign(secp256k1_context_sign, sig.data(), sighash.begin(), &keypair, NULL, NULL)) {
+            if (!secp256k1_schnorrsig_sign32(secp256k1_context_sign, sig.data(), sighash.begin(), &keypair, NULL)) {
                 abort("failed to create signature");
             }
-            if (!secp256k1_schnorrsig_verify(secp256k1_context_sign, sig.data(), sighash.begin(), &pubkey)) {
+            if (!secp256k1_schnorrsig_verify(secp256k1_context_sign, sig.data(), sighash.begin(), 32, &pubkey)) {
                 abort("failed to verify signature");
             }
             uint256 pk;
