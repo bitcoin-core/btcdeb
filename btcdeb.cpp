@@ -149,7 +149,7 @@ int main(int argc, char* const* argv)
         fprintf(stderr, "The --allow-disabled-opcodes flag enables experimental support for OP_CAT, OP_2MUL, etc (disabled in Bitcoin)\n");
         fprintf(stderr, "You can modify verification flags using the --modify-flags command. separate flags using comma (,). prefix with + to enable, - to disable. e.g. --modify-flags=\"-NULLDUMMY,-MINIMALIF\"\n");
         fprintf(stderr, "You can set the environment variables DEBUG_SIGHASH, DEBUG_SIGNING, and DEBUG_SEGWIT to increase verbosity for the respective areas.\n");
-        fprintf(stderr, "The standard (enabled by default) flags can be reviewed by typing %s --default-flags or %s -d", argv[0], argv[0]);
+        fprintf(stderr, "The standard (enabled by default) flags can be reviewed by typing %s --default-flags or %s -d\n", argv[0], argv[0]);
         fprintf(stderr, "The --verbose flag will turn btcdeb into a helpful hintful chatter-box in various situations.\n");
         return 0;
     } else if (ca.m.count('d')) {
