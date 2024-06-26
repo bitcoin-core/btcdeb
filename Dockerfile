@@ -1,7 +1,9 @@
-FROM chibidev/emsdk:alpine as base
+FROM chibidev/emsdk:alpine AS base
 
 #RUN echo 'Acquire::HTTP::Proxy "http://172.17.0.1:3142";' >> /etc/apt/apt.conf.d/01proxy \
 # && echo 'Acquire::HTTPS::Proxy "false";' >> /etc/apt/apt.conf.d/01proxy
+
+RUN sed -i '/edge/s/^#//' /etc/apk/repositories
 
 RUN apk --no-cache --update add \
     autoconf \
@@ -38,7 +40,7 @@ RUN apk update \
 		git vim curl shadow openssh-client \
 		util-linux autoconf
 
-FROM scratch as user
+FROM scratch AS user
 COPY --from=base . .
 
 ARG HOST_UID=${HOST_UID:-4000}
