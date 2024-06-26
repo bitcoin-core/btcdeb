@@ -5,7 +5,7 @@ TIME									:= $(shell date +%s)
 export TIME
 # PROJECT_NAME defaults to name of the current directory.
 # should not to be changed if you follow GitOps operating procedures.
-PROJECT_NAME = docker_shell#$(notdir $(PWD))
+PROJECT_NAME = $(notdir $(PWD))
 
 # Note. If you change this, you also need to update docker-compose.yml.
 # only useful in a setting with multiple services/ makefiles.
@@ -129,11 +129,11 @@ else
 	$(DOCKER_COMPOSE) $(VERBOSE) -p $(PROJECT_NAME)_$(HOST_UID) run --rm $(SERVICE_TARGET) bash -c "$(CMD_ARGUMENTS)"
 endif
 
-build: 	docker-compose build
+build:## 	docker-compose build
 	# only build the container. Note, docker does this also if you apply other targets.
 	$(DOCKER_COMPOSE) build $(NO_CACHE)  $(VERBOSE) ${SERVICE_TARGET}
 
-rebuild: 	docker-compose build --no-cache
+rebuild:## 	docker-compose build --no-cache
 	# force a rebuild by passing --no-cache
 	$(DOCKER_COMPOSE) build --no-cache $(VERBOSE) ${SERVICE_TARGET}
 
