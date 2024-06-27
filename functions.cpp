@@ -64,9 +64,9 @@ inline void svprintscripts(std::vector<std::string>& l, int& lmax, std::vector<C
             begun = true;
             char* pbuf = buf;
             if (vchPushValue.size() > 0) {
-                sprintf(pbuf, "%s", HexStr(std::vector<uint8_t>(vchPushValue.begin(), vchPushValue.end())).c_str());
+                snprintf(pbuf, 1024, "%s", HexStr(std::vector<uint8_t>(vchPushValue.begin(), vchPushValue.end())).c_str());
             } else {
-                sprintf(pbuf, "%s", GetOpName(opcode).c_str());
+                snprintf(pbuf, 1024, "%s", GetOpName(opcode).c_str());
             }
             auto s = std::string(buf);
             if (s.length() > lmax) lmax = s.length();
@@ -151,8 +151,8 @@ void print_dualstack() {
     int lcap = //66, rcap = 66; // 
     lmax > 66 ? 66 : lmax, rcap = rmax > 66 ? 66 : rmax;
     char lfmt[15], rfmt[14];
-    sprintf(lfmt, "%%-%ds", lcap + 1);
-    sprintf(rfmt, "%%%ds", rcap);
+    snprintf(lfmt, 15, "%%-%ds", lcap + 1);
+    snprintf(rfmt, 14, "%%%ds", rcap);
     printf(lfmt, "script");
     printf("| ");
     printf(rfmt, "stack ");

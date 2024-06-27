@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2009-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,11 +9,12 @@
 #include <crypto/sha1.h>
 #include <crypto/sha256.h>
 #include <pubkey.h>
+#include <script/script.h>
 #include <uint256.h>
 
 #include <debugger/interpreter.h>
 #include <inttypes.h> // PRId64 ...
-#include <util/strencodings.h> // for Join<>
+// #include <util/strencodings.h> // for Join<>
 #include <debugger/script.h>
 #include <tinyformat.h>
 
@@ -203,31 +204,6 @@ bool static CheckPubKeyEncoding(const valtype &vchPubKey, unsigned int flags, co
     // Only compressed keys are accepted in segwit
     if ((flags & SCRIPT_VERIFY_WITNESS_PUBKEYTYPE) != 0 && sigversion == SigVersion::WITNESS_V0 && !IsCompressedPubKey(vchPubKey)) {
         return set_error(serror, SCRIPT_ERR_WITNESS_PUBKEYTYPE);
-    }
-    return true;
-}
-
-bool CheckMinimalPush(const valtype& data, opcodetype opcode) {
-    // Excludes OP_1NEGATE, OP_1-16 since they are by definition minimal
-    assert(0 <= opcode && opcode <= OP_PUSHDATA4);
-    if (data.size() == 0) {
-        // Should have used OP_0.
-        return opcode == OP_0;
-    } else if (data.size() == 1 && data[0] >= 1 && data[0] <= 16) {
-        // Should have used OP_1 .. OP_16.
-        return false;
-    } else if (data.size() == 1 && data[0] == 0x81) {
-        // Should have used OP_1NEGATE.
-        return false;
-    } else if (data.size() <= 75) {
-        // Must have used a direct push (opcode indicating number of bytes pushed + those bytes).
-        return opcode == data.size();
-    } else if (data.size() <= 255) {
-        // Must have used OP_PUSHDATA.
-        return opcode == OP_PUSHDATA1;
-    } else if (data.size() <= 65535) {
-        // Must have used OP_PUSHDATA2.
-        return opcode == OP_PUSHDATA2;
     }
     return true;
 }
@@ -491,7 +467,6 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                 opcode == OP_LSHIFT ||
                 opcode == OP_RSHIFT))
                 return set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
-
 
             // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR in non-segwit script is rejected even in an unexecuted branch
             if (opcode == OP_CODESEPARATOR && sigversion == SigVersion::BASE && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
@@ -1163,6 +1138,7 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                     btc_sign_logf("stack has %zu entries [require 1]\n", stack.size());
                     if ((int)stack.size() < i)
                         return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+
                     int nKeysCount = CScriptNum(stacktop(-i), fRequireMinimal).getint();
                     int total_keys = nKeysCount;
                     if (nKeysCount < 0 || nKeysCount > MAX_PUBKEYS_PER_MULTISIG)
@@ -1202,7 +1178,9 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                                 return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
                         }
                     }
+
                     btc_sign_logf("scriptCode = %s\n", HexStr(scriptCode).c_str());
+
                     bool fSuccess = true;
                     btc_sign_logf("looping for multisig\n");
                     while (fSuccess && nSigsCount > 0)
@@ -1229,7 +1207,7 @@ bool StepScript(ScriptExecutionEnvironment& env, CScript::const_iterator& pc, CS
                             }
                             // Check signature
                             fOk = checker.CheckECDSASignature(vchSig, vchPubKey, scriptCode, sigversion);
-                        }
+                         }
                         btc_sign_logf("- sig check %s\n", fOk ? "succeeded" : "failed");
                         if (fOk) {
                             isig++;
@@ -1384,12 +1362,12 @@ public:
         it = itBegin;
         while (scriptCode.GetOp(it, opcode)) {
             if (opcode == OP_CODESEPARATOR) {
-                s.write((char*)&itBegin[0], it-itBegin-1);
+                s.write(AsBytes(Span{&itBegin[0], size_t(it - itBegin - 1)}));
                 itBegin = it;
             }
         }
         if (itBegin != scriptCode.end())
-            s.write((char*)&itBegin[0], it-itBegin);
+            s.write(AsBytes(Span{&itBegin[0], size_t(it - itBegin)}));
     }
 
     /** Serialize an input of txTo */
@@ -1457,8 +1435,8 @@ public:
 template <class T>
 uint256 GetPrevoutsSHA256(const T& txTo)
 {
-    CHashWriter ss(SER_GETHASH, 0);
     btc_sign_logf("- generating prevout hash from %zu ins\n", txTo.vin.size());
+    HashWriter ss{};
     for (const auto& txin : txTo.vin) {
         ss << txin.prevout;
         btc_sign_logf("[+] %s\n", txin.prevout.ToString().c_str());
@@ -1470,7 +1448,7 @@ uint256 GetPrevoutsSHA256(const T& txTo)
 template <class T>
 uint256 GetSequencesSHA256(const T& txTo)
 {
-    CHashWriter ss(SER_GETHASH, 0);
+    HashWriter ss{};
     for (const auto& txin : txTo.vin) {
         ss << txin.nSequence;
     }
@@ -1481,7 +1459,7 @@ uint256 GetSequencesSHA256(const T& txTo)
 template <class T>
 uint256 GetOutputsSHA256(const T& txTo)
 {
-    CHashWriter ss(SER_GETHASH, 0);
+    HashWriter ss{};
     for (const auto& txout : txTo.vout) {
         ss << txout;
     }
@@ -1491,7 +1469,7 @@ uint256 GetOutputsSHA256(const T& txTo)
 /** Compute the (single) SHA256 of the concatenation of all amounts spent by a tx. */
 uint256 GetSpentAmountsSHA256(const std::vector<CTxOut>& outputs_spent)
 {
-    CHashWriter ss(SER_GETHASH, 0);
+    HashWriter ss{};
     for (const auto& txout : outputs_spent) {
         ss << txout.nValue;
     }
@@ -1501,7 +1479,7 @@ uint256 GetSpentAmountsSHA256(const std::vector<CTxOut>& outputs_spent)
 /** Compute the (single) SHA256 of the concatenation of all scriptPubKeys spent by a tx. */
 uint256 GetSpentScriptsSHA256(const std::vector<CTxOut>& outputs_spent)
 {
-    CHashWriter ss(SER_GETHASH, 0);
+    HashWriter ss{};
     for (const auto& txout : outputs_spent) {
         ss << txout.scriptPubKey;
     }
@@ -1575,9 +1553,9 @@ template void PrecomputedTransactionData::Init(const CMutableTransaction& txTo, 
 template PrecomputedTransactionData::PrecomputedTransactionData(const CTransaction& txTo);
 template PrecomputedTransactionData::PrecomputedTransactionData(const CMutableTransaction& txTo);
 
-const CHashWriter HASHER_TAPSIGHASH = TaggedHash("TapSighash");
-const CHashWriter HASHER_TAPLEAF = TaggedHash("TapLeaf");
-const CHashWriter HASHER_TAPBRANCH = TaggedHash("TapBranch");
+const HashWriter HASHER_TAPSIGHASH{TaggedHash("TapSighash")};
+const HashWriter HASHER_TAPLEAF{TaggedHash("TapLeaf")};
+const HashWriter HASHER_TAPBRANCH{TaggedHash("TapBranch")};
 
 static bool HandleMissingData(MissingDataBehavior mdb)
 {
@@ -1592,7 +1570,7 @@ static bool HandleMissingData(MissingDataBehavior mdb)
 }
 
 template<typename T>
-bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache, MissingDataBehavior mdb)
+bool SignatureHashSchnorr(uint256& hash_out, ScriptExecutionData& execdata, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache, MissingDataBehavior mdb)
 {
     btc_sign_logf("SignatureHashSchnorr(in_pos=%d, hash_type=%02x)\n", in_pos, hash_type);
     uint8_t ext_flag, key_version;
@@ -1625,21 +1603,19 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
         return HandleMissingData(mdb);
     }
 
-    CHashWriter::debug = btc_enabled(btc_sighash_logf);
-    CHashWriter ss = HASHER_TAPSIGHASH;
+    HashWriter::debug = btc_enabled(btc_sighash_logf);
+    HashWriter ss{HASHER_TAPSIGHASH};
 
     // Epoch
     static constexpr uint8_t EPOCH = 0;
     btc_sighash_logf(" << epoch\n");
     ss << EPOCH;
-
     // Hash type
     const uint8_t output_type = (hash_type == SIGHASH_DEFAULT) ? SIGHASH_ALL : (hash_type & SIGHASH_OUTPUT_MASK); // Default (no sighash byte) is equivalent to SIGHASH_ALL
     const uint8_t input_type = hash_type & SIGHASH_INPUT_MASK;
     if (!(hash_type <= 0x03 || (hash_type >= 0x81 && hash_type <= 0x83))) return false;
     btc_sighash_logf(" << hash type\n");
     ss << hash_type;
-
     // Transaction level data
     btc_sighash_logf(" << tx_to.nVersion\n");
     ss << tx_to.nVersion;
@@ -1692,11 +1668,14 @@ bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata
             btc_sighash_logf(" << in_pos >= tx_to.vout.size()\n");
             return false;
         }
-        btc_sighash_logf(" (sha_single_output) << tx_to.vout[in_pos]\n");
-        CHashWriter sha_single_output(SER_GETHASH, 0);
-        sha_single_output << tx_to.vout[in_pos];
-        btc_sighash_logf(" << sha_single_output\n");
-        ss << sha_single_output.GetSHA256();
+        if (!execdata.m_output_hash) {
+            btc_sighash_logf(" (sha_single_output) << tx_to.vout[in_pos]\n");
+            HashWriter sha_single_output{};
+            sha_single_output << tx_to.vout[in_pos];
+            btc_sighash_logf(" << sha_single_output\n");
+            execdata.m_output_hash = sha_single_output.GetSHA256();
+        }
+        ss << execdata.m_output_hash.value();
     }
 
     // Additional data for BIP 342 signatures
@@ -1721,37 +1700,31 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
 {
     btc_sign_logf("SignatureHash(nIn=%d, nHashType=%02x, amount=%lld)\n", nIn, nHashType, amount);
     assert(nIn < txTo.vin.size());
-
     if (sigversion == SigVersion::WITNESS_V0) {
         btc_sign_logf("- sigversion == SIGVERSION_WITNESS_V0\n");
         uint256 hashPrevouts;
         uint256 hashSequence;
         uint256 hashOutputs;
         const bool cacheready = cache && cache->m_bip143_segwit_ready;
-
-        CHashWriter::debug = btc_enabled(btc_sighash_logf);
+        HashWriter::debug = btc_enabled(btc_sighash_logf);
         if (!(nHashType & SIGHASH_ANYONECANPAY)) {
             hashPrevouts = cacheready ? cache->hashPrevouts : SHA256Uint256(GetPrevoutsSHA256(txTo));
             btc_sighash_logf("  hashPrevouts = %s\n", hashPrevouts.ToString().c_str());
         }
-
         if (!(nHashType & SIGHASH_ANYONECANPAY) && (nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
             hashSequence = cacheready ? cache->hashSequence : SHA256Uint256(GetSequencesSHA256(txTo));
             btc_sighash_logf("  hashSequence = %s\n", hashSequence.ToString().c_str());
         }
-
-
         if ((nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
             hashOutputs = cacheready ? cache->hashOutputs : SHA256Uint256(GetOutputsSHA256(txTo));
             btc_sighash_logf("  hashOutputs [!single] = %s\n", hashOutputs.ToString().c_str());
         } else if ((nHashType & 0x1f) == SIGHASH_SINGLE && nIn < txTo.vout.size()) {
-            CHashWriter ss(SER_GETHASH, 0);
+            HashWriter ss{};
             ss << txTo.vout[nIn];
             hashOutputs = ss.GetHash();
             btc_sighash_logf("  hashOutputs [single] = %s\n", hashOutputs.ToString().c_str());
         }
-
-        CHashWriter ss(SER_GETHASH, 0);
+        HashWriter ss{};
         // Version
         btc_sighash_logf("SERIALIZING:\n");
         ss << txTo.nVersion;
@@ -1783,7 +1756,7 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
         btc_sighash_logf(" << nHashType = %02x\n", nHashType);
         uint256 sighash = ss.GetHash();
         btc_sighash_logf("RESULTING HASH = %s\n", sighash.ToString().c_str());
-        CHashWriter::debug = false;
+        HashWriter::debug = false;
         return sighash;
     }
 
@@ -1802,10 +1775,10 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
     CTransactionSignatureSerializer<T> txTmp(txTo, scriptCode, nIn, nHashType);
 
     // Serialize and hash
-    CHashWriter::debug = btc_enabled(btc_sighash_logf);
-    CHashWriter ss(SER_GETHASH, 0);
+    HashWriter::debug = btc_enabled(btc_sighash_logf);
+    HashWriter ss{};
     ss << txTmp << nHashType;
-    CHashWriter::debug = false;
+    HashWriter::debug = false;
     return ss.GetHash();
 }
 
@@ -1868,7 +1841,7 @@ bool GenericTransactionSignatureChecker<T>::CheckECDSASignature(const std::vecto
 }
 
 template <class T>
-bool GenericTransactionSignatureChecker<T>::CheckSchnorrSignature(Span<const unsigned char> sig, Span<const unsigned char> pubkey_in, SigVersion sigversion, const ScriptExecutionData& execdata, ScriptError* serror) const
+bool GenericTransactionSignatureChecker<T>::CheckSchnorrSignature(Span<const unsigned char> sig, Span<const unsigned char> pubkey_in, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror) const
 {
     btc_sign_logf("GenericTransactionSignatureChecker::CheckSchnorrSignature(%zu len sig, %zu len pubkey, sigversion=%d)\n", sig.size(), pubkey_in.size(), sigversion);
     btc_sign_logf("  sig         = %s\n", HexStr(sig).c_str());
@@ -1901,14 +1874,10 @@ bool GenericTransactionSignatureChecker<T>::CheckSchnorrSignature(Span<const uns
     }
     uint256 sighash;
     if (!this->txdata) {
-        btc_sign_logf("- failed (assertion!): this->txdata not set\n");
-        throw std::runtime_error("assertion failed: this->txdata");
-    }
-    if (!this->txdata) {
         btc_sign_logf("- transaction data missing");
         return HandleMissingData(m_mdb);
     }
-    bool ret = SignatureHashSchnorr(sighash, execdata, *txTo, nIn, hashtype, sigversion, *this->txdata, MissingDataBehavior::FAIL);
+    bool ret = SignatureHashSchnorr(sighash, execdata, *txTo, nIn, hashtype, sigversion, *this->txdata, m_mdb);
     if (!ret) {
         btc_sign_logf("- failed generating schnorr signature hash\n");
         return set_error(serror, SCRIPT_ERR_SCHNORR_SIG_HASHTYPE);
@@ -2009,17 +1978,17 @@ bool GenericTransactionSignatureChecker<T>::CheckSequence(const CScriptNum& nSeq
 template class GenericTransactionSignatureChecker<CTransaction>;
 template class GenericTransactionSignatureChecker<CMutableTransaction>;
 
-static bool ExecuteWitnessScript(const Span<const valtype>& stack_span, const CScript& scriptPubKey, unsigned int flags, SigVersion sigversion, const BaseSignatureChecker& checker, ScriptExecutionData& execdata, ScriptError* serror)
+static bool ExecuteWitnessScript(const Span<const valtype>& stack_span, const CScript& exec_script, unsigned int flags, SigVersion sigversion, const BaseSignatureChecker& checker, ScriptExecutionData& execdata, ScriptError* serror)
 {
     btc_logf("Executing witness program with sigversion %d\n", sigversion);
     std::vector<valtype> stack{stack_span.begin(), stack_span.end()};
 
     if (sigversion == SigVersion::TAPSCRIPT) {
         // OP_SUCCESSx processing overrides everything, including stack element size limits
-        CScript::const_iterator pc = scriptPubKey.begin();
-        while (pc < scriptPubKey.end()) {
+        CScript::const_iterator pc = exec_script.begin();
+        while (pc < exec_script.end()) {
             opcodetype opcode;
-            if (!scriptPubKey.GetOp(pc, opcode)) {
+            if (!exec_script.GetOp(pc, opcode)) {
                 // Note how this condition would not be reached if an unknown OP_SUCCESSx was found
                 btc_logf("- script pub key GetOp failed\n");
                 return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
@@ -2044,7 +2013,7 @@ static bool ExecuteWitnessScript(const Span<const valtype>& stack_span, const CS
     }
 
     // Run the script interpreter.
-    if (!EvalScript(stack, scriptPubKey, flags, checker, sigversion, execdata, serror)) return false;
+    if (!EvalScript(stack, exec_script, flags, checker, sigversion, execdata, serror)) return false;
 
     // Scripts inside witness implicitly require cleanstack behaviour
     if (stack.size() != 1) return set_error(serror, SCRIPT_ERR_CLEANSTACK);
@@ -2054,7 +2023,7 @@ static bool ExecuteWitnessScript(const Span<const valtype>& stack_span, const CS
 
 uint256 ComputeTapleafHash(uint8_t leaf_version, const CScript& script)
 {
-    return (CHashWriter(HASHER_TAPLEAF) << leaf_version << script).GetSHA256();
+    return (HashWriter{HASHER_TAPLEAF} << leaf_version << script).GetSHA256();
 }
 
 uint256 ComputeTaprootMerkleRoot(Span<const unsigned char> control, const uint256& tapleaf_hash)
@@ -2062,6 +2031,10 @@ uint256 ComputeTaprootMerkleRoot(Span<const unsigned char> control, const uint25
     btc_taproot_logf("Computing taproot merkle root:\n");
     btc_taproot_logf("- control      = %s\n", HexStr(control).c_str());
     btc_taproot_logf("- tapleaf hash = %s\n", HexStr(tapleaf_hash).c_str());
+    assert(control.size() >= TAPROOT_CONTROL_BASE_SIZE);
+    assert(control.size() <= TAPROOT_CONTROL_MAX_SIZE);
+    assert((control.size() - TAPROOT_CONTROL_BASE_SIZE) % TAPROOT_CONTROL_NODE_SIZE == 0);
+
     const int path_len = (control.size() - TAPROOT_CONTROL_BASE_SIZE) / TAPROOT_CONTROL_NODE_SIZE;
     btc_taproot_logf("- path len     = %d\n", path_len);
     uint256 k = tapleaf_hash;
@@ -2070,8 +2043,8 @@ uint256 ComputeTaprootMerkleRoot(Span<const unsigned char> control, const uint25
     btc_taproot_logf("  (%s)\n", k_desc.c_str());
     btc_taproot_logf("- looping over path (0..%d)\n", path_len-1);
     for (int i = 0; i < path_len; ++i) {
-        CHashWriter ss_branch{HASHER_TAPBRANCH};
-        Span<const unsigned char> node(control.data() + TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE);
+        HashWriter ss_branch{HASHER_TAPBRANCH};
+        Span node{Span{control}.subspan(TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE)};
         if (std::lexicographical_compare(k.begin(), k.end(), node.begin(), node.end())) {
             btc_taproot_logf("  - %d: node = %02x...; taproot control node match -> k first\n", i, node[0]);
             k_desc = strprintf("TapBranch(%s || Span<%d,%zu>=%s)", k_desc.c_str(), TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE, HexStr(node).c_str());
@@ -2088,7 +2061,7 @@ uint256 ComputeTaprootMerkleRoot(Span<const unsigned char> control, const uint25
     return k;
 }
 
-static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const uint256& tapleaf_hash)
+bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const uint256& tapleaf_hash)
 {
     btc_taproot_logf("Verifying taproot commitment:\n");
     btc_taproot_logf("- control      = %s\n", HexStr(control).c_str());
@@ -2097,9 +2070,9 @@ static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, c
     assert(control.size() >= TAPROOT_CONTROL_BASE_SIZE);
     assert(program.size() >= uint256::size());
     //! The internal pubkey (x-only, so no Y coordinate parity).
-    const XOnlyPubKey p{uint256(std::vector<unsigned char>(control.begin() + 1, control.begin() + TAPROOT_CONTROL_BASE_SIZE))};
+    const XOnlyPubKey p{Span{control}.subspan(1, TAPROOT_CONTROL_BASE_SIZE - 1)};
     //! The output pubkey (taken from the scriptPubKey).
-    const XOnlyPubKey q{uint256(program)};
+    const XOnlyPubKey q{program};
     // Compute the Merkle root from the leaf and the provided path.
     const uint256 merkle_root = ComputeTaprootMerkleRoot(control, tapleaf_hash);
     btc_taproot_logf("- p            = %s\n", p.ToString().c_str());
@@ -2114,7 +2087,7 @@ static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, c
 static bool VerifyWitnessProgram(const CScriptWitness& witness, int witversion, const std::vector<unsigned char>& program, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror, bool is_p2sh)
 {
     CScript exec_script; //!< Actually executed script (last stack item in P2WSH; implied P2PKH script in P2WPKH; leaf script in P2TR)
-    Span<const valtype> stack{witness.stack};
+    Span stack{witness.stack};
     ScriptExecutionData execdata;
 
     if (witversion == 0) {
@@ -2148,7 +2121,7 @@ static bool VerifyWitnessProgram(const CScriptWitness& witness, int witversion, 
         if (stack.size() >= 2 && !stack.back().empty() && stack.back()[0] == ANNEX_TAG) {
             // Drop annex (this is non-standard; see IsWitnessStandard)
             const valtype& annex = SpanPopBack(stack);
-            execdata.m_annex_hash = (CHashWriter(SER_GETHASH, 0) << annex).GetSHA256();
+            execdata.m_annex_hash = (HashWriter{} << annex).GetSHA256();
             execdata.m_annex_present = true;
         } else {
             execdata.m_annex_present = false;
@@ -2234,7 +2207,7 @@ bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const C
                 // The scriptSig must be _exactly_ CScript(), otherwise we reintroduce malleability.
                 return set_error(serror, SCRIPT_ERR_WITNESS_MALLEATED);
             }
-            if (!VerifyWitnessProgram(*witness, witnessversion, witnessprogram, flags, checker, serror, /* is_p2sh */ false)) {
+            if (!VerifyWitnessProgram(*witness, witnessversion, witnessprogram, flags, checker, serror, /*is_p2sh=*/false)) {
                 return false;
             }
             // Bypass the cleanstack check at the end. The actual stack is obviously not clean
@@ -2279,7 +2252,7 @@ bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const C
                     // reintroduce malleability.
                     return set_error(serror, SCRIPT_ERR_WITNESS_MALLEATED_P2SH);
                 }
-                if (!VerifyWitnessProgram(*witness, witnessversion, witnessprogram, flags, checker, serror, /* is_p2sh */ true)) {
+                if (!VerifyWitnessProgram(*witness, witnessversion, witnessprogram, flags, checker, serror, /*is_p2sh=*/true)) {
                     return false;
                 }
                 // Bypass the cleanstack check at the end. The actual stack is obviously not clean

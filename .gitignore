@@ -103,3 +103,7 @@ tap
 approach
 
 .DS_Store
+
+# secp256k1
+secp256k1/gen_context
+secp256k1/src/ecmult_static_context.h

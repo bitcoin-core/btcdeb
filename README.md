@@ -44,7 +44,7 @@ Or use **docker**:
 
 ```Bash
 docker build -t btcdeb .
-docker run -d -t --name btc-vm btc-vm btcdeb
+docker run -d -t --name btc-vm btcdeb btcdeb
 # and for run it in the shell
 docker exec -it btc-vm /bin/sh
 ```
