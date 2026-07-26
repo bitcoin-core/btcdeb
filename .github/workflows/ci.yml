@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  PACKAGE_MANAGER_INSTALL: "apt-get update && apt-get install -y"
+  MAKEJOBS: "-j4"
+  DANGER_RUN_CI_ON_HOST: "1"  # Containers are discarded after the run, so there is no risk of ci scripts modifying the host
+  TEST_RUNNER_PORT_MIN: "14000"  # Must be larger than 12321, which is used for the http cache. See https://cirrus-ci.org/guide/writing-tasks/#http-cache
+  CCACHE_SIZE: "200M"
+  CCACHE_DIR: "/tmp/ccache_dir"
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: ubuntu:focal
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "sanitizers: thread (TSan) [focal] [ENABLE_DANGEROUS=1]"
+            file_env: "./ci/test/00_setup_env_native_tsan.sh"
+            enable_dangerous: 1
+            makejobs: "-j8"
+          - name: "sanitizers: thread (TSan) [focal] [ENABLE_DANGEROUS=]"
+            file_env: "./ci/test/00_setup_env_native_tsan.sh"
+            enable_dangerous: ""
+            makejobs: "-j8"
+          - name: "no sanitizers: address/leak (ASan+LSan) + undefined (UBSan) + integer [focal] [ENABLE_DANGEROUS=1]"
+            file_env: "./ci/test/00_setup_env_native_asan.sh"
+            enable_dangerous: 1
+            makejobs: "-j4"
+          - name: "no sanitizers: address/leak (ASan+LSan) + undefined (UBSan) + integer [focal] [ENABLE_DANGEROUS=]"
+            file_env: "./ci/test/00_setup_env_native_asan.sh"
+            enable_dangerous: ""
+            makejobs: "-j4"
+    env:
+      FILE_ENV: ${{ matrix.file_env }}
+      ENABLE_DANGEROUS: ${{ matrix.enable_dangerous }}
+      MAKEJOBS: ${{ matrix.makejobs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ccache_dir
+          key: ccache-${{ matrix.name }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.name }}-
+
+      - name: Run CI
+        run: ./ci/test_run_all.sh
