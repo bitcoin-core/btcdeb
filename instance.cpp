@@ -93,7 +93,7 @@ bool Instance::parse_input_transaction(const char* txdata, int select_index) {
     return true;
 }
 
-bool Instance::parse_script(const char* script_str) {
+bool Instance::parse_script(int witprogver, const char* script_str) {
     std::vector<unsigned char> scriptData = Value(script_str).data_value();
     script = CScript(scriptData.begin(), scriptData.end());
     // for (const auto& keymap : COMPILER_CTX.keymap) {
@@ -110,12 +110,12 @@ bool Instance::parse_script(const char* script_str) {
     //     printf("miniscript failed to parse script; miniscript support disabled\n");
     //     msenv = nullptr;
     // }
-    return script.HasValidOps();
+    return witprogver != 0 || script.HasValidOps();
 }
 
-bool Instance::parse_script(const std::vector<uint8_t>& script_data) {
+bool Instance::parse_script(int witprogver, const std::vector<uint8_t>& script_data) {
     script = CScript(script_data.begin(), script_data.end());
-    return script.HasValidOps();
+    return witprogver != 0 || script.HasValidOps();
 }
 
 bool Instance::parse_pretend_valid_expr(const char* expr) {
@@ -545,7 +545,7 @@ bool Instance::configure_tx_txin() {
             }
         } else assert(!"should never get here; was a new witprogver added?");
 
-        if (parse_script(std::vector<uint8_t>(validation.begin(), validation.end()))) {
+        if (parse_script(witprogver, std::vector<uint8_t>(validation.begin(), validation.end()))) {
             btc_logf("valid script\n");
         } else {
             fprintf(stderr, "invalid script (witness stack last element)\n");

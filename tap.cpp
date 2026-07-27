@@ -265,7 +265,7 @@ int main(int argc, char* const* argv)
     for (size_t i = 0; i < script_count; ++i) {
         Item scriptData = Value(ca.l[2 + i]).data_value();
         CScript script = CScript(scriptData.begin(), scriptData.end());
-        if (!script.HasValidOps()) {
+        if (!is_tapscript && !script.HasValidOps()) {
             abort("invalid script #%zu: %s", i, HEXC(scriptData));
         }
         if (!quiet) {

@@ -68,8 +68,8 @@ public:
     bool parse_transaction(const char* txdata, bool parse_amounts = false);
     bool parse_input_transaction(const char* txdata, int select_index = -1);
 
-    bool parse_script(const char* script_str);
-    bool parse_script(const std::vector<uint8_t>& script_data);
+    bool parse_script(int witprogver, const char* script_str);
+    bool parse_script(int witprogver, const std::vector<uint8_t>& script_data);
 
     void parse_stack_args(size_t argc, char* const* argv, size_t starting_index);
     void parse_stack_args(const std::vector<const char*> args);

@@ -9,8 +9,15 @@
 
 #include <string>
 
+#include <tinyformat.h>
+
 std::string GetOpName(opcodetype opcode)
 {
+    if (opcode >= 0x01 && opcode <= 0x4b) {
+        // It's a push-data opcode for 'opcode' bytes
+        return strprintf("OP_PUSHBYTES_%d", (int)opcode);
+    }
+
     switch (opcode)
     {
     // push value

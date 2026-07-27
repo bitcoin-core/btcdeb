@@ -25,7 +25,7 @@ TEST_CASE("Segwit Multisig Signing", "[signing-segwit-multisig]") {
         Instance instance;
         instance.parse_transaction(TXAMT ":" TXHEX, true);
 
-        instance.parse_script(SCRIPT);
+        instance.parse_script(0, SCRIPT);
         // script should have 6 entries
         {
             size_t count = 0;
@@ -62,7 +62,7 @@ TEST_CASE("Segwit Multisig Signing", "[signing-segwit-multisig]") {
         #define STACK2X "304502207f874ef00f11dcc9a621acad9354f3fca1bf90c43878f607b7e2d358088487e7022052a01b47b8eef5e1c96a6affdc3dac46fdc11b60612464dc8c5921a852090d2701"
         Instance instance;
         instance.parse_transaction(TXAMT ":" TXHEX, true);
-        instance.parse_script(SCRIPT);
+        instance.parse_script(0, SCRIPT);
         const char* argv[] = {STACK1, STACK2X, STACK3};
         instance.parse_stack_args(3, (char* const*)argv, 0);
         instance.setup_environment();
@@ -86,7 +86,7 @@ TEST_CASE("Segwit Multisig Signing", "[signing-segwit-multisig]") {
         #define STACK3X "3045022100c56ab2abb17fdf565417228763bc9f2940a6465042fd62fbd9f4c7406345d7f702201cb1a56b45181f8347713627b325ec5df48fc1aee6bdaf937cbb804d7409b10c00"
         Instance instance;
         instance.parse_transaction(TXAMT ":" TXHEX, true);
-        instance.parse_script(SCRIPT);
+        instance.parse_script(0, SCRIPT);
         const char* argv[] = {STACK1, STACK2, STACK3X};
         instance.parse_stack_args(3, (char* const*)argv, 0);
         instance.setup_environment();
@@ -110,7 +110,7 @@ TEST_CASE("Segwit Multisig Signing", "[signing-segwit-multisig]") {
         #define TXAMTX "8.947025"
         Instance instance;
         instance.parse_transaction(TXAMTX ":" TXHEX, true);
-        instance.parse_script(SCRIPT);
+        instance.parse_script(0, SCRIPT);
         const char* argv[] = {STACK1, STACK2, STACK3};
         instance.parse_stack_args(3, (char* const*)argv, 0);
         instance.setup_environment();

@@ -242,9 +242,9 @@ int main(int argc, char* const* argv)
         }
     }
 
-    CScript script;
     if (script_str) {
-        if (instance.parse_script(script_str)) {
+        int witprogver = ((flags & SCRIPT_VERIFY_TAPROOT) != 0 ? 1 : 0);
+        if (instance.parse_script(witprogver, script_str)) {
             if (verbose) btc_logf("valid script\n");
         } else {
             fprintf(stderr, "invalid script\n");
@@ -300,6 +300,7 @@ int main(int argc, char* const* argv)
             p2sh_script = CScript(p2sh_script_payload.begin(), p2sh_script_payload.end());
         }
     }
+
     if (has_p2sh) {
         script_ptrs.push_back(&p2sh_script);
         script_headers.push_back("<<< P2SH script >>>");
@@ -316,19 +317,53 @@ int main(int argc, char* const* argv)
             script_lines[i++] = strdup(strprintf("#%04d %s", i, s).c_str());
         }
     }
+
     for (size_t siter = 0; siter < script_ptrs.size(); ++siter) {
         CScript* script = script_ptrs[siter];
         const std::string& header = script_headers[siter];
         if (header != "") script_lines[i++] = strdup(header.c_str());
         it = script->begin();
+
         while (script->GetOp(it, opcode, vchPushValue)) {
+            // log opcode and data
             char* pbuf = buf;
-            pbuf += snprintf(pbuf, 1024, "#%04d ", i);
-            if (vchPushValue.size() > 0) {
-                snprintf(pbuf, 1024 + pbuf - buf, "%s", HexStr(std::vector<uint8_t>(vchPushValue.begin(), vchPushValue.end())).c_str());
-            } else {
-                snprintf(pbuf, 1024 + pbuf - buf, "%s", GetOpName(opcode).c_str());
+
+            // Write the line number
+            int written = snprintf(pbuf, sizeof(buf), "#%04d ", i);
+            if (written < 0 || written >= (int)sizeof(buf)) {
+                // Handle error or truncation
+                // For safety, we can bail out or clamp
+                written = (int)(sizeof(buf) - 1);
             }
+            pbuf += written;
+
+            // Write the opcode
+            size_t remain = sizeof(buf) - (pbuf - buf);
+            if (vchPushValue.size() > 0) {
+                written = snprintf(
+                    pbuf,
+                    remain,
+                    "%s",
+                    HexStr(std::vector<uint8_t>(vchPushValue.begin(), vchPushValue.end())).c_str()
+                );
+            } else {
+                written = snprintf(
+                    pbuf,
+                    remain,
+                    "%s",
+                    GetOpName(opcode).c_str()
+                );
+            }
+
+            // Handle error or truncation
+            if (written < 0 || (size_t)written >= remain) {
+                // Handle error or truncation
+                written = (int)(remain - 1);
+            }
+
+            pbuf += written;
+
+            // Write the buffer
             script_lines[i++] = strdup(buf);
         }
     }
@@ -349,6 +384,7 @@ int main(int argc, char* const* argv)
         }
 
         print_stack(env->stack, true);
+
         return 0;
     } else {
         kerl_set_history_file(".btcdeb_history");
@@ -371,6 +407,7 @@ int main(int argc, char* const* argv)
         if (env->curr_op_seq < count) {
             printf("%s\n", script_lines[env->curr_op_seq]);
         }
+
         kerl_run("btcdeb> ");
     }
 }
